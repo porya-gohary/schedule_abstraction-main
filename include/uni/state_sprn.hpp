@@ -52,10 +52,6 @@ namespace NP {
 				return finish_time.until();
 			}
 
-			// Time earliest_job_release() const
-			// {
-			// 	return earliest_pending_release;
-			// }
 
 			const Interval<Time>& finish_range() const
 			{
@@ -67,27 +63,6 @@ namespace NP {
 				assert(update.intersects(finish_time));
 				finish_time.widen(update);
 			}
-
-			// hash_value_t get_key() const
-			// {
-			// 	return lookup_key;
-			// }
-
-			// const Job_set& get_scheduled_jobs() const
-			// {
-			// 	return scheduled_jobs;
-			// }
-
-			// bool matches(const Schedule_state& other) const
-			// {
-			// 	return lookup_key == other.lookup_key &&
-			// 		   scheduled_jobs == other.scheduled_jobs;
-			// }
-
-			// hash_value_t next_key(const Job<Time>& j) const
-			// {
-			// 	return get_key() ^ j.get_key();
-			// }
 
 			friend std::ostream& operator<< (std::ostream& stream,
 			                                 const Schedule_state<Time>& s)
@@ -105,6 +80,9 @@ namespace NP {
 
 			Job_set scheduled_jobs;
 			hash_value_t lookup_key;
+
+			typedef Schedule_state<Time> State;
+			typedef std::deque<State> States;
 
 			// no accidental copies
 			Schedule_node(const Schedule_node& origin)  = delete;
@@ -130,31 +108,10 @@ namespace NP {
 			{
 			}
 
-			// Time earliest_finish_time() const
-			// {
-			// 	return finish_time.from();
-			// }
-
-			// Time latest_finish_time() const
-			// {
-			// 	return finish_time.until();
-			// }
-
 			Time earliest_job_release() const
 			{
 				return earliest_pending_release;
 			}
-
-			// const Interval<Time>& finish_range() const
-			// {
-			// 	return finish_time;
-			// }
-
-			// void update_finish_range(const Interval<Time> &update)
-			// {
-			// 	assert(update.intersects(finish_time));
-			// 	finish_time.widen(update);
-			// }
 
 			hash_value_t get_key() const
 			{
