@@ -20,6 +20,7 @@
 #include "clock.hpp"
 
 #include "uni/state.hpp"
+#include "uni/state_sprn.hpp"
 
 namespace NP {
 
@@ -35,6 +36,7 @@ namespace NP {
 			typedef typename Scheduling_problem<Time>::Workload Workload;
 			typedef typename Scheduling_problem<Time>::Abort_actions Abort_actions;
 			typedef Schedule_state<Time> State;
+			typedef Schedule_node<Time> Node;
 
 			static State_space explore(
 					const Problem& prob,
@@ -116,11 +118,11 @@ namespace NP {
 
 			struct Edge {
 				const Job<Time>* scheduled;
-				const State* source;
-				const State* target;
+				const Node* source;
+				const Node* target;
 				const Interval<Time> finish_range;
 
-				Edge(const Job<Time>* s, const State* src, const State* tgt,
+				Edge(const Job<Time>* s, const Node* src, const Node* tgt,
 				     const Interval<Time>& fr)
 				: scheduled(s)
 				, source(src)
@@ -171,9 +173,9 @@ namespace NP {
 
 			typedef Job_set Scheduled;
 
-			typedef std::deque<State> States;
-			typedef typename std::deque<State>::iterator State_ref;
-			typedef std::unordered_multimap<hash_value_t, State_ref> States_map;
+			typedef std::deque<Node> Nodes;
+			typedef typename std::deque<Node>::iterator Node_ref;
+			typedef std::unordered_multimap<hash_value_t, Node_ref> Nodes_map;
 
 			typedef const Job<Time>* Job_ref;
 			typedef std::multimap<Time, Job_ref> By_time_map;
@@ -206,9 +208,9 @@ namespace NP {
 
 			std::vector<const Abort_action<Time>*> abort_actions;
 
-			States states;
-			unsigned long num_states, num_edges, width;
-			States_map states_by_key;
+			Nodes nodes;
+			unsigned long num_nodes, num_edges, width;
+			Nodes_map nodes_by_key;
 
 			static const std::size_t num_todo_queues = 3;
 
@@ -302,15 +304,15 @@ namespace NP {
 				return !scheduled.contains(index_of(j));
 			}
 
-			bool incomplete(const State& s, const Job<Time>& j) const
+			bool incomplete(const Node& n, const Job<Time>& j) const
 			{
-				return incomplete(s.get_scheduled_jobs(), j);
+				return incomplete(n.get_scheduled_jobs(), j);
 			}
 
 			// find next time by which a job is certainly released
-			Time next_certain_job_release(const State& s)
+			Time next_certain_job_release(const State& s, const Node& n)
 			{
-				const Scheduled &already_scheduled = s.get_scheduled_jobs();
+				const Scheduled &already_scheduled = n.get_scheduled_jobs();
 
 				for (auto it = jobs_by_latest_arrival
 				               .lower_bound(s.earliest_finish_time());
