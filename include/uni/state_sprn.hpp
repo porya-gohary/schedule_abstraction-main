@@ -22,6 +22,7 @@ namespace NP {
 			private:
 
 			Interval<Time> finish_time;
+			Schedule_node *ptrnode;
 
 			// no accidental copies
 			Schedule_state(const Schedule_state& origin)  = delete;
@@ -29,16 +30,20 @@ namespace NP {
 			public:
 
 			// initial state
-			Schedule_state()
+			Schedule_state(
+				Schedule_node *nptr)
 			: finish_time{0, 0}
+			, ptrnode{nptr}
 			{
 			}
 
 			// transition: new state by scheduling a job in an existing state
 			Schedule_state(
 				std::size_t idx,
-				Interval<Time> ftimes)
+				Interval<Time> ftimes,
+				Schedule_node *nptr)
 			: finish_time{ftimes}
+			, ptrnode{nptr}
 			{
 			}
 
@@ -56,6 +61,21 @@ namespace NP {
 			const Interval<Time>& finish_range() const
 			{
 				return finish_time;
+			}
+
+			Time earliest_job_release() const
+			{
+				return ptrnode->earliest_job_release();
+			}
+
+			hash_value_t get_key() const
+			{
+				return ptrnode->get_key();
+			}
+
+			const Job_set& get_scheduled_jobs() const
+			{
+				return ptrnode->get_scheduled_jobs();
 			}
 
 			void update_finish_range(const Interval<Time> &update)
@@ -101,6 +121,7 @@ namespace NP {
 				const Schedule_node& from,
 				const Job<Time>& j,
 				std::size_t idx,
+				States states,
 				const Time next_earliest_release)
 			: scheduled_jobs{from.scheduled_jobs, idx}
 			, lookup_key{from.next_key(j)}
