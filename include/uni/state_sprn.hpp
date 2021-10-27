@@ -121,11 +121,12 @@ namespace NP {
 				const Schedule_node& from,
 				const Job<Time>& j,
 				std::size_t idx,
-				States states,
+				std::deque<State> sts,
 				const Time next_earliest_release)
 			: scheduled_jobs{from.scheduled_jobs, idx}
 			, lookup_key{from.next_key(j)}
 			, earliest_pending_release{next_earliest_release}
+			, States{sts}
 			{
 			}
 
