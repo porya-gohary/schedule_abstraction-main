@@ -73,6 +73,11 @@ namespace NP {
 				return ptrnode->get_key();
 			}
 
+			hash_value_t next_key(const Job<Time>& j) const
+			{
+				return ptrnode->get_key() ^ j.get_key();
+			}
+
 			const Job_set& get_scheduled_jobs() const
 			{
 				return ptrnode->get_scheduled_jobs();

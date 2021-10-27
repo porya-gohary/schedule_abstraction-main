@@ -759,7 +759,7 @@ namespace NP {
 
 			void process_new_edge(
 				const State& from,
-				const State& to,
+				const Node& to,
 				const Job<Time>& j,
 				const Interval<Time>& finish_range)
 			{
@@ -851,13 +851,13 @@ namespace NP {
 
 				auto k = s.next_key(j);
 
-				auto r = states_by_key.equal_range(k);
+				auto r = nodes_by_key.equal_range(k);
 
 				if (r.first != r.second) {
 					Job_set sched_jobs{s.get_scheduled_jobs(), index_of(j)};
 
 					for (auto it = r.first; it != r.second; it++) {
-						State &found = *it->second;
+						Node &found = *it->second;
 
 						// key collision if the job sets don't match exactly
 						if (found.get_scheduled_jobs() != sched_jobs)
@@ -865,23 +865,33 @@ namespace NP {
 
 						// cannot merge without loss of accuracy if the
 						// intervals do not overlap
-						if (!finish_range.intersects(found.finish_range()))
-							continue;
+						bool state_merged = false;
+						for(int i = 0; i<found.States.size(); i++)
+						{
+							if (finish_range.intersects(found.State[i].finish_range()))
+							{
+								found.State[i].update_finish_range(finish_range);
+								process_new_edge(s, found, j, finish_range);
+								state_merged = true;
+								break;
+							}
+						}
 
-						// great, we found a match and can merge the states
-						found.update_finish_range(finish_range);
-						process_new_edge(s, found, j, finish_range);
-						return;
+						if(state_merged == false)
+						{
+							found.States.push_back(finish_range);
+							process_new_edge(s, found, j, finish_range);
+						}
 					}
 				}
 
 				// If we reach here, we didn't find a match and need to create
 				// a new state.
-				const State& next =
+				const Node& next =
 					new_node(s, j, index_of(j),
 					          finish_range,
 					          earliest_possible_job_release(s, j));
-				DM("      -----> S" << (states.end() - states.begin())
+				DM("      -----> S" << (nodes.end() - nodes.begin())
 				   << std::endl);
 				process_new_edge(s, next, j, finish_range);
 			}
