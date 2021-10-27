@@ -180,7 +180,7 @@ namespace NP {
 			typedef const Job<Time>* Job_ref;
 			typedef std::multimap<Time, Job_ref> By_time_map;
 
-			typedef std::deque<State_ref> Todo_queue;
+			typedef std::deque<Node_ref> Todo_queue;
 
 			typedef std::unordered_map<JobID, Interval<Time> > Response_times;
 
@@ -580,10 +580,10 @@ namespace NP {
 					return true;
 			}
 
-			const State& next_state()
+			const Node& next_node()
 			{
-				auto s = todo[todo_idx].front();
-				return *s;
+				auto n = todo[todo_idx].front();
+				return *n;
 			}
 
 			bool in_todo(State_ref s)
@@ -636,6 +636,12 @@ namespace NP {
 				assert(states.begin() == s);
 				states.pop_front();
 #endif
+			}
+
+			void done_with_current_node()
+			{
+				Node_ref n = todo[todo_idx].front();
+				todo[todo_idx].pop_front();
 			}
 
 			//////////////////////////////////////
@@ -780,10 +786,10 @@ namespace NP {
 
 			void explore_naively()
 			{
-				make_initial_state();
+				make_initial_node();
 
 				while (not_done() && !aborted) {
-					const State& s = next_state();
+					const Node& s = next_node();
 
 					DM("\n==================================================="
 					   << std::endl);
@@ -885,60 +891,66 @@ namespace NP {
 				make_initial_node();
 
 				while (not_done() && !aborted) {
-					const State& s = next_state();
+					const Node& n = next_node();
 
 					DM("\n==================================================="
 					   << std::endl);
 					DM("Looking at: S"
-					   << (todo[todo_idx].front() - states.begin() + 1)
-					   << " " << s << std::endl);
+					   << (todo[todo_idx].front() - nodes.begin() + 1)
+					   << " " << n << std::endl);
 
 					// Identify relevant interval for next job
 					// relevant job buckets
-					auto ts_min = s.earliest_finish_time();
-					auto rel_min = s.earliest_job_release();
-					auto t_l = std::max(next_eligible_job_ready(s), s.latest_finish_time());
 
-					Interval<Time> next_range{std::min(ts_min, rel_min), t_l};
+					for(int i=0; i<n.States.size();i++)
+					{
+						const State& s = n.States[i];
+						auto ts_min = s.earliest_finish_time();
+						auto rel_min = s.earliest_job_release();
+						auto t_l = std::max(next_eligible_job_ready(s), s.latest_finish_time());
 
-					DM("ts_min = " << ts_min << std::endl <<
-					   "rel_min = " << rel_min << std::endl <<
-					   "latest_idle = " << latest_idle << std::endl <<
-					   "latest_finish = " << s.latest_finish_time() << std::endl);
-					DM("=> next range = " << next_range << std::endl);
+						Interval<Time> next_range{std::min(ts_min, rel_min), t_l};
 
-					bool found_at_least_one = false;
+						DM("ts_min = " << ts_min << std::endl <<
+						   "rel_min = " << rel_min << std::endl <<
+						   "latest_idle = " << latest_idle << std::endl <<
+						   "latest_finish = " << s.latest_finish_time() << std::endl);
+						DM("=> next range = " << next_range << std::endl);
 
-					DM("\n---\nChecking for pending and later-released jobs:"
-					   << std::endl);
-					const Job<Time>* jp;
-					foreach_possbly_pending_job_until(s, jp, next_range.upto()) {
-						const Job<Time>& j = *jp;
-						DM("+ " << j << std::endl);
-						// if it can be scheduled next...
-						if (is_eligible_successor(s, j)) {
-							DM("  --> can be next "  << std::endl);
-							// create the relevant state and continue
-							schedule(s, j);
-							found_at_least_one = true;
+						bool found_at_least_one = false;
+
+						DM("\n---\nChecking for pending and later-released jobs:"
+						   << std::endl);
+						const Job<Time>* jp;
+						foreach_possbly_pending_job_until(s, jp, next_range.upto()) {
+							const Job<Time>& j = *jp;
+							DM("+ " << j << std::endl);
+							// if it can be scheduled next...
+							if (is_eligible_successor(s, j)) {
+								DM("  --> can be next "  << std::endl);
+								// create the relevant state and continue
+								schedule(s, j);
+								found_at_least_one = true;
+							}
 						}
+
+						DM("---\nDone iterating over all jobs." << std::endl);
+
+						// check for a dead end
+						if (!found_at_least_one &&
+						    s.get_scheduled_jobs().size() != jobs.size()) {
+							// out of options and we didn't schedule all jobs
+							observed_deadline_miss = true;
+							if (early_exit)
+								aborted = true;
+							DM(":: Didn't find any possible successors." << std::endl);
+						}
+
+						done_with_current_state();
+						check_cpu_timeout();
+						check_depth_abort();
 					}
-
-					DM("---\nDone iterating over all jobs." << std::endl);
-
-					// check for a dead end
-					if (!found_at_least_one &&
-					    s.get_scheduled_jobs().size() != jobs.size()) {
-						// out of options and we didn't schedule all jobs
-						observed_deadline_miss = true;
-						if (early_exit)
-							aborted = true;
-						DM(":: Didn't find any possible successors." << std::endl);
-					}
-
-					done_with_current_state();
-					check_cpu_timeout();
-					check_depth_abort();
+					done_with_current_node();
 				}
 			}
 
