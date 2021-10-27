@@ -163,9 +163,9 @@ namespace NP {
 				return edges;
 			}
 
-			const std::deque<State>& get_states() const
+			const std::deque<Node>& get_nodes() const
 			{
-				return states;
+				return nodes;
 			}
 
 #endif
@@ -310,9 +310,9 @@ namespace NP {
 			}
 
 			// find next time by which a job is certainly released
-			Time next_certain_job_release(const State& s, const Node& n)
+			Time next_certain_job_release(const State& s)
 			{
-				const Scheduled &already_scheduled = n.get_scheduled_jobs();
+				const Scheduled &already_scheduled = s.get_scheduled_jobs();
 
 				for (auto it = jobs_by_latest_arrival
 				               .lower_bound(s.earliest_finish_time());
@@ -543,30 +543,30 @@ namespace NP {
 				return true;
 			}
 
-			void make_initial_state()
+			void make_initial_node()
 			{
 				// construct initial state
-				new_state();
+				new_node();
 			}
 
 			template <typename... Args>
-			State& new_state(Args&&... args)
+			State& new_node(Args&&... args)
 			{
-				states.emplace_back(std::forward<Args>(args)...);
-				State_ref s_ref = --states.end();
+				nodes.emplace_back(std::forward<Args>(args)...);
+				Node_ref n_ref = --nodes.end();
 
-				auto njobs = s_ref->get_scheduled_jobs().size();
+				auto njobs = n_ref->get_scheduled_jobs().size();
 				assert (
-					(!njobs && num_states == 0) // initial state
+					(!njobs && num_nodes == 0) // initial state
 				    || (njobs == current_job_count + 1) // normal State
 				    || (njobs == current_job_count + 2 && aborted) // deadline miss
 				);
 				auto idx = njobs % num_todo_queues;
-				todo[idx].push_back(s_ref);
-				states_by_key.insert(std::make_pair(s_ref->get_key(), s_ref));
-				num_states++;
+				todo[idx].push_back(n_ref);
+				nodes_by_key.insert(std::make_pair(n_ref->get_key(), n_ref));
+				num_nodes++;
 				width = std::max(width, (unsigned long) todo[idx].size() - 1);
-				return *s_ref;
+				return *n_ref;
 			}
 
 			bool not_done()
@@ -770,7 +770,7 @@ namespace NP {
 			void schedule_job(const State &s, const Job<Time> &j)
 			{
 				const State& next =
-					new_state(s, j, index_of(j),
+					new_node(s, j, index_of(j),
 					          next_finish_times(s, j),
 					          earliest_possible_job_release(s, j));
 				DM("      -----> S" << (states.end() - states.begin())
@@ -872,7 +872,7 @@ namespace NP {
 				// If we reach here, we didn't find a match and need to create
 				// a new state.
 				const State& next =
-					new_state(s, j, index_of(j),
+					new_node(s, j, index_of(j),
 					          finish_range,
 					          earliest_possible_job_release(s, j));
 				DM("      -----> S" << (states.end() - states.begin())
@@ -882,7 +882,7 @@ namespace NP {
 
 			void explore()
 			{
-				make_initial_state();
+				make_initial_node();
 
 				while (not_done() && !aborted) {
 					const State& s = next_state();
