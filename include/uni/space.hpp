@@ -19,7 +19,7 @@
 #include "precedence.hpp"
 #include "clock.hpp"
 
-#include "uni/state.hpp"
+//#include "uni/state.hpp"
 #include "uni/state_sprn.hpp"
 
 namespace NP {
@@ -92,6 +92,11 @@ namespace NP {
 			bool was_timed_out() const
 			{
 				return timed_out;
+			}
+
+			unsigned long number_of_nodes() const
+			{
+				return num_nodes;
 			}
 
 			unsigned long number_of_states() const
@@ -209,7 +214,7 @@ namespace NP {
 			std::vector<const Abort_action<Time>*> abort_actions;
 
 			Nodes nodes;
-			unsigned long num_nodes, num_edges, width;
+			unsigned long num_nodes, num_states, num_edges, width;
 			Nodes_map nodes_by_key;
 
 			static const std::size_t num_todo_queues = 3;
@@ -239,7 +244,7 @@ namespace NP {
 			, timeout(max_cpu_time)
 			, max_depth(max_depth)
 			, iip(*this, jobs)
-			, num_states(0)
+			, num_nodes(0)
 			, num_edges(0)
 			, width(0)
 			, todo_idx(0)
@@ -545,12 +550,12 @@ namespace NP {
 
 			void make_initial_node()
 			{
-				// construct initial state
+				// construct initial node
 				new_node();
 			}
 
 			template <typename... Args>
-			State& new_node(Args&&... args)
+			Node& new_node(Args&&... args)
 			{
 				nodes.emplace_back(std::forward<Args>(args)...);
 				Node_ref n_ref = --nodes.end();
@@ -586,10 +591,10 @@ namespace NP {
 				return *n;
 			}
 
-			bool in_todo(State_ref s)
+			bool in_todo(Node_ref n)
 			{
 				for (auto it : todo)
-					if (it == s)
+					if (it == next_earliest_job_abortion)
 						return true;
 				return false;
 			}
@@ -612,7 +617,7 @@ namespace NP {
 
 			void done_with_current_state()
 			{
-				State_ref s = todo[todo_idx].front();
+				Node_ref n = todo[todo_idx].front();
 				// remove from TODO list
 				todo[todo_idx].pop_front();
 
@@ -622,19 +627,19 @@ namespace NP {
 				// memory.
 
 				// remove from lookup map
-				auto matches = states_by_key.equal_range(s->get_key());
+				auto matches = nodes_by_key.equal_range(n->get_key());
 				bool deleted = false;
 				for (auto it = matches.first; it != matches.second; it++)
-					if (it->second == s) {
-						states_by_key.erase(it);
+					if (it->second == n) {
+						nodes_by_key.erase(it);
 						deleted = true;
 						break;
 					}
 				assert(deleted);
 
 				// delete from master sequence to free up memory
-				assert(states.begin() == s);
-				states.pop_front();
+				assert(nodes.begin() == n);
+				nodes.pop_front();
 #endif
 			}
 
@@ -912,9 +917,9 @@ namespace NP {
 					// Identify relevant interval for next job
 					// relevant job buckets
 
-					for(int i=0; i<n.States.size();i++)
+					for(unsigned int i=0; i<n.states_size();i++)
 					{
-						const State& s = n.States[i];
+						const State& s = n.get_state(i);
 						auto ts_min = s.earliest_finish_time();
 						auto rel_min = s.earliest_job_release();
 						auto t_l = std::max(next_eligible_job_ready(s), s.latest_finish_time());

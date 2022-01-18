@@ -16,13 +16,16 @@ namespace NP {
 	namespace Uniproc {
 
 		typedef Index_set Job_set;
+		template<class Time> class Schedule_state;
+		template<class Time> class Schedule_node;
 
 		template<class Time> class Schedule_state
 		{
 			private:
 
 			Interval<Time> finish_time;
-			Schedule_node *ptrnode;
+			typedef Schedule_node<Time> Node;
+			Node ptrnode;
 
 			// no accidental copies
 			Schedule_state(const Schedule_state& origin)  = delete;
@@ -30,8 +33,7 @@ namespace NP {
 			public:
 
 			// initial state
-			Schedule_state(
-				Schedule_node *nptr)
+			Schedule_state(Schedule_node<Time> nptr)
 			: finish_time{0, 0}
 			, ptrnode{nptr}
 			{
@@ -41,7 +43,7 @@ namespace NP {
 			Schedule_state(
 				std::size_t idx,
 				Interval<Time> ftimes,
-				Schedule_node *nptr)
+				Schedule_node<Time> nptr)
 			: finish_time{ftimes}
 			, ptrnode{nptr}
 			{
@@ -65,22 +67,22 @@ namespace NP {
 
 			Time earliest_job_release() const
 			{
-				return ptrnode->earliest_job_release();
+				return ptrnode::earliest_job_release();
 			}
 
 			hash_value_t get_key() const
 			{
-				return ptrnode->get_key();
+				return ptrnode::get_key();
 			}
 
 			hash_value_t next_key(const Job<Time>& j) const
 			{
-				return ptrnode->get_key() ^ j.get_key();
+				return ptrnode::get_key() ^ j.get_key();
 			}
 
 			const Job_set& get_scheduled_jobs() const
 			{
-				return ptrnode->get_scheduled_jobs();
+				return ptrnode::get_scheduled_jobs();
 			}
 
 			void update_finish_range(const Interval<Time> &update)
@@ -106,13 +108,14 @@ namespace NP {
 			Job_set scheduled_jobs;
 			hash_value_t lookup_key;
 
-			typedef Schedule_state<Time> State;
-			typedef std::deque<State> States;
 
 			// no accidental copies
 			Schedule_node(const Schedule_node& origin)  = delete;
 
 			public:
+
+			typedef Schedule_state<Time> State;
+			typedef std::deque<State> States;
 
 			// initial state
 			Schedule_node()
@@ -166,6 +169,18 @@ namespace NP {
 			{
 				stream << "Node(" << s.get_scheduled_jobs() << ")";
 				return stream;
+			}
+
+			//return the number of states in the node
+			int states_size() const
+			{
+				return States.size();
+			}
+
+			//return state 
+			State get_state(int i) const
+			{
+				return States[i];
 			}
 		};
 
