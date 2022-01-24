@@ -24,8 +24,6 @@ namespace NP {
 			private:
 
 			Interval<Time> finish_time;
-			typedef Schedule_node<Time> Node;
-			Node ptrnode;
 
 			// no accidental copies
 			Schedule_state(const Schedule_state& origin)  = delete;
@@ -33,19 +31,14 @@ namespace NP {
 			public:
 
 			// initial state
-			Schedule_state(Schedule_node<Time> nptr)
+			Schedule_state()
 			: finish_time{0, 0}
-			, ptrnode{nptr}
 			{
 			}
 
 			// transition: new state by scheduling a job in an existing state
-			Schedule_state(
-				std::size_t idx,
-				Interval<Time> ftimes,
-				Schedule_node<Time> nptr)
+			Schedule_state(Interval<Time> ftimes)
 			: finish_time{ftimes}
-			, ptrnode{nptr}
 			{
 			}
 
@@ -59,30 +52,9 @@ namespace NP {
 				return finish_time.until();
 			}
 
-
 			const Interval<Time>& finish_range() const
 			{
 				return finish_time;
-			}
-
-			Time earliest_job_release() const
-			{
-				return ptrnode::earliest_job_release();
-			}
-
-			hash_value_t get_key() const
-			{
-				return ptrnode::get_key();
-			}
-
-			hash_value_t next_key(const Job<Time>& j) const
-			{
-				return ptrnode::get_key() ^ j.get_key();
-			}
-
-			const Job_set& get_scheduled_jobs() const
-			{
-				return ptrnode::get_scheduled_jobs();
 			}
 
 			void update_finish_range(const Interval<Time> &update)
@@ -107,6 +79,7 @@ namespace NP {
 
 			Job_set scheduled_jobs;
 			hash_value_t lookup_key;
+			Interval<Time> finish_time;
 
 
 			// no accidental copies
@@ -115,26 +88,29 @@ namespace NP {
 			public:
 
 			typedef Schedule_state<Time> State;
-			typedef std::deque<State> States;
+			State st;
 
-			// initial state
+			typedef std::deque<State> States;
+			States states;
+
+			// initial node
 			Schedule_node()
 			: lookup_key{0}
 			, earliest_pending_release{0}
 			{
 			}
 
-			// transition: new state by scheduling a job in an existing state
+			// transition: new node by scheduling a job in an existing state
 			Schedule_node(
 				const Schedule_node& from,
 				const Job<Time>& j,
 				std::size_t idx,
-				std::deque<State> sts,
+				Interval<Time> ftimes,
 				const Time next_earliest_release)
 			: scheduled_jobs{from.scheduled_jobs, idx}
 			, lookup_key{from.next_key(j)}
+			, finish_time{ftimes}
 			, earliest_pending_release{next_earliest_release}
-			, States{sts}
 			{
 			}
 
@@ -164,6 +140,16 @@ namespace NP {
 				return get_key() ^ j.get_key();
 			}
 
+			const Interval<Time>& finish_range() const
+			{
+				return finish_time;
+			}
+
+			void add_state(const State& s)
+			{
+				states.push_back(s);
+			}
+
 			friend std::ostream& operator<< (std::ostream& stream,
 			                                 const Schedule_node<Time>& s)
 			{
@@ -174,14 +160,16 @@ namespace NP {
 			//return the number of states in the node
 			int states_size() const
 			{
-				return States.size();
+				return states.size();
 			}
 
-			//return state 
+			//return the 'i'th state
 			State get_state(int i) const
 			{
-				return States[i];
+				st = states[i];
+				return st;
 			}
+
 		};
 
 	}

@@ -179,8 +179,24 @@ namespace NP {
 			typedef Job_set Scheduled;
 
 			typedef std::deque<Node> Nodes;
+			typedef std::deque<State> States;
 			typedef typename std::deque<Node>::iterator Node_ref;
+			typedef typename std::deque<State>::iterator State_ref;
+
+			/* Explanation of what an unordered_multimap is: An unordered_map stores a <key,value> pair but the key has to be unique.
+			In case of the unordered_multimap duplicate keys can exist and in order to differentiate duplicates
+			a count value is maintained with each key-pair. There is no particular order in which the among the 
+			elements of the unordered_multimap, however entries with the same key come together in a data structure.
+			If the pairs are the same there is no effect in the way the entries are stored.
+
+			Reason for use of unordered_multimaps in this program: The Nodes_map typedef allows for storing a key-pair of
+			hash_value_t and Node_ref. The hash_value_t is the typedef defined in jobs.hpp that allows for creating a unique key for
+			each node. A variable called the nodes_by_key is created using Nodes_map. When a new node is made it is added to the map.
+			The use of Nodes_map can be found in new_node(), done_with_current_state() ad schedule().
+			*/
 			typedef std::unordered_multimap<hash_value_t, Node_ref> Nodes_map;
+
+			typedef std::unordered_multimap<hash_value_t, State_ref> States_map;
 
 			typedef const Job<Time>* Job_ref;
 			typedef std::multimap<Time, Job_ref> By_time_map;
@@ -214,8 +230,10 @@ namespace NP {
 			std::vector<const Abort_action<Time>*> abort_actions;
 
 			Nodes nodes;
+			States states;
 			unsigned long num_nodes, num_states, num_edges, width;
 			Nodes_map nodes_by_key;
+			States_map states_by_key;
 
 			static const std::size_t num_todo_queues = 3;
 
@@ -312,6 +330,11 @@ namespace NP {
 			bool incomplete(const Node& n, const Job<Time>& j) const
 			{
 				return incomplete(n.get_scheduled_jobs(), j);
+			}
+
+			bool incomplete(const State& s, const Job<Time>& j) const
+			{
+				return incomplete(s.get_scheduled_jobs(), j);
 			}
 
 			// find next time by which a job is certainly released
@@ -560,6 +583,19 @@ namespace NP {
 				nodes.emplace_back(std::forward<Args>(args)...);
 				Node_ref n_ref = --nodes.end();
 
+				const State& st;
+				if(n_ref->get_key()==0)
+				{
+					st= new_state(n_ref->get_key());
+				}
+				else
+				{
+					st= new_state(n_ref->get_key(), n_ref->finish_range());
+				}
+
+
+				n_ref->add_state(st);
+
 				auto njobs = n_ref->get_scheduled_jobs().size();
 				assert (
 					(!njobs && num_nodes == 0) // initial state
@@ -574,6 +610,34 @@ namespace NP {
 				return *n_ref;
 			}
 
+			template <typename... Args>
+			State& new_state(hash_value_t n_key)
+			{
+				states.emplace_back();
+				State_ref s_ref = --states.end();
+				states_by_key.insert(std::make_pair(n_key,s_ref));
+				num_states++;
+				return *s_ref;
+			}
+
+			template <typename... Args>
+			State& new_state(hash_value_t n_key, Interval<Time> ftimes)
+			{
+				states.emplace_back(ftimes);
+				State_ref s_ref = --states.end();
+				states_by_key.insert(std::make_pair(s_ref->get_key(),s_ref));
+				num_states++;
+				return *s_ref;
+			}
+
+			/*the todo queue contains the nodes that have to be processed in order to build the graph further,
+			there are currently two todo queues being used, one is for the nodes that have 'current_job_count' scheduled jobs and the other
+			queue is for nodes that have 'current_job_count+1' scheduled jobs. 
+			In the function below, the first queue with 'current_job_count' scheduled jobs is checked to see if it is empty or not.
+			If it is empty then the second queue with 'current_job_count++' scheduled jobs is checked to see if it empty or not. 
+			If both queues are empty then all nodes have been processed and the function returns false
+
+			*/
 			bool not_done()
 			{
 				// if the curent queue is empty, move on to the next
@@ -647,6 +711,7 @@ namespace NP {
 			{
 				Node_ref n = todo[todo_idx].front();
 				todo[todo_idx].pop_front();
+				// As in done_with_urrent_state() should the nodes be removed once processed??
 			}
 
 			//////////////////////////////////////
@@ -763,7 +828,7 @@ namespace NP {
 			}
 
 			void process_new_edge(
-				const State& from,
+				const Node& from,
 				const Node& to,
 				const Job<Time>& j,
 				const Interval<Time>& finish_range)
@@ -778,15 +843,15 @@ namespace NP {
 			}
 
 			// naive: no state merging
-			void schedule_job(const State &s, const Job<Time> &j)
+			void schedule_job(const Node &n, const Job<Time> &j)
 			{
-				const State& next =
-					new_node(s, j, index_of(j),
-					          next_finish_times(s, j),
-					          earliest_possible_job_release(s, j));
-				DM("      -----> S" << (states.end() - states.begin())
+				const Node& next =
+					new_node(n, j, index_of(j),
+					          next_finish_times(n, j),
+					          earliest_possible_job_release(n, j));
+				DM("      -----> N" << (nodes.end() - nodes.begin())
 				   << std::endl);
-				process_new_edge(s, next, j, next.finish_range());
+				process_new_edge(n, next, j, next.finish_range());
 			}
 
 			void explore_naively()
@@ -794,7 +859,7 @@ namespace NP {
 				make_initial_node();
 
 				while (not_done() && !aborted) {
-					const Node& s = next_node();
+					const Node& n = next_node();
 
 					DM("\n==================================================="
 					   << std::endl);
@@ -802,50 +867,56 @@ namespace NP {
 					   << (todo[todo_idx].front() - states.begin() + 1)
 					   << " " << s << std::endl);
 
-					// Identify relevant interval for next job
-					// relevant job buckets
-					auto ts_min = s.earliest_finish_time();
-					auto rel_min = s.earliest_job_release();
-					auto t_l = std::max(next_eligible_job_ready(s), s.latest_finish_time());
+					for(unsigned int i=0; i<n.states_size();i++)
+					{
+						const State& s = n.get_state(i);
 
-					Interval<Time> next_range{std::min(ts_min, rel_min), t_l};
+						// Identify relevant interval for next job
+						// relevant job buckets
+						auto ts_min = s.earliest_finish_time();
+						auto rel_min = n.earliest_job_release();
+						auto t_l = std::max(next_eligible_job_ready(s), s.latest_finish_time());
 
-					DM("ts_min = " << ts_min << std::endl <<
-					   "latest_idle = " << latest_idle << std::endl <<
-					   "latest_finish = " <<s.latest_finish_time() << std::endl);
-					DM("=> next range = " << next_range << std::endl);
+						Interval<Time> next_range{std::min(ts_min, rel_min), t_l};
 
-					bool found_at_least_one = false;
+						DM("ts_min = " << ts_min << std::endl <<
+						   "latest_idle = " << latest_idle << std::endl <<
+						   "latest_finish = " <<s.latest_finish_time() << std::endl);
+						DM("=> next range = " << next_range << std::endl);
 
-					DM("\n---\nChecking for pending and later-released jobs:"
-					   << std::endl);
-					const Job<Time>* jp;
-					foreach_possbly_pending_job_until(s, jp, next_range.upto()) {
-						const Job<Time>& j = *jp;
-						DM("+ " << j << std::endl);
-						// if it can be scheduled next...
-						if (is_eligible_successor(s, j)) {
-							DM("  --> can be next "  << std::endl);
-							// create the relevant state and continue
-							schedule_job(s, j);
-							found_at_least_one = true;
+						bool found_at_least_one = false;
+
+						DM("\n---\nChecking for pending and later-released jobs:"
+						   << std::endl);
+						const Job<Time>* jp;
+						foreach_possbly_pending_job_until(s, jp, next_range.upto()) {
+							const Job<Time>& j = *jp;
+							DM("+ " << j << std::endl);
+							// if it can be scheduled next...
+							if (is_eligible_successor(s, j)) {
+								DM("  --> can be next "  << std::endl);
+								// create the relevant state and continue
+								schedule_job(s, j);
+								found_at_least_one = true;
+							}
 						}
+
+						DM("---\nDone iterating over all jobs." << std::endl);
+
+						// check for a dead end
+						if (!found_at_least_one &&
+						    s.get_scheduled_jobs().size() != jobs.size()) {
+							// out of options and we didn't schedule all jobs
+							observed_deadline_miss = true;
+							if (early_exit)
+								aborted = true;
+						}
+
+						done_with_current_state();
+						check_cpu_timeout();
+						check_depth_abort();
 					}
-
-					DM("---\nDone iterating over all jobs." << std::endl);
-
-					// check for a dead end
-					if (!found_at_least_one &&
-					    s.get_scheduled_jobs().size() != jobs.size()) {
-						// out of options and we didn't schedule all jobs
-						observed_deadline_miss = true;
-						if (early_exit)
-							aborted = true;
-					}
-
-					done_with_current_state();
-					check_cpu_timeout();
-					check_depth_abort();
+					done_with_current_node();
 				}
 			}
 
@@ -875,7 +946,7 @@ namespace NP {
 						{
 							if (finish_range.intersects(found.State[i].finish_range()))
 							{
-								found.State[i].update_finish_range(finish_range);
+								found.States[i].update_finish_range(finish_range);
 								process_new_edge(s, found, j, finish_range);
 								state_merged = true;
 								break;
@@ -994,7 +1065,7 @@ namespace NP {
 						out << "\"];"
 							<< std::endl;
 					}
-					for (auto e : space.get_edges()) {
+					for (auto e : space.get_edges ()) {
 						out << "\tS" << state_id[e.source]
 						    << " -> "
 						    << "S" << state_id[e.target]
