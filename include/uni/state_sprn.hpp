@@ -88,8 +88,6 @@ namespace NP {
 			public:
 
 			typedef Schedule_state<Time> State;
-			State st;
-
 			typedef std::deque<State> States;
 			States states;
 
@@ -164,10 +162,15 @@ namespace NP {
 			}
 
 			//return the 'i'th state
-			State get_state(int i) const
+			State& get_state(const int i)
 			{
-				st = states[i];
+				State& st = states[i];
 				return st;
+			}
+
+			States get_states() const
+			{
+				return states;
 			}
 
 		};

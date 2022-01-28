@@ -332,13 +332,13 @@ namespace NP {
 				return incomplete(n.get_scheduled_jobs(), j);
 			}
 
-			bool incomplete(const State& s, const Job<Time>& j) const
-			{
-				return incomplete(s.get_scheduled_jobs(), j);
-			}
+			// bool incomplete(const State& s, const Job<Time>& j) const
+			// {
+			// 	return incomplete(s.get_scheduled_jobs(), j);
+			// }
 
 			// find next time by which a job is certainly released
-			Time next_certain_job_release(const State& s)
+			Time next_certain_job_release(const Node& n, const State& s)
 			{
 				const Scheduled &already_scheduled = s.get_scheduled_jobs();
 
@@ -363,7 +363,7 @@ namespace NP {
 					// Relevant only if we have an IIP, otherwise the job is
 					// trivially priority-eligible.
 					if (iip.can_block &&
-					    !priority_eligible(s, j, std::max(j.latest_arrival(), s.latest_finish_time())))
+					    !priority_eligible(n, s, j, std::max(j.latest_arrival(), s.latest_finish_time())))
 						continue;
 
 					// great, this job fits the bill
@@ -413,23 +413,24 @@ namespace NP {
 		if (incomplete(ppj_macro_local_s, *ppj_macro_local_j))
 
 // Iterate over all incomplete jobs that are released no later than ppju_macro_local_until
-#define foreach_possbly_pending_job_until(ppju_macro_local_s, ppju_macro_local_j, ppju_macro_local_until) 	\
+#define foreach_possbly_pending_job_until(ppju_macro_local_n, ppju_macro_local_s, ppju_macro_local_j, ppju_macro_local_until) 	\
 	for (auto ppju_macro_local_it = jobs_by_earliest_arrival			\
-                     .lower_bound((ppju_macro_local_s).earliest_job_release()); \
+                     .lower_bound((ppju_macro_local_n).earliest_job_release()); \
 	     ppju_macro_local_it != jobs_by_earliest_arrival.end() 				\
 	        && (ppju_macro_local_j = ppju_macro_local_it->second, ppju_macro_local_j->earliest_arrival() <= (ppju_macro_local_until)); 	\
 	     ppju_macro_local_it++) \
-		if (incomplete(ppju_macro_local_s, *ppju_macro_local_j))
+		if (incomplete(ppju_macro_local_n, *ppju_macro_local_j))
 
 // Iterare over all incomplete jobs that are certainly released no later than
 // cpju_macro_local_until
-#define foreach_certainly_pending_job_until(cpju_macro_local_s, cpju_macro_local_j, cpju_macro_local_until) \
-	foreach_possbly_pending_job_until(cpju_macro_local_s, cpju_macro_local_j, (cpju_macro_local_until)) \
+#define foreach_certainly_pending_job_until(cpju_macro_local_n, cpju_macro_local_s, cpju_macro_local_j, cpju_macro_local_until) \
+	foreach_possbly_pending_job_until(cpju_macro_local_n, cpju_macro_local_s, cpju_macro_local_j, (cpju_macro_local_until)) \
 		if (cpju_macro_local_j->latest_arrival() <= (cpju_macro_local_until))
 
 			// returns true if there is certainly some pending job of higher
 			// priority at the given time ready to be scheduled
 			bool exists_certainly_released_higher_prio_job(
+				const Node& n,
 				const State& s,
 				const Job<Time>& reference_job,
 				Time at)
@@ -440,11 +441,11 @@ namespace NP {
 				DM("    ? " << __FUNCTION__ << " at " << at << ": "
 				   << reference_job << std::endl);
 
-				auto rel_min = s.earliest_job_release();
+				auto rel_min = n.earliest_job_release();
 
 				// consider all possibly pending jobs
 				const Job<Time>* jp;
-				foreach_certainly_pending_job_until(s, jp, at) {
+				foreach_certainly_pending_job_until(n, s, jp, at) {
 					const Job<Time>& j = *jp;
 					DM("        - considering " << j << std::endl);
 					// skip reference job
@@ -464,13 +465,13 @@ namespace NP {
 			}
 
 			Time earliest_possible_job_release(
-				const State& s,
+				const Node& n,
 				const Job<Time>& ignored_job)
 			{
 				DM("      - looking for earliest possible job release starting from: "
-				   << s.earliest_job_release() << std::endl);
+				   << n.earliest_job_release() << std::endl);
 				const Job<Time>* jp;
-				foreach_possibly_pending_job(s, jp) {
+				foreach_possibly_pending_job(n, jp) {
 					const Job<Time>& j = *jp;
 
 					DM("         * looking at " << j << std::endl);
@@ -495,20 +496,20 @@ namespace NP {
 				return !iip.can_block || t <= iip.latest_start(j, t, s);
 			}
 
-			bool priority_eligible(const State &s, const Job<Time> &j, Time t)
+			bool priority_eligible(const Node& n, const State &s, const Job<Time> &j, Time t)
 			{
-				return !exists_certainly_released_higher_prio_job(s, j, t);
+				return !exists_certainly_released_higher_prio_job(n, s, j, t);
 			}
 
 			// returns true if there is certainly some pending job in this state
-			bool exists_certainly_pending_job(const State &s)
+			bool exists_certainly_pending_job(const Node& n, const State &s)
 			{
 				auto ts_min = s.earliest_finish_time();
 
 				const Job<Time>* jp;
-				foreach_certainly_pending_job_until(s, jp, ts_min) {
+				foreach_certainly_pending_job_until(n, s, jp, ts_min) {
 					const Job<Time>& j = *jp;
-					if ((!iip.can_block || priority_eligible(s, j, ts_min))
+					if ((!iip.can_block || priority_eligible(n, s, j, ts_min))
 					    && iip_eligible(s, j, ts_min)) {
 					    DM("\t\t\t\tcertainly released by "
 					       << ts_min << ":" << j << std::endl);
@@ -545,9 +546,9 @@ namespace NP {
 				return s.get_scheduled_jobs().includes(preds);
 			}
 
-			bool is_eligible_successor(const State &s, const Job<Time> &j)
+			bool is_eligible_successor(const Node &n, const State &s, const Job<Time> &j)
 			{
-				if (!incomplete(s, j)) {
+				if (!incomplete(n, j)) {
 					DM("  --> already complete"  << std::endl);
 					return false;
 				}
@@ -556,7 +557,7 @@ namespace NP {
 					return false;
 				}
 				auto t_s = next_earliest_start_time(s, j);
-				if (!priority_eligible(s, j, t_s)) {
+				if (!priority_eligible(n, s, j, t_s)) {
 					DM("  --> not prio eligible"  << std::endl);
 					return false;
 				}
@@ -583,16 +584,9 @@ namespace NP {
 				nodes.emplace_back(std::forward<Args>(args)...);
 				Node_ref n_ref = --nodes.end();
 
-				const State& st;
-				if(n_ref->get_key()==0)
-				{
-					st= new_state(n_ref->get_key());
-				}
-				else
-				{
-					st= new_state(n_ref->get_key(), n_ref->finish_range());
-				}
-
+				const State& st = (n_ref->get_key()==0) ?
+					new_state(n_ref->get_key()) :
+					new_state(n_ref->get_key(), n_ref->finish_range());
 
 				n_ref->add_state(st);
 
@@ -625,7 +619,6 @@ namespace NP {
 			{
 				states.emplace_back(ftimes);
 				State_ref s_ref = --states.end();
-				states_by_key.insert(std::make_pair(s_ref->get_key(),s_ref));
 				num_states++;
 				return *s_ref;
 			}
@@ -732,8 +725,8 @@ namespace NP {
 				return earliest_start + j.least_cost();
 			}
 
-			Time next_eligible_job_ready(const State& s) {
-			    const Scheduled& already_scheduled = s.get_scheduled_jobs();
+			Time next_eligible_job_ready(const Node& n,const State& s) {
+			    const Scheduled& already_scheduled = n.get_scheduled_jobs();
 
 			    for (auto it = jobs_by_latest_arrival.begin(); it != jobs_by_latest_arrival.end(); it++) {
 			        const Job<Time>& j = *(it->second);
@@ -744,7 +737,7 @@ namespace NP {
 
 			        auto t = std::max(j.latest_arrival(), s.latest_finish_time());
 
-			        if (priority_eligible(s, j, t) && iip_eligible(s, j, t))
+			        if (priority_eligible(n, s, j, t) && iip_eligible(s, j, t))
 			            return j.latest_arrival();
 
 			    }
@@ -754,6 +747,7 @@ namespace NP {
 
 			// l_k, equation 6
 			Time next_latest_finish_time(
+				const Node &n,
 				const State &s,
 				const Job<Time>& j)
 			{
@@ -767,7 +761,7 @@ namespace NP {
 				// t_s'
 				// t_L
 				Time own_latest_start = std::max(s.latest_finish_time(),
-                                                 next_eligible_job_ready(s));
+                                                 next_eligible_job_ready(n,s));
 
 				// t_R, t_I
 				Time last_start_before_other = std::min(
@@ -788,7 +782,7 @@ namespace NP {
 				return a.latest_trigger_time() + a.maximum_cleanup_cost();
 			}
 
-			Interval<Time> next_finish_times(const State &s, const Job<Time> &j)
+			Interval<Time> next_finish_times(const Node& n, const State &s, const Job<Time> &j)
 			{
 				auto i = index_of(j);
 
@@ -808,7 +802,7 @@ namespace NP {
 					// regular and aborted completion times.
 
 					auto eft = next_earliest_finish_time(s, j);
-					auto lft = next_latest_finish_time(s, j);
+					auto lft = next_latest_finish_time(n, s, j);
 
 					auto eat = next_earliest_job_abortion(*abort_actions[i]);
 					auto lat = next_latest_job_abortion(*abort_actions[i]);
@@ -822,7 +816,7 @@ namespace NP {
 					// standard case -- this job is never aborted or skipped
 					return Interval<Time>{
 						next_earliest_finish_time(s, j),
-						next_latest_finish_time(s, j)
+						next_latest_finish_time(n, s, j)
 					};
 				}
 			}
@@ -843,11 +837,11 @@ namespace NP {
 			}
 
 			// naive: no state merging
-			void schedule_job(const Node &n, const Job<Time> &j)
+			void schedule_job(const Node &n, const State& s, const Job<Time> &j)
 			{
 				const Node& next =
 					new_node(n, j, index_of(j),
-					          next_finish_times(n, j),
+					          next_finish_times(n, s, j),
 					          earliest_possible_job_release(n, j));
 				DM("      -----> N" << (nodes.end() - nodes.begin())
 				   << std::endl);
@@ -867,15 +861,13 @@ namespace NP {
 					   << (todo[todo_idx].front() - states.begin() + 1)
 					   << " " << s << std::endl);
 
-					for(unsigned int i=0; i<n.states_size();i++)
+					for(const State& s : n.get_states())
 					{
-						const State& s = n.get_state(i);
-
 						// Identify relevant interval for next job
 						// relevant job buckets
 						auto ts_min = s.earliest_finish_time();
 						auto rel_min = n.earliest_job_release();
-						auto t_l = std::max(next_eligible_job_ready(s), s.latest_finish_time());
+						auto t_l = std::max(next_eligible_job_ready(n,s), s.latest_finish_time());
 
 						Interval<Time> next_range{std::min(ts_min, rel_min), t_l};
 
@@ -889,14 +881,14 @@ namespace NP {
 						DM("\n---\nChecking for pending and later-released jobs:"
 						   << std::endl);
 						const Job<Time>* jp;
-						foreach_possbly_pending_job_until(s, jp, next_range.upto()) {
+						foreach_possbly_pending_job_until(n, s, jp, next_range.upto()) {
 							const Job<Time>& j = *jp;
 							DM("+ " << j << std::endl);
 							// if it can be scheduled next...
-							if (is_eligible_successor(s, j)) {
+							if (is_eligible_successor(n, s, j)) {
 								DM("  --> can be next "  << std::endl);
 								// create the relevant state and continue
-								schedule_job(s, j);
+								schedule_job(n, s, j);
 								found_at_least_one = true;
 							}
 						}
@@ -905,7 +897,7 @@ namespace NP {
 
 						// check for a dead end
 						if (!found_at_least_one &&
-						    s.get_scheduled_jobs().size() != jobs.size()) {
+						    n.get_scheduled_jobs().size() != jobs.size()) {
 							// out of options and we didn't schedule all jobs
 							observed_deadline_miss = true;
 							if (early_exit)
@@ -921,16 +913,16 @@ namespace NP {
 			}
 
 
-			void schedule(const State &s, const Job<Time> &j)
+			void schedule(const Node& n, const State &s, const Job<Time> &j)
 			{
-				Interval<Time> finish_range = next_finish_times(s, j);
+				Interval<Time> finish_range = next_finish_times(n, s, j);
 
-				auto k = s.next_key(j);
+				auto k = n.next_key(j);
 
 				auto r = nodes_by_key.equal_range(k);
 
 				if (r.first != r.second) {
-					Job_set sched_jobs{s.get_scheduled_jobs(), index_of(j)};
+					Job_set sched_jobs{n.get_scheduled_jobs(), index_of(j)};
 
 					for (auto it = r.first; it != r.second; it++) {
 						Node &found = *it->second;
@@ -966,7 +958,7 @@ namespace NP {
 				const Node& next =
 					new_node(s, j, index_of(j),
 					          finish_range,
-					          earliest_possible_job_release(s, j));
+					          earliest_possible_job_release(n, j));
 				DM("      -----> S" << (nodes.end() - nodes.begin())
 				   << std::endl);
 				process_new_edge(s, next, j, finish_range);
@@ -988,12 +980,11 @@ namespace NP {
 					// Identify relevant interval for next job
 					// relevant job buckets
 
-					for(unsigned int i=0; i<n.states_size();i++)
+					for(const State& s : n.get_states())
 					{
-						const State& s = n.get_state(i);
 						auto ts_min = s.earliest_finish_time();
-						auto rel_min = s.earliest_job_release();
-						auto t_l = std::max(next_eligible_job_ready(s), s.latest_finish_time());
+						auto rel_min = n.earliest_job_release();
+						auto t_l = std::max(next_eligible_job_ready(n,s), s.latest_finish_time());
 
 						Interval<Time> next_range{std::min(ts_min, rel_min), t_l};
 
@@ -1008,14 +999,14 @@ namespace NP {
 						DM("\n---\nChecking for pending and later-released jobs:"
 						   << std::endl);
 						const Job<Time>* jp;
-						foreach_possbly_pending_job_until(s, jp, next_range.upto()) {
+						foreach_possbly_pending_job_until(n, s, jp, next_range.upto()) {
 							const Job<Time>& j = *jp;
 							DM("+ " << j << std::endl);
 							// if it can be scheduled next...
-							if (is_eligible_successor(s, j)) {
+							if (is_eligible_successor(n, s, j)) {
 								DM("  --> can be next "  << std::endl);
 								// create the relevant state and continue
-								schedule(s, j);
+								schedule(n, s, j);
 								found_at_least_one = true;
 							}
 						}
@@ -1024,7 +1015,7 @@ namespace NP {
 
 						// check for a dead end
 						if (!found_at_least_one &&
-						    s.get_scheduled_jobs().size() != jobs.size()) {
+						    n.get_scheduled_jobs().size() != jobs.size()) {
 							// out of options and we didn't schedule all jobs
 							observed_deadline_miss = true;
 							if (early_exit)
@@ -1103,11 +1094,11 @@ namespace NP {
 
 namespace std
 {
-	template<class Time> struct hash<NP::Uniproc::Schedule_state<Time>>
+	template<class Time> struct hash<NP::Uniproc::Schedule_node<Time>>
     {
-		std::size_t operator()(NP::Uniproc::Schedule_state<Time> const& s) const
+		std::size_t operator()(NP::Uniproc::Schedule_node<Time> const& n) const
         {
-            return s.get_key();
+            return n.get_key();
         }
     };
 }
