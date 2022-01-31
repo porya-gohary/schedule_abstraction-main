@@ -63,6 +63,11 @@ namespace NP {
 				finish_time.widen(update);
 			}
 
+			void copy_state(const Interval<Time> &newst)
+			{
+				finish_time.equate(newst);
+			}
+
 			friend std::ostream& operator<< (std::ostream& stream,
 			                                 const Schedule_state<Time>& s)
 			{
@@ -143,9 +148,9 @@ namespace NP {
 				return finish_time;
 			}
 
-			void add_state(const State& s)
+			void add_state(State& s)
 			{
-				states.push_back(s);
+				states.insert(states.end(),s);
 			}
 
 			friend std::ostream& operator<< (std::ostream& stream,
@@ -168,9 +173,27 @@ namespace NP {
 				return st;
 			}
 
-			States get_states() const
+			const States& get_states() const
 			{
 				return states;
+			}
+
+			State& get_states_modify() 
+			{
+				return states;
+			}
+
+			bool merge_states(const Interval<Time> &new_st)
+			{
+				for(State &s: states)
+				{
+					if(new_st.intersects(s.finish_range()))
+					{
+						s.update_finish_range(new_st);
+						return true;
+					}
+				}
+				return false;
 			}
 
 		};

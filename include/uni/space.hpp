@@ -340,7 +340,7 @@ namespace NP {
 			// find next time by which a job is certainly released
 			Time next_certain_job_release(const Node& n, const State& s)
 			{
-				const Scheduled &already_scheduled = s.get_scheduled_jobs();
+				const Scheduled &already_scheduled = n.get_scheduled_jobs();
 
 				for (auto it = jobs_by_latest_arrival
 				               .lower_bound(s.earliest_finish_time());
@@ -356,7 +356,7 @@ namespace NP {
 					// If the job is not IIP-eligible when it is certainly
 					// released, then there exists a schedule where it doesn't
 					// count, so skip it.
-					if (!iip_eligible(s, j, std::max(j.latest_arrival(), s.latest_finish_time())))
+					if (!iip_eligible(n, s, j, std::max(j.latest_arrival(), s.latest_finish_time())))
 						continue;
 
 					// It must be priority-eligible when released, too.
@@ -376,6 +376,7 @@ namespace NP {
 			// find next time by which a job of higher priority
 			// is certainly released on or after a given point in time
 			Time next_certain_higher_priority_job_release(
+				const Node& n,
 				const State& s,
 				const Job<Time>& reference_job)
 			{
@@ -386,7 +387,7 @@ namespace NP {
 					const Job<Time>& j = *(it->second);
 
 					// not relevant if already scheduled
-					if (!incomplete(s, j))
+					if (!incomplete(n, j))
 						continue;
 
 					// irrelevant if not of sufficient priority
@@ -452,7 +453,7 @@ namespace NP {
 					if (&j == &reference_job)
 						continue;
 					// ignore jobs that aren't yet ready
-					if (!ready(s, j))
+					if (!ready(n, j))
 						continue;
 					// check priority
 					if (j.higher_priority_than(reference_job)) {
@@ -491,9 +492,9 @@ namespace NP {
 				return Time_model::constants<Time>::infinity();
 			}
 
-			bool iip_eligible(const State &s, const Job<Time> &j, Time t)
+			bool iip_eligible(const Node &n, const State &s, const Job<Time> &j, Time t)
 			{
-				return !iip.can_block || t <= iip.latest_start(j, t, s);
+				return !iip.can_block || t <= iip.latest_start(j, t, s, n);
 			}
 
 			bool priority_eligible(const Node& n, const State &s, const Job<Time> &j, Time t)
@@ -510,7 +511,7 @@ namespace NP {
 				foreach_certainly_pending_job_until(n, s, jp, ts_min) {
 					const Job<Time>& j = *jp;
 					if ((!iip.can_block || priority_eligible(n, s, j, ts_min))
-					    && iip_eligible(s, j, ts_min)) {
+					    && iip_eligible(n, s, j, ts_min)) {
 					    DM("\t\t\t\tcertainly released by "
 					       << ts_min << ":" << j << std::endl);
 						return true;
@@ -519,7 +520,7 @@ namespace NP {
 				return false;
 			}
 
-			bool potentially_next(const State &s, const Job<Time> &j)
+			bool potentially_next(const Node &n, const State &s, const Job<Time> &j)
 			{
 				auto t_latest = s.latest_finish_time();
 
@@ -527,7 +528,7 @@ namespace NP {
 				// job is trivially potentially next, so check the other case.
 
 				if (t_latest < j.earliest_arrival()) {
-					Time r = next_certain_job_release(s);
+					Time r = next_certain_job_release(n,s);
 					// if something else is certainly released before j and IIP-
 					// eligible at the time of certain release, then j can't
 					// possibly be next
@@ -538,12 +539,12 @@ namespace NP {
 			}
 
 			// returns true if all predecessors of j have completed in state s
-			bool ready(const State &s, const Job<Time> &j)
+			bool ready(const Node &n, const Job<Time> &j)
 			{
 				const Job_precedence_set &preds =
 					job_precedence_sets[index_of(j)];
 				// check that all predecessors have completed
-				return s.get_scheduled_jobs().includes(preds);
+				return n.get_scheduled_jobs().includes(preds);
 			}
 
 			bool is_eligible_successor(const Node &n, const State &s, const Job<Time> &j)
@@ -552,7 +553,7 @@ namespace NP {
 					DM("  --> already complete"  << std::endl);
 					return false;
 				}
-				if (!ready(s, j)) {
+				if (!ready(n, j)) {
 					DM("  --> not ready"  << std::endl);
 					return false;
 				}
@@ -561,11 +562,11 @@ namespace NP {
 					DM("  --> not prio eligible"  << std::endl);
 					return false;
 				}
-				if (!potentially_next(s, j)) {
+				if (!potentially_next(n, s, j)) {
 					DM("  --> not potentially next" <<  std::endl);
 					return false;
 				}
-				if (!iip_eligible(s, j, t_s)) {
+				if (!iip_eligible(n, s, j, t_s)) {
 					DM("  --> not IIP eligible" << std::endl);
 					return false;
 				}
@@ -584,9 +585,9 @@ namespace NP {
 				nodes.emplace_back(std::forward<Args>(args)...);
 				Node_ref n_ref = --nodes.end();
 
-				const State& st = (n_ref->get_key()==0) ?
-					new_state(n_ref->get_key()) :
-					new_state(n_ref->get_key(), n_ref->finish_range());
+				State& st = (n_ref->get_key()==0) ?
+					new_state() :
+					new_state(n_ref->finish_range());
 
 				n_ref->add_state(st);
 
@@ -605,17 +606,16 @@ namespace NP {
 			}
 
 			template <typename... Args>
-			State& new_state(hash_value_t n_key)
+			State& new_state()
 			{
 				states.emplace_back();
 				State_ref s_ref = --states.end();
-				states_by_key.insert(std::make_pair(n_key,s_ref));
 				num_states++;
 				return *s_ref;
 			}
 
 			template <typename... Args>
-			State& new_state(hash_value_t n_key, Interval<Time> ftimes)
+			State& new_state(Interval<Time> ftimes)
 			{
 				states.emplace_back(ftimes);
 				State_ref s_ref = --states.end();
@@ -737,7 +737,7 @@ namespace NP {
 
 			        auto t = std::max(j.latest_arrival(), s.latest_finish_time());
 
-			        if (priority_eligible(n, s, j, t) && iip_eligible(s, j, t))
+			        if (priority_eligible(n, s, j, t) && iip_eligible(n, s, j, t))
 			            return j.latest_arrival();
 
 			    }
@@ -752,11 +752,11 @@ namespace NP {
 				const Job<Time>& j)
 			{
 				Time other_certain_start =
-					next_certain_higher_priority_job_release(s, j);
+					next_certain_higher_priority_job_release(n, s, j);
 
 				Time t_s = next_earliest_start_time(s, j);
 
-				Time iip_latest_start = iip.latest_start(j, t_s, s);
+				Time iip_latest_start = iip.latest_start(j, t_s, s, n);
 
 				// t_s'
 				// t_L
@@ -857,11 +857,12 @@ namespace NP {
 
 					DM("\n==================================================="
 					   << std::endl);
-					DM("Looking at: S"
-					   << (todo[todo_idx].front() - states.begin() + 1)
-					   << " " << s << std::endl);
+					DM("Looking at: N"
+					   << (todo[todo_idx].front() - nodes.begin() + 1)
+					   << " " << n << std::endl);
+					const States& states = n.get_states();
 
-					for(const State& s : n.get_states())
+					for(State const &s: states)
 					{
 						// Identify relevant interval for next job
 						// relevant job buckets
@@ -913,7 +914,7 @@ namespace NP {
 			}
 
 
-			void schedule(const Node& n, const State &s, const Job<Time> &j)
+			void schedule(const Node& n, const State& s, const Job<Time> &j)
 			{
 				Interval<Time> finish_range = next_finish_times(n, s, j);
 
@@ -926,6 +927,7 @@ namespace NP {
 
 					for (auto it = r.first; it != r.second; it++) {
 						Node &found = *it->second;
+						Node_ref n_ref = it->second;
 
 						// key collision if the job sets don't match exactly
 						if (found.get_scheduled_jobs() != sched_jobs)
@@ -933,23 +935,13 @@ namespace NP {
 
 						// cannot merge without loss of accuracy if the
 						// intervals do not overlap
-						bool state_merged = false;
-						for(int i = 0; i<found.States.size(); i++)
+						if(!found.merge_states(finish_range))
 						{
-							if (finish_range.intersects(found.State[i].finish_range()))
-							{
-								found.States[i].update_finish_range(finish_range);
-								process_new_edge(s, found, j, finish_range);
-								state_merged = true;
-								break;
-							}
+							State& st = new_state(finish_range);
+							n_ref->add_state(st);
 						}
-
-						if(state_merged == false)
-						{
-							found.States.push_back(finish_range);
-							process_new_edge(s, found, j, finish_range);
-						}
+						process_new_edge(n, found, j, finish_range);
+						return;
 					}
 				}
 
@@ -961,7 +953,7 @@ namespace NP {
 					          earliest_possible_job_release(n, j));
 				DM("      -----> S" << (nodes.end() - nodes.begin())
 				   << std::endl);
-				process_new_edge(s, next, j, finish_range);
+				process_new_edge(n, next, j, finish_range);
 			}
 
 			void explore()
@@ -980,7 +972,9 @@ namespace NP {
 					// Identify relevant interval for next job
 					// relevant job buckets
 
-					for(const State& s : n.get_states())
+					const States &states = n.get_states();
+
+					for(State const &s: states)
 					{
 						auto ts_min = s.earliest_finish_time();
 						auto rel_min = n.earliest_job_release();

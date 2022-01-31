@@ -9,6 +9,7 @@ namespace NP {
 		{
 			public:
 
+			typedef Schedule_node<Time> Node;
 			typedef Schedule_state<Time> State;
 			typedef State_space<Time, Null_IIP> Space;
 			typedef typename State_space<Time, Null_IIP>::Workload Jobs;
@@ -19,7 +20,7 @@ namespace NP {
 
 			Null_IIP(const Space &space, const Jobs &jobs) {}
 
-			Time latest_start(const Job<Time>& j, Time t, const State& s)
+			Time latest_start(const Job<Time>& j, Time t, const State& s, const Node& n)
 			{
 				return Time_model::constants<Time>::infinity();
 			}
@@ -29,6 +30,7 @@ namespace NP {
 		{
 			public:
 
+			typedef Schedule_node<Time> Node;
 			typedef Schedule_state<Time> State;
 			typedef State_space<Time, Precatious_RM_IIP> Space;
 			typedef typename State_space<Time, Precatious_RM_IIP>::Workload Jobs;
@@ -46,7 +48,7 @@ namespace NP {
 				DM("IIP max priority = " << max_priority);
 			}
 
-			Time latest_start(const Job<Time>& j, Time t, const State& s)
+			Time latest_start(const Job<Time>& j, Time t, const State& s, const Node& n)
 			{
 				DM("IIP P-RM for " << j << ": ");
 
@@ -58,7 +60,7 @@ namespace NP {
 
 				for (auto it = hp_jobs.upper_bound(t); it != hp_jobs.end(); it++) {
 					const Job<Time>& h = *it->second;
-					if (space.incomplete(s, h)) {
+					if (space.incomplete(n, h)) {
 						Time latest = h.get_deadline()
 						              - h.maximal_cost()
 						              - j.maximal_cost();

@@ -116,6 +116,12 @@ template<class T> class Interval {
 		b = std::max(until(), other.until());
 	}
 
+	void equate(const Interval<T>& other)
+	{
+		a = other.from();
+		b = other.until();
+	}
+
 	Interval<T> operator|(const Interval<T>& other) const
 	{
 		return merge(other);
