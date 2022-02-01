@@ -64,14 +64,14 @@ TEST_CASE("Interval LUT") {
 
 TEST_CASE("state space") {
 
-	NP::Uniproc::Schedule_state<dtime_t> s0;
+	NP::Uniproc::Schedule_node<dtime_t> n0;
 
-	CHECK(s0.earliest_finish_time() == 0);
-	CHECK(s0.latest_finish_time() == 0);
+	CHECK(n0.finish_range().from() == 0);
+	CHECK(n0.finish_range().until() == 0);
 
-	auto h = std::hash<Uniproc::Schedule_state<dtime_t>>{};
+	auto h = std::hash<Uniproc::Schedule_node<dtime_t>>{};
 
-	CHECK(h(s0) == 0);
+	CHECK(h(n0) == 0);
 
 	Job<dtime_t> j1{10, I(0, 0), I(3, 13), 60, 60};
 

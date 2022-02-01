@@ -167,7 +167,7 @@ namespace NP {
 					const Job<Time>& j = *(it->second);
 					auto tid = j.get_task_id();
 					if (j_i.get_task_id() != tid
-					    && space.incomplete(s, j)
+					    && space.incomplete(n, j)
 					    && (ijs.find(tid) == ijs.end()
 					        || ijs[tid]->earliest_arrival()
 					           > j.earliest_arrival())) {
@@ -192,7 +192,7 @@ namespace NP {
 					auto tid = j.get_task_id();
 
 					// future jobs should still be pending...
-					assert(space.incomplete(s, j));
+					assert(space.incomplete(n, j));
 
 					if (ijs.find(tid) == ijs.end()) {
 						ijs[tid] = &j;

@@ -202,6 +202,7 @@ namespace NP {
 			typedef std::multimap<Time, Job_ref> By_time_map;
 
 			typedef std::deque<Node_ref> Todo_queue;
+			typedef std::deque<State_ref> State_ref_queue;
 
 			typedef std::unordered_map<JobID, Interval<Time> > Response_times;
 
@@ -585,7 +586,7 @@ namespace NP {
 				nodes.emplace_back(std::forward<Args>(args)...);
 				Node_ref n_ref = --nodes.end();
 
-				State& st = (n_ref->get_key()==0) ?
+				State_ref st = (n_ref->get_key()==0) ?
 					new_state() :
 					new_state(n_ref->finish_range());
 
@@ -606,21 +607,21 @@ namespace NP {
 			}
 
 			template <typename... Args>
-			State& new_state()
+			State_ref new_state()
 			{
 				states.emplace_back();
 				State_ref s_ref = --states.end();
 				num_states++;
-				return *s_ref;
+				return s_ref;
 			}
 
 			template <typename... Args>
-			State& new_state(Interval<Time> ftimes)
+			State_ref new_state(Interval<Time> ftimes)
 			{
 				states.emplace_back(ftimes);
 				State_ref s_ref = --states.end();
 				num_states++;
-				return *s_ref;
+				return s_ref;
 			}
 
 			/*the todo queue contains the nodes that have to be processed in order to build the graph further,
@@ -860,21 +861,21 @@ namespace NP {
 					DM("Looking at: N"
 					   << (todo[todo_idx].front() - nodes.begin() + 1)
 					   << " " << n << std::endl);
-					const States& states = n.get_states();
+					const State_ref_queue& states = n.get_states();
 
-					for(State const &s: states)
+					for(State_ref const &s: states)
 					{
 						// Identify relevant interval for next job
 						// relevant job buckets
-						auto ts_min = s.earliest_finish_time();
+						auto ts_min = s->earliest_finish_time();
 						auto rel_min = n.earliest_job_release();
-						auto t_l = std::max(next_eligible_job_ready(n,s), s.latest_finish_time());
+						auto t_l = std::max(next_eligible_job_ready(n,*s), s->latest_finish_time());
 
 						Interval<Time> next_range{std::min(ts_min, rel_min), t_l};
 
 						DM("ts_min = " << ts_min << std::endl <<
 						   "latest_idle = " << latest_idle << std::endl <<
-						   "latest_finish = " <<s.latest_finish_time() << std::endl);
+						   "latest_finish = " <<s->latest_finish_time() << std::endl);
 						DM("=> next range = " << next_range << std::endl);
 
 						bool found_at_least_one = false;
@@ -882,14 +883,14 @@ namespace NP {
 						DM("\n---\nChecking for pending and later-released jobs:"
 						   << std::endl);
 						const Job<Time>* jp;
-						foreach_possbly_pending_job_until(n, s, jp, next_range.upto()) {
+						foreach_possbly_pending_job_until(n, *s, jp, next_range.upto()) {
 							const Job<Time>& j = *jp;
 							DM("+ " << j << std::endl);
 							// if it can be scheduled next...
-							if (is_eligible_successor(n, s, j)) {
+							if (is_eligible_successor(n, *s, j)) {
 								DM("  --> can be next "  << std::endl);
 								// create the relevant state and continue
-								schedule_job(n, s, j);
+								schedule_job(n, *s, j);
 								found_at_least_one = true;
 							}
 						}
@@ -937,7 +938,7 @@ namespace NP {
 						// intervals do not overlap
 						if(!found.merge_states(finish_range))
 						{
-							State& st = new_state(finish_range);
+							State_ref st = new_state(finish_range);
 							n_ref->add_state(st);
 						}
 						process_new_edge(n, found, j, finish_range);
@@ -948,7 +949,7 @@ namespace NP {
 				// If we reach here, we didn't find a match and need to create
 				// a new state.
 				const Node& next =
-					new_node(s, j, index_of(j),
+					new_node(n, j, index_of(j),
 					          finish_range,
 					          earliest_possible_job_release(n, j));
 				DM("      -----> S" << (nodes.end() - nodes.begin())
@@ -972,20 +973,20 @@ namespace NP {
 					// Identify relevant interval for next job
 					// relevant job buckets
 
-					const States &states = n.get_states();
+					const State_ref_queue &states = n.get_states();
 
-					for(State const &s: states)
+					for(State_ref const &s: states)
 					{
-						auto ts_min = s.earliest_finish_time();
+						auto ts_min = s->earliest_finish_time();
 						auto rel_min = n.earliest_job_release();
-						auto t_l = std::max(next_eligible_job_ready(n,s), s.latest_finish_time());
+						auto t_l = std::max(next_eligible_job_ready(n,*s), s->latest_finish_time());
 
 						Interval<Time> next_range{std::min(ts_min, rel_min), t_l};
 
 						DM("ts_min = " << ts_min << std::endl <<
 						   "rel_min = " << rel_min << std::endl <<
 						   "latest_idle = " << latest_idle << std::endl <<
-						   "latest_finish = " << s.latest_finish_time() << std::endl);
+						   "latest_finish = " << s->latest_finish_time() << std::endl);
 						DM("=> next range = " << next_range << std::endl);
 
 						bool found_at_least_one = false;
@@ -993,14 +994,14 @@ namespace NP {
 						DM("\n---\nChecking for pending and later-released jobs:"
 						   << std::endl);
 						const Job<Time>* jp;
-						foreach_possbly_pending_job_until(n, s, jp, next_range.upto()) {
+						foreach_possbly_pending_job_until(n, *s, jp, next_range.upto()) {
 							const Job<Time>& j = *jp;
 							DM("+ " << j << std::endl);
 							// if it can be scheduled next...
-							if (is_eligible_successor(n, s, j)) {
+							if (is_eligible_successor(n, *s, j)) {
 								DM("  --> can be next "  << std::endl);
 								// create the relevant state and continue
-								schedule(n, s, j);
+								schedule(n, *s, j);
 								found_at_least_one = true;
 							}
 						}
