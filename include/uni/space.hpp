@@ -861,9 +861,9 @@ namespace NP {
 					DM("Looking at: N"
 					   << (todo[todo_idx].front() - nodes.begin() + 1)
 					   << " " << n << std::endl);
-					const State_ref_queue n_states = n.get_states();
+					const State_ref_queue *n_states = n.get_states();
 
-					for(State* s: n_states)
+					for(State *s : *n_states)
 					{
 						// Identify relevant interval for next job
 						// relevant job buckets
@@ -973,9 +973,9 @@ namespace NP {
 					// Identify relevant interval for next job
 					// relevant job buckets
 
-					const State_ref_queue n_states = n.get_states();
+					const State_ref_queue* n_states = n.get_states();
 
-					for(State* s: n_states)
+					for(State *s: *n_states)
 					{
 						auto ts_min = s->earliest_finish_time();
 						auto rel_min = n.earliest_job_release();

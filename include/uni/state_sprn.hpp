@@ -168,9 +168,9 @@ namespace NP {
 				return states.size();
 			}
 
-			const State_ref_queue get_states() const
+			const State_ref_queue* get_states() const
 			{
-				return states;
+				return &states;
 			}
 
 			bool merge_states(const Interval<Time> &new_st)
