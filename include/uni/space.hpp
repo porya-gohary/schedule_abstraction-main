@@ -673,7 +673,7 @@ namespace NP {
 				}
 			}
 
-			void done_with_current_state()
+			void done_with_current_node()
 			{
 				Node_ref n = todo[todo_idx].front();
 				// remove from TODO list
@@ -699,13 +699,6 @@ namespace NP {
 				assert(nodes.begin() == n);
 				nodes.pop_front();
 #endif
-			}
-
-			void done_with_current_node()
-			{
-				Node_ref n = todo[todo_idx].front();
-				todo[todo_idx].pop_front();
-				// As in done_with_urrent_state() should the nodes be removed once processed??
 			}
 
 			//////////////////////////////////////
@@ -873,8 +866,7 @@ namespace NP {
 
 						Interval<Time> next_range{std::min(ts_min, rel_min), t_l};
 
-						DM("ts_min = " << ts_min << std::endl <<
-						   "latest_idle = " << latest_idle << std::endl <<
+						DM("ts_min = " << ts_min << std::endl << std::endl <<
 						   "latest_finish = " <<s->latest_finish_time() << std::endl);
 						DM("=> next range = " << next_range << std::endl);
 
@@ -906,7 +898,6 @@ namespace NP {
 								aborted = true;
 						}
 
-						done_with_current_state();
 						check_cpu_timeout();
 						check_depth_abort();
 					}
@@ -938,6 +929,7 @@ namespace NP {
 						// intervals do not overlap
 						if(!found.merge_states(finish_range))
 						{
+							DM("State not merged but added to the node");
 							State &st = new_state(finish_range);
 							n_ref->add_state(&st);
 						}
@@ -948,11 +940,12 @@ namespace NP {
 
 				// If we reach here, we didn't find a match and need to create
 				// a new state.
+				DM("Creating a new node"<<std::endl);
 				const Node& next =
 					new_node(n, j, index_of(j),
 					          finish_range,
 					          earliest_possible_job_release(n, j));
-				DM("      -----> S" << (nodes.end() - nodes.begin())
+				DM("      -----> N" << (nodes.end() - nodes.begin()) << " " <<(todo[todo_idx].front() - nodes.begin() + 1)
 				   << std::endl);
 				process_new_edge(n, next, j, finish_range);
 			}
@@ -966,8 +959,8 @@ namespace NP {
 
 					DM("\n==================================================="
 					   << std::endl);
-					DM("Looking at: S"
-					   << (todo[todo_idx].front() - nodes.begin() + 1)
+					DM("Looking at: N"
+					   << (todo[todo_idx].front() - nodes.begin() + 1) 
 					   << " " << n << std::endl);
 
 					// Identify relevant interval for next job
@@ -975,7 +968,7 @@ namespace NP {
 
 					const State_ref_queue* n_states = n.get_states();
 
-					for(State *s: *n_states)
+					for(auto s: *n_states)
 					{
 						auto ts_min = s->earliest_finish_time();
 						auto rel_min = n.earliest_job_release();
@@ -984,8 +977,7 @@ namespace NP {
 						Interval<Time> next_range{std::min(ts_min, rel_min), t_l};
 
 						DM("ts_min = " << ts_min << std::endl <<
-						   "rel_min = " << rel_min << std::endl <<
-						   "latest_idle = " << latest_idle << std::endl <<
+						   "rel_min = " << rel_min << std::endl  <<
 						   "latest_finish = " << s->latest_finish_time() << std::endl);
 						DM("=> next range = " << next_range << std::endl);
 
@@ -1018,7 +1010,6 @@ namespace NP {
 							DM(":: Didn't find any possible successors." << std::endl);
 						}
 
-						done_with_current_state();
 						check_cpu_timeout();
 						check_depth_abort();
 					}

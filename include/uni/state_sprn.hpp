@@ -156,9 +156,9 @@ namespace NP {
 			}
 
 			friend std::ostream& operator<< (std::ostream& stream,
-			                                 const Schedule_node<Time>& s)
+			                                 const Schedule_node<Time>& n)
 			{
-				stream << "Node(" << s.get_scheduled_jobs() << ")";
+				stream << "Node(" << n.states.size() << ")";
 				return stream;
 			}
 
