@@ -202,7 +202,7 @@ namespace NP {
 			typedef std::multimap<Time, Job_ref> By_time_map;
 
 			typedef std::deque<Node_ref> Todo_queue;
-			typedef std::deque<State_ref> State_ref_queue;
+			typedef std::deque<State*> State_ref_queue;
 
 			typedef std::unordered_map<JobID, Interval<Time> > Response_times;
 
@@ -586,11 +586,11 @@ namespace NP {
 				nodes.emplace_back(std::forward<Args>(args)...);
 				Node_ref n_ref = --nodes.end();
 
-				State_ref st = (n_ref->get_key()==0) ?
+				State &st = (n_ref->get_key()==0) ?
 					new_state() :
 					new_state(n_ref->finish_range());
 
-				n_ref->add_state(st);
+				n_ref->add_state(&st);
 
 				auto njobs = n_ref->get_scheduled_jobs().size();
 				assert (
@@ -607,21 +607,21 @@ namespace NP {
 			}
 
 			template <typename... Args>
-			State_ref new_state()
+			State& new_state()
 			{
 				states.emplace_back();
 				State_ref s_ref = --states.end();
 				num_states++;
-				return s_ref;
+				return *s_ref;
 			}
 
 			template <typename... Args>
-			State_ref new_state(Interval<Time> ftimes)
+			State& new_state(Interval<Time> ftimes)
 			{
 				states.emplace_back(ftimes);
 				State_ref s_ref = --states.end();
 				num_states++;
-				return s_ref;
+				return *s_ref;
 			}
 
 			/*the todo queue contains the nodes that have to be processed in order to build the graph further,
@@ -861,9 +861,9 @@ namespace NP {
 					DM("Looking at: N"
 					   << (todo[todo_idx].front() - nodes.begin() + 1)
 					   << " " << n << std::endl);
-					const State_ref_queue& states = n.get_states();
+					const State_ref_queue n_states = n.get_states();
 
-					for(State_ref const &s: states)
+					for(State* s: n_states)
 					{
 						// Identify relevant interval for next job
 						// relevant job buckets
@@ -938,8 +938,8 @@ namespace NP {
 						// intervals do not overlap
 						if(!found.merge_states(finish_range))
 						{
-							State_ref st = new_state(finish_range);
-							n_ref->add_state(st);
+							State &st = new_state(finish_range);
+							n_ref->add_state(&st);
 						}
 						process_new_edge(n, found, j, finish_range);
 						return;
@@ -973,9 +973,9 @@ namespace NP {
 					// Identify relevant interval for next job
 					// relevant job buckets
 
-					const State_ref_queue &states = n.get_states();
+					const State_ref_queue n_states = n.get_states();
 
-					for(State_ref const &s: states)
+					for(State* s: n_states)
 					{
 						auto ts_min = s->earliest_finish_time();
 						auto rel_min = n.earliest_job_release();

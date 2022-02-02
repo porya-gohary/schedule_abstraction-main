@@ -93,9 +93,7 @@ namespace NP {
 			public:
 
 			typedef Schedule_state<Time> State;
-			//typedef std::deque<State> States;
-			typedef typename std::deque<State>::iterator State_ref;
-			typedef std::deque<State_ref> State_ref_queue;
+			typedef typename std::deque<State*> State_ref_queue;
 			State_ref_queue states;
 
 			// initial node
@@ -151,7 +149,7 @@ namespace NP {
 				return finish_time;
 			}
 
-			void add_state(State_ref s)
+			void add_state(State* s)
 			{
 				//State_ref s_ref = *s;
 				states.push_back(s);
@@ -170,21 +168,14 @@ namespace NP {
 				return states.size();
 			}
 
-			//return the 'i'th state
-			State_ref& get_state(const int i)
-			{
-				State& st = states[i];
-				return st;
-			}
-
-			const State_ref_queue& get_states() const
+			const State_ref_queue get_states() const
 			{
 				return states;
 			}
 
 			bool merge_states(const Interval<Time> &new_st)
 			{
-				for(State_ref &s: states)
+				for(State* s: states)
 				{
 					if(new_st.intersects(s->finish_range()))
 					{
