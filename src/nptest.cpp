@@ -183,6 +183,7 @@ static void process_file(const std::string& fname)
 			result = process_stream(in, dag_in, aborts_in);
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
 			if (want_dot_graph) {
+				DM("Dot graph being made");
 				std::string dot_name = fname;
 				auto p = dot_name.find(".csv");
 				if (p != std::string::npos) {
@@ -381,6 +382,7 @@ int main(int argc, char** argv)
 
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
 	want_dot_graph = options.get("dot");
+	DM("Dot graph"<<want_dot_graph<<std::endl);
 #else
 	if (options.is_set_by_user("dot")) {
 		std::cerr << "Error: graph collection support must be enabled "

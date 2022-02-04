@@ -968,7 +968,7 @@ namespace NP {
 
 					const State_ref_queue* n_states = n.get_states();
 
-					for(auto s: *n_states)
+					for(State *s: *n_states)
 					{
 						auto ts_min = s->earliest_finish_time();
 						auto rel_min = n.earliest_job_release();
@@ -1021,31 +1021,38 @@ namespace NP {
 			friend std::ostream& operator<< (std::ostream& out,
 			                                 const State_space<Time, IIP>& space)
 			{
-					std::map<const Schedule_state<Time>*, unsigned int> state_id;
+					std::map<const Schedule_node<Time>*, unsigned int> node_id;
 					unsigned int i = 1;
 					out << "digraph {" << std::endl;
-					for (const Schedule_state<Time>& s : space.get_states()) {
-						state_id[&s] = i++;
-						out << "\tS" << state_id[&s]
-						    << "[label=\"S" << state_id[&s] << ": ["
-						    << s.earliest_finish_time()
-						    << ", "
-						    << s.latest_finish_time()
-						    << "]"
+					for (const Schedule_node<Time>& n : space.get_nodes()) {
+						node_id[&n] = i++;
+						out << "\tN" << node_id[&n]
+						    << "[label=\"N" << node_id[&n] << ": [";
+						const State_ref_queue* n_states = n.get_states();
+
+						for(State *s: *n_states)
+						{
+							out << "("
+						    	<< s->earliest_finish_time()
+						    	<< ", "
+						    	<< s->latest_finish_time()
+						    	<< ")\\n";
+						}
+						out << "]"
 						    << "\\nER=";
-						if (s.earliest_job_release() ==
+						if (n.earliest_job_release() ==
 						    Time_model::constants<Time>::infinity()) {
 							out << "N/A";
 						} else {
-							out << s.earliest_job_release();
+							out << n.earliest_job_release();
 						}
 						out << "\"];"
 							<< std::endl;
 					}
 					for (auto e : space.get_edges ()) {
-						out << "\tS" << state_id[e.source]
+						out << "\tN" << node_id[e.source]
 						    << " -> "
-						    << "S" << state_id[e.target]
+						    << "N" << node_id[e.target]
 						    << "[label=\""
 						    << "T" << e.scheduled->get_task_id()
 						    << " J" << e.scheduled->get_job_id()
@@ -1062,7 +1069,7 @@ namespace NP {
 						    << ";"
 						    << std::endl;
 						if (e.deadline_miss_possible()) {
-							out << "S" << state_id[e.target]
+							out << "N" << node_id[e.target]
 								<< "[color=Red];"
 								<< std::endl;
 						}
