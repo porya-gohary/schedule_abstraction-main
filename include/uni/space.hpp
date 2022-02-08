@@ -264,6 +264,7 @@ namespace NP {
 			, max_depth(max_depth)
 			, iip(*this, jobs)
 			, num_nodes(0)
+			, num_states(0)
 			, num_edges(0)
 			, width(0)
 			, todo_idx(0)
@@ -415,7 +416,7 @@ namespace NP {
 		if (incomplete(ppj_macro_local_s, *ppj_macro_local_j))
 
 // Iterate over all incomplete jobs that are released no later than ppju_macro_local_until
-#define foreach_possbly_pending_job_until(ppju_macro_local_n, ppju_macro_local_s, ppju_macro_local_j, ppju_macro_local_until) 	\
+#define foreach_possbly_pending_job_until(ppju_macro_local_n, ppju_macro_local_j, ppju_macro_local_until) 	\
 	for (auto ppju_macro_local_it = jobs_by_earliest_arrival			\
                      .lower_bound((ppju_macro_local_n).earliest_job_release()); \
 	     ppju_macro_local_it != jobs_by_earliest_arrival.end() 				\
@@ -424,9 +425,9 @@ namespace NP {
 		if (incomplete(ppju_macro_local_n, *ppju_macro_local_j))
 
 // Iterare over all incomplete jobs that are certainly released no later than
-// cpju_macro_local_until
-#define foreach_certainly_pending_job_until(cpju_macro_local_n, cpju_macro_local_s, cpju_macro_local_j, cpju_macro_local_until) \
-	foreach_possbly_pending_job_until(cpju_macro_local_n, cpju_macro_local_s, cpju_macro_local_j, (cpju_macro_local_until)) \
+// cpju_macro_local_until remove state HERE 
+#define foreach_certainly_pending_job_until(cpju_macro_local_n, cpju_macro_local_j, cpju_macro_local_until) \
+	foreach_possbly_pending_job_until(cpju_macro_local_n, cpju_macro_local_j, (cpju_macro_local_until)) \
 		if (cpju_macro_local_j->latest_arrival() <= (cpju_macro_local_until))
 
 			// returns true if there is certainly some pending job of higher
@@ -447,7 +448,7 @@ namespace NP {
 
 				// consider all possibly pending jobs
 				const Job<Time>* jp;
-				foreach_certainly_pending_job_until(n, s, jp, at) {
+				foreach_certainly_pending_job_until(n, jp, at) {
 					const Job<Time>& j = *jp;
 					DM("        - considering " << j << std::endl);
 					// skip reference job
@@ -509,7 +510,7 @@ namespace NP {
 				auto ts_min = s.earliest_finish_time();
 
 				const Job<Time>* jp;
-				foreach_certainly_pending_job_until(n, s, jp, ts_min) {
+				foreach_certainly_pending_job_until(n, jp, ts_min) {
 					const Job<Time>& j = *jp;
 					if ((!iip.can_block || priority_eligible(n, s, j, ts_min))
 					    && iip_eligible(n, s, j, ts_min)) {
@@ -875,7 +876,7 @@ namespace NP {
 						DM("\n---\nChecking for pending and later-released jobs:"
 						   << std::endl);
 						const Job<Time>* jp;
-						foreach_possbly_pending_job_until(n, *s, jp, next_range.upto()) {
+						foreach_possbly_pending_job_until(n, jp, next_range.upto()) {
 							const Job<Time>& j = *jp;
 							DM("+ " << j << std::endl);
 							// if it can be scheduled next...
@@ -986,7 +987,7 @@ namespace NP {
 						DM("\n---\nChecking for pending and later-released jobs:"
 						   << std::endl);
 						const Job<Time>* jp;
-						foreach_possbly_pending_job_until(n, *s, jp, next_range.upto()) {
+						foreach_possbly_pending_job_until(n, jp, next_range.upto()) {
 							const Job<Time>& j = *jp;
 							DM("+ " << j << std::endl);
 							// if it can be scheduled next...
