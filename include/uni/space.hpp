@@ -1028,18 +1028,18 @@ namespace NP {
 					for (const Schedule_node<Time>& n : space.get_nodes()) {
 						node_id[&n] = i++;
 						out << "\tN" << node_id[&n]
-						    << "[label=\"N" << node_id[&n] << ": [";
+						    << "[label=\"N" << node_id[&n] << ": {";
 						const State_ref_queue* n_states = n.get_states();
 
 						for(State *s: *n_states)
 						{
-							out << "("
+							out << "["
 						    	<< s->earliest_finish_time()
 						    	<< ", "
 						    	<< s->latest_finish_time()
-						    	<< ")\\n";
+						    	<< "]\\n";
 						}
-						out << "]"
+						out << "}"
 						    << "\\nER=";
 						if (n.earliest_job_release() ==
 						    Time_model::constants<Time>::infinity()) {
