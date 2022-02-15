@@ -202,7 +202,6 @@ namespace NP {
 			typedef std::multimap<Time, Job_ref> By_time_map;
 
 			typedef std::deque<Node_ref> Todo_queue;
-			typedef std::deque<State*> State_ref_queue;
 
 			typedef std::unordered_map<JobID, Interval<Time> > Response_times;
 
@@ -333,11 +332,6 @@ namespace NP {
 			{
 				return incomplete(n.get_scheduled_jobs(), j);
 			}
-
-			// bool incomplete(const State& s, const Job<Time>& j) const
-			// {
-			// 	return incomplete(s.get_scheduled_jobs(), j);
-			// }
 
 			// find next time by which a job is certainly released
 			Time next_certain_job_release(const Node& n, const State& s)
@@ -855,7 +849,7 @@ namespace NP {
 					DM("Looking at: N"
 					   << (todo[todo_idx].front() - nodes.begin() + 1)
 					   << " " << n << std::endl);
-					const State_ref_queue *n_states = n.get_states();
+					const auto *n_states = n.get_states();
 
 					for(State *s : *n_states)
 					{
@@ -928,6 +922,7 @@ namespace NP {
 
 						// cannot merge without loss of accuracy if the
 						// intervals do not overlap
+
 						if(!found.merge_states(finish_range))
 						{
 							DM("State not merged but added to the node");
@@ -967,7 +962,7 @@ namespace NP {
 					// Identify relevant interval for next job
 					// relevant job buckets
 
-					const State_ref_queue* n_states = n.get_states();
+					const auto *n_states = n.get_states();
 
 					for(State *s: *n_states)
 					{
@@ -1029,7 +1024,7 @@ namespace NP {
 						node_id[&n] = i++;
 						out << "\tN" << node_id[&n]
 						    << "[label=\"N" << node_id[&n] << ": {";
-						const State_ref_queue* n_states = n.get_states();
+						const auto *n_states = n.get_states();
 
 						for(State *s: *n_states)
 						{

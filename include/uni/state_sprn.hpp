@@ -90,11 +90,20 @@ namespace NP {
 			// no accidental copies
 			Schedule_node(const Schedule_node& origin)  = delete;
 
-			public:
-
 			typedef Schedule_state<Time> State;
-			typedef typename std::deque<State*> State_ref_queue;
-			State_ref_queue states;
+
+			struct eft_compare 
+			{
+				bool operator() (State* x, State* y) const
+				{
+					return x->earliest_finish_time() < y->earliest_finish_time();
+				}
+			};
+
+			typedef typename std::set<State*, eft_compare> State_ref_queue;
+			State_ref_queue states;  
+
+			public:
 
 			// initial node
 			Schedule_node()
@@ -151,8 +160,7 @@ namespace NP {
 
 			void add_state(State* s)
 			{
-				//State_ref s_ref = *s;
-				states.push_back(s);
+				states.insert(s);
 			}
 
 			friend std::ostream& operator<< (std::ostream& stream,
@@ -175,13 +183,20 @@ namespace NP {
 
 			bool merge_states(const Interval<Time> &new_st)
 			{
-				for(State* s: states)
+				typedef typename std::set<State*, eft_compare>::iterator State_ref;
+				State_ref s_ref = states.begin();
+				while(s_ref!=states.end())
 				{
-					if(new_st.intersects(s->finish_range()))
+					if(new_st.intersects((*s_ref)->finish_range()))
 					{
-						s->update_finish_range(new_st);
+						State* merged_state = *s_ref;
+						merged_state->update_finish_range(new_st);
+						s_ref = states.erase(s_ref);
+						states.insert(merged_state);
 						return true;
 					}
+					else
+						s_ref++;
 				}
 				return false;
 			}
