@@ -15,19 +15,28 @@ static const auto inf = Time_model::constants<dtime_t>::infinity();
 TEST_CASE("Intervals") {
 	auto i1 = Interval<dtime_t>{10, 20};
 	auto i2 = Interval<dtime_t>{15, 25};
+	//to check if i1 and  i3 are not disjoint as they are consecutive intervals
 	auto i3 = Interval<dtime_t>{21, 30};
 	auto i4 = Interval<dtime_t>{5,  45};
+	//to check if i1 and i5 are disjoint as they are not consecutive nor are they joint
+	auto i5 = Interval<dtime_t>{22, 30};
 
 	Interval<dtime_t> ivals[]{i1, i2, i3, i4};
 
 	CHECK(i1.intersects(i2));
 	CHECK(i2.intersects(i3));
-	CHECK(i1.disjoint(i3));
+	//to check if i1 and  i3 are not disjoint as they are consecutive intervals
+	CHECK(i1.intersects(i3));
+	//to check if i1 and i5 are disjoint as they are not consecutive nor are they joint
+	CHECK(i1.disjoint(i5));
 
 	for (auto i : ivals)
 		CHECK(i.intersects(i4));
 
 	CHECK(i1.merge(i2).merge(i3) == I(10, 30));
+
+	//to check if i1 and  i3 are not disjoint as they are consecutive intervals
+	CHECK(i1.merge(i3) == I(10,30));	
 
 	CHECK(I(10, 20).intersects(I(10, 20)));
 }

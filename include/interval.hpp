@@ -75,7 +75,7 @@ template<class T> class Interval {
 
 	bool disjoint(const Interval<T>& other) const
 	{
-		return other.until() < from() || until() < other.from();
+		return (other.until()+1) < from() || (until()+1) < other.from();
 	}
 
 	bool intersects(const Interval<T>& other) const

@@ -19,8 +19,7 @@
 #include "precedence.hpp"
 #include "clock.hpp"
 
-//#include "uni/state.hpp"
-#include "uni/state_sprn.hpp"
+#include "uni/state.hpp"
 
 namespace NP {
 
