@@ -1,5 +1,5 @@
-#ifndef SCHEDULE_SPACE_H
-#define SCHEDULE_SPACE_H
+#ifndef UNI_IIP_SPACE_H
+#define UNI_IIP_SPACE_H
 
 #include <unordered_set>
 #include <unordered_map>
@@ -19,13 +19,15 @@
 #include "precedence.hpp"
 #include "clock.hpp"
 
-#include "uni/state.hpp"
+#include "uni_iip/state_iip.hpp"
 
 namespace NP {
 
-	namespace Uniproc {
+	namespace UniprocIIP {
 
-		template<class Time> class State_space
+		template<class Time> class Null_IIP;
+
+		template<class Time, class IIP = Null_IIP<Time>> class State_space
 		{
 			public:
 
@@ -187,7 +189,7 @@ namespace NP {
 
 			typedef std::deque<Node> Nodes;
 
-			// All the states created through the making of the schedule abstrcation graph are stored in States.
+			// All the states created hrough the making of the schedule abstrcation graph are stored in States.
 			// This is done in the function new_state()
 			typedef std::deque<State> States;
 
@@ -222,11 +224,11 @@ namespace NP {
 
 
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
-			typedef std::deque<Edge> Edges;
-			typedef typename std::deque<Edge>::iterator Edge_ref;
-
-			Edges edges;
+			std::deque<Edge> edges;
 #endif
+
+			IIP iip;
+			friend IIP;
 
 			Response_times rta;
 			bool aborted;
@@ -274,6 +276,7 @@ namespace NP {
 			, timed_out(false)
 			, timeout(max_cpu_time)
 			, max_depth(max_depth)
+			, iip(*this, jobs)
 			, num_nodes(0)
 			, num_states(0)
 			, num_edges(0)
@@ -370,6 +373,19 @@ namespace NP {
 
 					// not relevant if already scheduled
 					if (!incomplete(already_scheduled, j))
+						continue;
+
+					// If the job is not IIP-eligible when it is certainly
+					// released, then there exists a schedule where it doesn't
+					// count, so skip it.
+					if (!iip_eligible(n, s, j, std::max(j.latest_arrival(), s.latest_finish_time())))
+						continue;
+
+					// It must be priority-eligible when released, too.
+					// Relevant only if we have an IIP, otherwise the job is
+					// trivially priority-eligible.
+					if (iip.can_block &&
+					    !priority_eligible(n, s, j, std::max(j.latest_arrival(), s.latest_finish_time())))
 						continue;
 
 					// great, this job fits the bill
@@ -478,7 +494,7 @@ namespace NP {
 				return false;
 			}
 
-			// Find the earliest possible job release of all jobs in a node except for the ignored job
+			// Find the ealrliest possible job release of all jobs in a node except for the ignored job
 			Time earliest_possible_job_release(
 				const Node& n,
 				const Job<Time>& ignored_job)
@@ -506,10 +522,36 @@ namespace NP {
 				return Time_model::constants<Time>::infinity();
 			}
 
+			// Ensures that time t, is smaller tthan the latest_permissible start time. Thei latest permissible
+			// start time depends on the IIP methodology, if Null_IIP, infinity is released in which case
+			// iip_eligible will always return true.
+			bool iip_eligible(const Node &n, const State &s, const Job<Time> &j, Time t)
+			{
+				return !iip.can_block || t <= iip.latest_start(j, t, s, n);
+			}
+
 			// Ensure that there is no higher prioirty job that has certainly released
 			bool priority_eligible(const Node& n, const State &s, const Job<Time> &j, Time t)
 			{
 				return !exists_certainly_released_higher_prio_job(n, s, j, t);
+			}
+
+			// returns true if there is certainly some pending job in this state
+			bool exists_certainly_pending_job(const Node& n, const State &s)
+			{
+				auto ts_min = s.earliest_finish_time();
+
+				const Job<Time>* jp;
+				foreach_certainly_pending_job_until(n, jp, ts_min) {
+					const Job<Time>& j = *jp;
+					if ((!iip.can_block || priority_eligible(n, s, j, ts_min))
+					    && iip_eligible(n, s, j, ts_min)) {
+					    DM("\t\t\t\tcertainly released by "
+					       << ts_min << ":" << j << std::endl);
+						return true;
+					}
+				}
+				return false;
 			}
 
 			//checks if the job j can be the next potential job for a state 
@@ -562,6 +604,12 @@ namespace NP {
 				// if not potentially next, then false
 				if (!potentially_next(n, s, j)) {
 					DM("  --> not potentially next" <<  std::endl);
+					return false;
+				}
+
+				// If not IIP eligible, then false
+				if (!iip_eligible(n, s, j, t_s)) {
+					DM("  --> not IIP eligible" << std::endl);
 					return false;
 				}
 
@@ -721,11 +769,6 @@ namespace NP {
 				return earliest_start + j.least_cost();
 			}
 
-			Time next_latest_finish_time(const State &s, const Job<Time>& j, Time lst)
-			{
-				return lst + j.maximal_cost();
-			}
-
 			// For all the jobs sorted by their latest arrival, check if they have already been scheduled, 
 			Time next_eligible_job_ready(const Node& n,const State& s) {
 			    const Scheduled& already_scheduled = n.get_scheduled_jobs();
@@ -739,7 +782,7 @@ namespace NP {
 
 			        auto t = std::max(j.latest_arrival(), s.latest_finish_time());
 
-			        if (priority_eligible(n, s, j, t))
+			        if (priority_eligible(n, s, j, t) && iip_eligible(n, s, j, t))
 			            return j.latest_arrival();
 
 			    }
@@ -747,21 +790,31 @@ namespace NP {
 			    return Time_model::constants<Time>::infinity();
 			}
 
-			// The earliest time at which a job has certainly released and has not been scheduled so far in node n
-			Time next_job_ready(const Node& n) {
-				const Scheduled& already_scheduled = n.get_scheduled_jobs();
+			// l_k, equation 6
+			Time next_latest_finish_time(
+				const Node &n,
+				const State &s,
+				const Job<Time>& j)
+			{
+				Time other_certain_start =
+					next_certain_higher_priority_job_release(n, s, j);
 
-			    for (auto it = jobs_by_latest_arrival.begin(); it != jobs_by_latest_arrival.end(); it++) {
-			        const Job<Time>& j = *(it->second);
+				Time t_s = next_earliest_start_time(s, j);
 
-			        // not relevant if already scheduled
-			        if (!incomplete(already_scheduled, j))
-			            continue;
+				Time iip_latest_start = iip.latest_start(j, t_s, s, n);
 
-			        return j.latest_arrival();
-			    }
+				// t_s'
+				// t_L is t_wc
+				Time own_latest_start = std::max(s.latest_finish_time(),
+                                                 next_eligible_job_ready(n,s));
 
-			    return Time_model::constants<Time>::infinity();
+				// t_R, t_I
+				Time last_start_before_other = std::min(
+					other_certain_start - Time_model::constants<Time>::epsilon(),
+					iip_latest_start);
+
+				return std::min(own_latest_start, last_start_before_other)
+					   + j.maximal_cost();
 			}
 
 			Time next_earliest_job_abortion(const Abort_action<Time> &a)
@@ -774,7 +827,7 @@ namespace NP {
 				return a.latest_trigger_time() + a.maximum_cleanup_cost();
 			}
 
-			Interval<Time> next_finish_times(const State &s, const Job<Time> &j, Time lst)
+			Interval<Time> next_finish_times(const Node& n, const State &s, const Job<Time> &j)
 			{
 				auto i = index_of(j);
 
@@ -794,7 +847,7 @@ namespace NP {
 					// regular and aborted completion times.
 
 					auto eft = next_earliest_finish_time(s, j);
-					auto lft = next_latest_finish_time(s, j, lst);
+					auto lft = next_latest_finish_time(n, s, j);
 
 					auto eat = next_earliest_job_abortion(*abort_actions[i]);
 					auto lat = next_latest_job_abortion(*abort_actions[i]);
@@ -808,13 +861,11 @@ namespace NP {
 					// standard case -- this job is never aborted or skipped
 					return Interval<Time>{
 						next_earliest_finish_time(s, j),
-						next_latest_finish_time(s, j, lst)
+						next_latest_finish_time(n, s, j)
 					};
 				}
 			}
 
-			// creates a new edge from an existing to another node that can either be an existing node
-			// in case of merge or a new node when merge is not possible
 			void process_new_edge(
 				const Node& from,
 				const Node& to,
@@ -833,13 +884,9 @@ namespace NP {
 			// naive: no state merging
 			void schedule_job(const Node &n, const State& s, const Job<Time> &j)
 			{
-				Time t_high = next_certain_higher_priority_job_release(n, s, j);
-				Time t_wc = std::max(s.latest_finish_time(), next_eligible_job_ready(n, s));
-				Time lft = std::min(t_wc, t_high-Time_model::constants<Time>::epsilon());
-								
 				const Node& next =
 					new_node(n, j, index_of(j),
-					          next_finish_times(s, j, lft),
+					          next_finish_times(n, s, j),
 					          earliest_possible_job_release(n, j));
 				DM("      -----> N" << (nodes.end() - nodes.begin())
 				   << std::endl);
@@ -912,41 +959,42 @@ namespace NP {
 				}
 			}
 
-			// The three schedule functions below are responsible for finsing the finish time interval, adding the
-			// state to a node and managing the edges for the nodes based on the newly created state
 
-			// In schedule_merge_edge, the function handles the addition of a new state where,
-			// not only is the state being merged into another node, but it also has a common edge with another job
-			void schedule_merge_edge(const Node& n, const Node_ref match, const State& s, const Job<Time> &j, const Time lst)
+			void schedule(const Node& n, const State& s, const Job<Time> &j)
 			{
-				Interval<Time> finish_range = next_finish_times(s, j, lst);//requires lft
-				if(!match->merge_states(finish_range))
-				{
-					DM("State not merged but added to the node");
-					State &st = new_state(finish_range);
-					match->add_state(&st);
+				Interval<Time> finish_range = next_finish_times(n, s, j);
+
+				auto k = n.next_key(j);
+
+				auto r = nodes_by_key.equal_range(k);
+
+				if (r.first != r.second) {
+					Job_set sched_jobs{n.get_scheduled_jobs(), index_of(j)};
+
+					for (auto it = r.first; it != r.second; it++) {
+						Node &found = *it->second;
+						Node_ref n_ref = it->second;
+
+						// key collision if the job sets don't match exactly
+						if (found.get_scheduled_jobs() != sched_jobs)
+							continue;
+
+						// cannot merge without loss of accuracy if the
+						// intervals do not overlap
+
+						if(!found.merge_states(finish_range))
+						{
+							DM("State not merged but added to the node");
+							State &st = new_state(finish_range);
+							n_ref->add_state(&st);
+						}
+						process_new_edge(n, found, j, finish_range);
+						return;
+					}
 				}
-				update_finish_times(j, finish_range);
-			}
 
-			// In schedule_merge_node, the function handles the addition of a new state that is to be merged into another 
-			// node but has its own unique edge.
-			void schedule_merge_node(const Node& n, const Node_ref match, const State& s, const Job<Time> &j, const Time lst)
-			{
-				Interval<Time> finish_range = next_finish_times(s, j, lst);//requires lft
-				if(!match->merge_states(finish_range))
-				{
-					DM("State not merged but added to the node");
-					State &st = new_state(finish_range);
-					match->add_state(&st);
-				}
-				process_new_edge(n, *match, j, finish_range);
-			}
-
-			// In schedule_new, the funtion does not attempt to merge but instead creates a new node for the new state
-			Node_ref schedule_new(const Node& n, const State& s, const Job<Time> &j, const Time lst)
-			{
-				Interval<Time> finish_range = next_finish_times(s, j, lst);//requires lft
+				// If we reach here, we didn't find a match and need to create
+				// a new state.
 				DM("Creating a new node"<<std::endl);
 				const Node& next =
 					new_node(n, j, index_of(j),
@@ -955,16 +1003,13 @@ namespace NP {
 				DM("      -----> N" << (nodes.end() - nodes.begin()) << " " <<(todo[todo_idx].front() - nodes.begin() + 1)
 				   << std::endl);
 				process_new_edge(n, next, j, finish_range);
-				Node_ref n_ref = --nodes.end();
-				return n_ref;
 			}
 
 			void explore()
 			{
 				make_initial_node();
 
-				while (not_done() && !aborted) 
-				{
+				while (not_done() && !aborted) {
 					const Node& n = next_node();
 
 					DM("\n==================================================="
@@ -973,130 +1018,63 @@ namespace NP {
 					   << (todo[todo_idx].front() - nodes.begin() + 1) 
 					   << " " << n << std::endl);
 
-					// Obtain all the states in Node n
+					// Identify relevant interval for next job
+					// relevant job buckets
+
 					const auto *n_states = n.get_states();
 
-					// the earliest of all the efts of each state in node n
-					auto eft_min = (n.get_first_state())->earliest_finish_time();
-					// The earliest job release in node n
-					auto rel_min = n.earliest_job_release();
-					// The latest of all the lfts of of each state in node n
-					auto lft_max = (n.get_last_state())->latest_finish_time();
-					// among the incomplete jobs of node n, the time at which the earliest certain release occurs.
-					auto nxt_ready_job = next_job_ready(n);
-
-					Interval<Time> next_range{std::min(eft_min,rel_min),std::max(lft_max,nxt_ready_job)};
-
-					DM("eft_min = " << eft_min << std::endl <<
-						"rel_min = " << rel_min << std::endl <<
-						"lft_max = " << lft_max << std::endl <<
-						"nxt_ready_job = " << nxt_ready_job << std::endl);
-					DM("=> next range = "<< next_range << std::endl);
-
-					// Keep track of the number of states that have led to new states. This is needed to detect
-					// a deadend wherein a state cannot be expanded. The intial value is set to 0 and as we find states that 
-					// can be expanded, we incremet this variable
-					int num_states_expanded = 0;
-
-					const Job<Time>* jp;
-					foreach_possbly_pending_job_until(n, jp, next_range.upto())
+					for(State *s: *n_states)
 					{
-						const Job<Time>& j = *jp;
+						auto ts_min = s->earliest_finish_time();
+						auto rel_min = n.earliest_job_release();
+						auto t_l = std::max(next_eligible_job_ready(n,*s), s->latest_finish_time());
 
-						// atleast_one_node keeps track of whether atleast one node has been created with the current job
-						// All other states that ensure that the job 'j' is eligible will merge into the same node. 
-						bool atleast_one_node = false;
+						Interval<Time> next_range{std::min(ts_min, rel_min), t_l};
 
-						// If atleast_one_node has been found then it has to be stored in the variable match
-						Node_ref match;
+						DM("ts_min = " << ts_min << std::endl <<
+						   "rel_min = " << rel_min << std::endl  <<
+						   "latest_finish = " << s->latest_finish_time() << std::endl);
+						DM("=> next range = " << next_range << std::endl);
 
-						// t_high is computed once per job, and is common to all the states explored
-						Time t_high = next_certain_higher_priority_job_release(n,*(n.get_first_state()), j);
+						bool found_at_least_one = false;
 
-						DM("\n---\nChecking for states to expand to for job "<< j.get_id()<<std::endl);
-						for(State *s: *n_states)
-						{
-							if (is_eligible_successor(n, *s, j))
-							{
-								// Calculate the t_wc value which in turn will allow you to calculate the 
-								// latest start time which uses t_wc and t_high that was calculated before 
-								// looping through all the states.
-
-								Time t_wc = std::max(s->latest_finish_time(), next_eligible_job_ready(n,*s));
-								Time lst = std::min(t_wc, t_high-Time_model::constants<Time>::epsilon());
-
-								if(atleast_one_node == false)
-								{
-									// Find the key of the next state from state s connected by an edge with job j
-									// Find all states that have the same key
-									auto k = n.next_key(j);
-									auto r = nodes_by_key.equal_range(k);
-
-									if(r.first != r.second) {
-										Job_set sched_jobs{n.get_scheduled_jobs(), index_of(j)};
-										for(auto it = r.first; it != r.second; it++)
-										{
-											Node &found = *it->second;
-
-											// If the found state and the state that is to be expanded have the same set of scheduled_jobs
-											// only then can we find a match to merge
-											if(found.get_scheduled_jobs() != sched_jobs)
-												continue;
-
-											// If we have reached here, it means that we have found a state where merge is possible.
-											match = it->second;
-											schedule_merge_node(n, match, *s, j, lst);
-											atleast_one_node = true;
-											break;
-										}
-									}
-
-									// if there exists no existing nodes where the new state can be merged into, then a new node is created
-									if(atleast_one_node == false)
-									{
-										match = schedule_new(n, *s, j, lst);
-										atleast_one_node = true;
-									}
-								}								
-								else
-								{
-									schedule_merge_edge(n, match, *s, j, lst); //match is given here
-								}
-
-								// If the state is not a deadend, then we already know that the state has been expanded
-								// so there is no need to increase the num_states_expanded variable. But if the state
-								// is found to be a deadend, then this state can be set to not a deadend because the 
-								// state has just been expanded.
-								if(s->is_deadend())
-								{
-									s->not_deadend();
-									num_states_expanded++;
-								}
+						DM("\n---\nChecking for pending and later-released jobs:"
+						   << std::endl);
+						const Job<Time>* jp;
+						foreach_possbly_pending_job_until(n, jp, next_range.upto()) {
+							const Job<Time>& j = *jp;
+							DM("+ " << j << std::endl);
+							// if it can be scheduled next...
+							if (is_eligible_successor(n, *s, j)) {
+								DM("  --> can be next "  << std::endl);
+								// create the relevant state and continue
+								schedule(n, *s, j);
+								found_at_least_one = true;
 							}
 						}
+
+						DM("---\nDone iterating over all jobs." << std::endl);
+
+						// check for a dead end
+						if (!found_at_least_one &&
+						    n.get_scheduled_jobs().size() != jobs.size()) {
+							// out of options and we didn't schedule all jobs
+							observed_deadline_miss = true;
+							if (early_exit)
+								aborted = true;
+							DM(":: Didn't find any possible successors." << std::endl);
+						}
+
+						check_cpu_timeout();
+						check_depth_abort();
 					}
-
-					
-					DM("---\nDone iterating over all jobs." << std::endl);
-
-					// check for a dead end, check that all the states in the node has been expanded
-					if (num_states_expanded != n.states_size() && n.get_scheduled_jobs().size() != jobs.size()) {
-						// out of options and we didn't schedule all jobs
-						observed_deadline_miss = true;
-						if (early_exit)
-							aborted = true;
-						DM(":: Didn't find any possible successors." << std::endl);
-					}
-
-					check_cpu_timeout();
-					check_depth_abort();
 					done_with_current_node();
 				}
 			}
 
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
 			friend std::ostream& operator<< (std::ostream& out,
-			                                 const State_space<Time>& space)
+			                                 const State_space<Time, IIP>& space)
 			{
 					std::map<const Schedule_node<Time>*, unsigned int> node_id;
 					unsigned int i = 1;
@@ -1160,13 +1138,13 @@ namespace NP {
 	}
 }
 
-// #include "uni_iip/iip.hpp"
+#include "uni_iip/iip.hpp"
 
 namespace std
 {
-	template<class Time> struct hash<NP::Uniproc::Schedule_node<Time>>
+	template<class Time> struct hash<NP::UniprocIIP::Schedule_node<Time>>
     {
-		std::size_t operator()(NP::Uniproc::Schedule_node<Time> const& n) const
+		std::size_t operator()(NP::UniprocIIP::Schedule_node<Time> const& n) const
         {
             return n.get_key();
         }

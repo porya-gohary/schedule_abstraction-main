@@ -267,6 +267,7 @@ TEST_CASE("[NP state space] don't skip over deadline-missing jobs") {
 
 		CHECK(nspace.number_of_edges() == 2);
 		CHECK(nspace.number_of_states() == 3);
+        CHECK(nspace.number_of_nodes() == 3);
 	}
 
 	SUBCASE("Exploration with state-merging") {
@@ -275,6 +276,7 @@ TEST_CASE("[NP state space] don't skip over deadline-missing jobs") {
 
 		CHECK(space.number_of_edges() == 2);
 		CHECK(space.number_of_states() == 3);
+        CHECK(space.number_of_nodes() == 3);
 	}
 
 	SUBCASE("Exploration after deadline miss") {
@@ -287,6 +289,7 @@ TEST_CASE("[NP state space] don't skip over deadline-missing jobs") {
 
 		CHECK(space.number_of_edges() == 5);
 		CHECK(space.number_of_states() == 6);
+		CHECK(space.number_of_nodes() == 6);
 
 		// make sure the analysis continued after the deadline miss
 		auto ftimes = space.get_finish_times(prob.jobs[0]);
@@ -328,6 +331,7 @@ TEST_CASE("[NP state space] explore all branches with deadline-missing jobs") {
 
 	CHECK(space.number_of_edges() ==  7);
 	CHECK(space.number_of_states() == 7);
+	CHECK(space.number_of_nodes() == 7);
 
 	// make sure the analysis continued after the deadline miss
 	auto ftimes = space.get_finish_times(prob.jobs[0]);

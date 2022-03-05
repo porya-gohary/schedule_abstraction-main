@@ -17,10 +17,10 @@
 
 #include "problem.hpp"
 #include "uni/space.hpp"
+#include "uni_iip/space.hpp"
 #include "global/space.hpp"
 #include "io.hpp"
 #include "clock.hpp"
-
 
 #define MAX_PROCESSORS 512
 
@@ -140,15 +140,15 @@ static Analysis_result process_stream(
 	else if (want_multiprocessor && !want_dense)
 		return analyze<dtime_t, NP::Global::State_space<dtime_t>>(in, dag_in, aborts_in);
 	else if (want_dense && want_prm_iip)
-		return analyze<dense_t, NP::Uniproc::State_space<dense_t, NP::Uniproc::Precatious_RM_IIP<dense_t>>>(in, dag_in, aborts_in);
+		return analyze<dense_t, NP::UniprocIIP::State_space<dense_t, NP::UniprocIIP::Precatious_RM_IIP<dense_t>>>(in, dag_in, aborts_in);
 	else if (want_dense && want_cw_iip)
-		return analyze<dense_t, NP::Uniproc::State_space<dense_t, NP::Uniproc::Critical_window_IIP<dense_t>>>(in, dag_in, aborts_in);
+		return analyze<dense_t, NP::UniprocIIP::State_space<dense_t, NP::UniprocIIP::Critical_window_IIP<dense_t>>>(in, dag_in, aborts_in);
 	else if (want_dense && !want_prm_iip)
 		return analyze<dense_t, NP::Uniproc::State_space<dense_t>>(in, dag_in, aborts_in);
 	else if (!want_dense && want_prm_iip)
-		return analyze<dtime_t, NP::Uniproc::State_space<dtime_t, NP::Uniproc::Precatious_RM_IIP<dtime_t>>>(in, dag_in, aborts_in);
+		return analyze<dtime_t, NP::UniprocIIP::State_space<dtime_t, NP::UniprocIIP::Precatious_RM_IIP<dtime_t>>>(in, dag_in, aborts_in);
 	else if (!want_dense && want_cw_iip)
-		return analyze<dtime_t, NP::Uniproc::State_space<dtime_t, NP::Uniproc::Critical_window_IIP<dtime_t>>>(in, dag_in, aborts_in);
+		return analyze<dtime_t, NP::UniprocIIP::State_space<dtime_t, NP::UniprocIIP::Critical_window_IIP<dtime_t>>>(in, dag_in, aborts_in);
 	else
 		return analyze<dtime_t, NP::Uniproc::State_space<dtime_t>>(in, dag_in, aborts_in);
 }
@@ -334,6 +334,8 @@ int main(int argc, char** argv)
 
 
 	auto options = parser.parse_args(argc, argv);
+	//all the options that could have been entered above are processed below and appropriate variables
+	// are assigned their respective values.
 
 	const std::string& time_model = options.get("time_model");
 	want_dense = time_model == "dense";
@@ -405,9 +407,11 @@ int main(int argc, char** argv)
 	}
 #endif
 
+	// this prints the header in the output on the console
 	if (options.get("print_header"))
 		print_header();
 
+	// process_file is given the arguments that have been passed
 	for (auto f : parser.args())
 		process_file(f);
 

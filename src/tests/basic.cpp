@@ -7,6 +7,7 @@
 #include "index_set.hpp"
 #include "jobs.hpp"
 #include "uni/space.hpp"
+#include "uni_iip/space.hpp"
 
 using namespace NP;
 

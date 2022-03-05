@@ -3,7 +3,7 @@
 
 namespace NP {
 
-	namespace Uniproc {
+	namespace UniprocIIP {
 
 		template<class Time> class Null_IIP
 		{
