@@ -334,6 +334,9 @@ int main(int argc, char** argv)
 
 	const std::string& time_model = options.get("time_model");
 	want_dense = time_model == "dense";
+	#if want_dense == true
+	#define want_dense
+	#endif
 
 	const std::string& iip = options.get("iip");
 	want_prm_iip = iip == "P-RM";

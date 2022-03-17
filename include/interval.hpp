@@ -5,6 +5,7 @@
 #include <ostream>
 #include <memory>
 #include <vector>
+#include <limits>
 
 template<class T> class Interval {
 	T a, b;
@@ -77,7 +78,13 @@ template<class T> class Interval {
 	{
 		//consecutive intervals are not considered to be disjoint
 		// eg. [2,3] and [4,5] is not considered disjoint, this can be merged to form [2,5]
-		return (other.until()+1) < from() || (until()+1) < other.from();
+		bool disjoint;
+		#ifdef WANT_DENSE
+		disjoint = (other.until()+ std::numeric_limits<double>::epsilon()) < from() || (until()+std::numeric_limits<double>::epsilon()) < other.from();
+		#else
+		disjoint = (other.until()+1) < from() || (until()+1) < other.from();
+		#endif
+		return disjoint;
 	}
 
 	bool intersects(const Interval<T>& other) const
