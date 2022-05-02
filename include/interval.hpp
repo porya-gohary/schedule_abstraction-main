@@ -73,6 +73,21 @@ template<class T> class Interval {
 		return from() <= point && point <= until();
 	}
 
+	bool disjoint_before(const Interval<T>& other) const
+	{
+		return other.until() < from();
+	}
+
+	bool disjoint_after(const Interval<T>& other) const
+	{
+		return until() < other.from();
+	}
+
+	bool overlap(const Interval<T>& other) const
+	{
+		return (not (disjoint_before(other)) || (disjoint_after(other)));
+	}
+
 	bool disjoint(const Interval<T>& other) const
 	{
 		return (other.until()+1) < from() || (until()+1) < other.from();

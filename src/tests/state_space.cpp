@@ -3,6 +3,7 @@
 #include <iostream>
 
 #include "uni/space.hpp"
+#include "tsn/space.hpp"
 
 using namespace NP;
 
@@ -401,3 +402,36 @@ TEST_CASE("[NP state space] start times satisfy work-conserving property")
         CHECK(space.get_finish_times(j1) == I(2, 10));
     }
 }
+
+// TEST_CASE("[NP TSN state space] Check the working of TAS") {
+// 	TSN::State_space<dtime_t>::Workload jobs{
+// 		Job<dtime_t>{1, I( 0,  0), I(1, 2), 10, 0},
+// 		Job<dtime_t>{2, I(10, 10), I(1, 2),  20, 0},
+// 		Job<dtime_t>{3, I(20, 20), I(1, 2),  30, 0},
+// 		Job<dtime_t>{4, I(10, 12), I(5, 7),  30, 1},
+// 		Job<dtime_t>{5, I(25, 25), I(15, 19),  60, 2},
+// 		Job<dtime_t>{6, I(10, 12), I(5, 7),  30, 0},
+// 	};
+
+// 	SUBCASE("Checking finish times") {
+// 		auto space = TSN::State_space<dtime_t>::explore(jobs);
+// 		//also perhaps needs gates
+		
+// 		CHECK(!space.is_schedulable());
+
+// 		CHECK(space.get_finish_times(jobs[0]).from()  == 1);
+// 		CHECK(space.get_finish_times(jobs[0]).until() == 2);
+
+// 		CHECK(space.get_finish_times(jobs[1]).from()  == 11);
+// 		CHECK(space.get_finish_times(jobs[1]).until() == 27);
+
+// 		CHECK(space.get_finish_times(jobs[2]).from()  == 21);
+// 		CHECK(space.get_finish_times(jobs[2]).until() == 24);
+
+// 		CHECK(space.get_finish_times(jobs[3]).from()  == 14);
+// 		CHECK(space.get_finish_times(jobs[3]).until() == 29);
+
+// 		CHECK(space.get_finish_times(jobs[5]).from()  == 15);
+// 		CHECK(space.get_finish_times(jobs[5]).until() == 26);
+// 	}
+// }

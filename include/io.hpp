@@ -9,6 +9,8 @@
 #include "jobs.hpp"
 #include "precedence.hpp"
 #include "aborts.hpp"
+#include "config.h"
+#include "tsn/shaper.hpp"
 
 namespace NP {
 
@@ -37,6 +39,16 @@ namespace NP {
 	{
 		in.peek();
 		return !in.eof();
+	}
+
+	inline bool more_fields_in_line(std::istream& in)
+	{
+		if(in.peek() == '\n')
+		{
+			return false;
+		}
+		else
+			return true;
 	}
 
 	inline void next_field(std::istream& in)
@@ -144,6 +156,58 @@ namespace NP {
 		}
 
 		return jobs;
+	}
+
+	template<class Time> Time_Aware_Shaper<Time> parse_tas(std::istream& in)
+	{
+		Time prio, period, gate_close, gate_open;
+		Time curr_time = 0;
+
+		typename Time_Aware_Shaper<Time>::Intervals tas_queue;
+
+		std::ios_base::iostate state_before = in.exceptions();
+
+		in.exceptions(std::istream::failbit | std::istream::badbit);
+
+		in >> prio;
+		next_field(in);
+		in >> period;
+		next_field(in);
+
+		while(more_fields_in_line(in)) {
+			in >> gate_close;
+			next_field(in);
+			in >> gate_open;
+			next_field(in);
+
+			gate_close = curr_time + gate_close;
+			curr_time = gate_close;
+
+			gate_open = curr_time + gate_open;
+			curr_time = gate_open;
+
+			tas_queue.push_back(Interval<Time>{gate_close,gate_open});
+		}
+
+		in.exceptions(state_before);
+		return Time_Aware_Shaper<Time>{prio, period, tas_queue};
+	}
+
+	template<class Time>
+	typename Time_Aware_Shaper<Time>::TAS_set parse_tas_file(std::istream& in)
+	{
+		// first row contains the header of each column, so skip it
+		next_line(in);
+
+		typename Time_Aware_Shaper<Time>::TAS_set TAS_queues;
+
+		while (more_data(in)) {
+			TAS_queues.push_back(parse_tas<Time>(in));
+			// munge any trailing whitespace or extra columns
+			next_line(in);
+		}
+
+		return TAS_queues;
 	}
 
 	template<class Time>
