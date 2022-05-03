@@ -460,24 +460,6 @@ namespace NP {
 	     ppj_macro_local_it++) \
 		if (incomplete(ppj_macro_local_n, *ppj_macro_local_j))
 
-// Iterate over all incomplete jobs that are released no later than ppju_macro_local_until
-// For all the jobs that arrive after the earliest job release of a node n, and before the ppju_macro_local_until time,
-// check if they are incomplete
-#define foreach_possbly_pending_job_until(ppju_macro_local_n, ppju_macro_local_j, ppju_macro_local_until) 	\
-	for (auto ppju_macro_local_it = jobs_by_earliest_arrival			\
-                     .lower_bound((ppju_macro_local_n).earliest_job_release()); \
-	     ppju_macro_local_it != jobs_by_earliest_arrival.end() 				\
-	        && (ppju_macro_local_j = ppju_macro_local_it->second, ppju_macro_local_j->earliest_arrival() <= (ppju_macro_local_until)); 	\
-	     ppju_macro_local_it++) \
-		if (incomplete(ppju_macro_local_n, *ppju_macro_local_j))
-
-// Iterate over all incomplete jobs that are certainly released no later than
-// cpju_macro_local_until remove state HERE 
-// for_each_possibly_pending_job also check if their latest arrival occurs before the cpju_macro_local_until
-#define foreach_certainly_pending_job_until(cpju_macro_local_n, cpju_macro_local_j, cpju_macro_local_until) \
-	foreach_possbly_pending_job_until(cpju_macro_local_n, cpju_macro_local_j, (cpju_macro_local_until)) \
-		if (cpju_macro_local_j->latest_arrival() <= (cpju_macro_local_until))
-
 			// Find the earliest possible job release of all jobs in a node except for the ignored job
 			Time earliest_possible_job_release(
 				const Node& n,
@@ -635,35 +617,6 @@ namespace NP {
 			//////////////////////////////////////
 			// Rules for finding the next state //
 			//////////////////////////////////////
-
-			Time next_earliest_start_time(const State &s, const Job<Time>& j)
-			{
-				// t_S in paper, see definition 6.
-				return std::max(s.earliest_finish_time(), j.earliest_arrival());
-			}
-
-			Time next_earliest_finish_time(const State &s, const Job<Time>& j)
-			{
-				Time earliest_start = next_earliest_start_time(s, j);
-
-				// e_k, equation 5
-				return earliest_start + j.least_cost();
-			}
-
-			Time next_latest_finish_time(const State &s, const Job<Time>& j, Time lst)
-			{
-				return lst + j.maximal_cost();
-			}
-
-			Time next_earliest_job_abortion(const Abort_action<Time> &a)
-			{
-				return a.earliest_trigger_time() + a.least_cleanup_cost();
-			}
-
-			Time next_latest_job_abortion(const Abort_action<Time> &a)
-			{
-				return a.latest_trigger_time() + a.maximum_cleanup_cost();
-			}
 
 			Intervals overlap_delete(Intervals main, Intervals remove)
 			{
