@@ -58,8 +58,8 @@ namespace NP {
 			{
 				if(check < gc.from())
 					return check;
-				else if(check >= gc.from() && check < gc.upto())
-					return gc.upto();
+				else if(check >= gc.from() && check <= gc.upto())
+					return gc.upto() + 1;
 			}
 			return check;
 		}
@@ -91,18 +91,40 @@ namespace NP {
 
 		Intervals get_gates_close(Time start, Time end) const
 		{
-			Intervals GC;
+			Intervals mGC, GC;
 			Time start_period = floor(start/period);
 			Time end_period = ceil(end/period);
+
 			for(Time current_period = start_period; current_period <= end_period; current_period += 1 )
 			{
 				for(Interval<Time> gc: tas_close_queue)
 				{
-					GC.emplace_back(Interval<Time>{current_period*period + gc.from(), 
+					mGC.emplace_back(Interval<Time>{current_period*period + gc.from(), 
 													current_period*period + gc.upto()});
 				}
 			}
+			GC = merge_ints(mGC);
 			return GC;
+		}
+
+		Intervals merge_ints(Intervals merge_lists) const
+		{
+			Intervals merged;
+			Interval<Time> to_add = merge_lists[0];
+			for(int i=0;i<merge_lists.size();i++)
+			{
+				if(to_add.upto() <= merge_lists[i].from())
+				{
+					to_add = Interval<Time>{to_add.from(),merge_lists[i].upto()};
+				}
+				else
+				{
+					merged.emplace_back(to_add);
+					to_add = merge_lists[i];
+				}
+			}
+			merged.emplace_back(to_add);
+			return merged;
 		}
 	};
 

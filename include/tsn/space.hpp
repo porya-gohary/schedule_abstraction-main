@@ -268,6 +268,9 @@ namespace NP {
 
 			static const std::size_t num_todo_queues = 3;
 
+			//value of the inter_packet_gap is set here
+			const Time c_ipg = 0;
+
 			Todo_queue todo[num_todo_queues];
 			int todo_idx;
 			unsigned long current_job_count;
@@ -500,12 +503,15 @@ namespace NP {
 			template <typename... Args>
 			Node& new_node(Args&&... args)
 			{
+				DM("\nCreated Node\n");
 				nodes.emplace_back(std::forward<Args>(args)...);
 				Node_ref n_ref = --nodes.end();
 
+				Interval<Time> fr_ipg = Interval<Time>{n_ref->finish_range().from() + c_ipg, n_ref->finish_range().upto() +c_ipg};
+
 				State &st = (n_ref->get_key()==0) ?
 					new_state() :
-					new_state(n_ref->finish_range());
+					new_state(fr_ipg);
 
 				n_ref->add_state(&st);
 
@@ -644,28 +650,28 @@ namespace NP {
 					Interval<Time> a = intermediate.begin()->second;
 					Interval<Time> b = remove[j];
 
-					if(a.until() <= b.from())
+					if(a.until() < b.from())
 					{
 						result.emplace_back(intermediate.begin()->second);
 						auto it = intermediate.begin();
 						intermediate.erase(it);
 					}
-					else if(b.until() <=a.from())
+					else if(b.until() < a.from())
 						j+=1;
 					else
 					{
 						auto it = intermediate.begin();
 						intermediate.erase(it);
 
-						if(a.from() <= b.from())
+						if(a.from() < b.from())
 						{
 							Interval<Time> first_split = Interval<Time>{a.from(),b.from()-1};
 							intermediate.insert({first_split.from(),first_split});	
 						}
 
-						if(a.until() >= b.until())
+						if(a.until() > b.until())
 						{
-							Interval<Time> second_split = Interval<Time>{a.until(),b.until()};
+							Interval<Time> second_split = Interval<Time>{b.until()+1,a.until()};
 							intermediate.insert({second_split.from(),second_split});	
 						}
 					}
@@ -707,6 +713,10 @@ namespace NP {
 
 				for(Time i=0; i<j.get_priority(); i+=1)
 				{
+					if(get_trmax(n, i) > t_wc)
+					{
+						continue;
+					}
 					DM("HP entries: "<<get_trmax(n, i)<<" "<<t_wc<<"\n");
 					HP =tasQueues[i].get_gates_open(get_trmax(n, i), t_wc);
 					DM("HP Loop "<<i<<": ");
@@ -752,10 +762,12 @@ namespace NP {
 			{
 				for(auto fr: finish_ranges)
 				{
-					if(!match->merge_states(fr))
+					Interval<Time> fr_ipg = Interval<Time>{fr.from()+c_ipg,fr.upto()+c_ipg};
+					if(!match->merge_states(fr_ipg))
 					{
 						DM("State not merged but added to the node");
-						State &st = new_state(fr);
+
+						State &st = new_state(fr_ipg);
 						match->add_state(&st);
 					}
 					update_finish_times(j, fr);
@@ -768,10 +780,11 @@ namespace NP {
 			{
 				for(auto fr: finish_ranges)
 				{
-					if(!match->merge_states(fr))
+					Interval<Time> fr_ipg = Interval<Time>{fr.from()+c_ipg,fr.upto()+c_ipg};
+					if(!match->merge_states(fr_ipg))
 					{
 						DM("State not merged but added to the node");
-						State &st = new_state(fr);
+						State &st = new_state(fr_ipg);
 						match->add_state(&st);
 					}
 					update_finish_times(j, fr);
