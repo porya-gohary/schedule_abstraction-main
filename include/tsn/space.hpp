@@ -444,11 +444,12 @@ namespace NP {
 
 //custom macro/iteration helper for analysing TSN
 
-// Lopp through all the jobs that can possibly be on the top of the queue
+// Loop through all the jobs that can possibly be on the top of the queue
 #define foreach_possibly_fifo_top_job(pftj_macro_local_n, pftj_macro_local_j, pftj_macro_local_priority) \
 	for (auto pftj_macro_local_it = jobs_by_earliest_arrival_priority[pftj_macro_local_priority]	\
 									.lower_bound((pftj_macro_local_n).earliest_job_release());	\
 			pftj_macro_local_it->first <= get_trmax(pftj_macro_local_n, pftj_macro_local_priority)	\
+				&& pftj_macro_local_it != jobs_by_earliest_arrival_priority[pftj_macro_local_priority].end() \
 				&& (pftj_macro_local_j = pftj_macro_local_it->second);	\
 			pftj_macro_local_it++) \
 		if(incomplete(pftj_macro_local_n, *pftj_macro_local_j))
@@ -854,6 +855,8 @@ namespace NP {
 						foreach_possibly_fifo_top_job(n, jp, i)
 						{
 							const Job<Time>& j = *jp;
+
+							DM(j.least_cost());
 
 							// atleast_one_node keeps track of whether atleast one node has been created with the current job
 							// All other states that ensure that the job 'j' is eligible will merge into the same node. 

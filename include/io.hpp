@@ -160,7 +160,7 @@ namespace NP {
 
 	template<class Time> Time_Aware_Shaper<Time> parse_tas(std::istream& in)
 	{
-		Time prio, period, gate_close, gate_open;
+		Time prio, period, gc1, go1, gc2, go2;
 		Time curr_time = 0;
 
 		typename Time_Aware_Shaper<Time>::Intervals tas_queue;
@@ -173,21 +173,33 @@ namespace NP {
 		next_field(in);
 		in >> period;
 		next_field(in);
+		in >> gc1;
+		next_field(in);
+		in >> go1;
+		next_field(in);
+		in >> gc2;
+		next_field(in);
+		in >> go2;
+		next_field(in);
 
-		while(more_fields_in_line(in)) {
-			in >> gate_close;
-			next_field(in);
-			in >> gate_open;
-			next_field(in);
+		// while(more_fields_in_line(in)) {
+		// 	in >> gate_close;
+		// 	next_field(in);
+		// 	in >> gate_open;
+		// 	next_field(in);
 
-			gate_close = curr_time + gate_close;
-			curr_time = gate_close;
+		// 	gate_close = curr_time + gate_close;
+		// 	curr_time = gate_close;
 
-			gate_open = curr_time + gate_open;
-			curr_time = gate_open;
+		// 	gate_open = curr_time + gate_open;
+		// 	curr_time = gate_open;
 
-			tas_queue.push_back(Interval<Time>{gate_close,gate_open});
-		}
+		// 	tas_queue.push_back(Interval<Time>{gate_close,gate_open});
+		// 	DM("\n"<<gate_close<<","<<gate_open<<"\n");
+		// }
+
+		tas_queue.push_back(Interval<Time>{gc1,go1+gc1});
+		tas_queue.push_back(Interval<Time>{gc2+go1+gc1,go2+gc2+go1+gc1});
 
 		in.exceptions(state_before);
 		return Time_Aware_Shaper<Time>{prio, period, tas_queue};
@@ -198,6 +210,7 @@ namespace NP {
 	{
 		// first row contains the header of each column, so skip it
 		next_line(in);
+		DM("\nIn parse tas files\n");
 
 		typename Time_Aware_Shaper<Time>::TAS_set TAS_queues;
 
@@ -207,6 +220,7 @@ namespace NP {
 			next_line(in);
 		}
 
+		DM("\nparsed gates\n");
 		return TAS_queues;
 	}
 

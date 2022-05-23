@@ -91,7 +91,7 @@ namespace NP {
 
 		Intervals get_gates_close(Time start, Time end) const
 		{
-			Intervals mGC, GC;
+			Intervals mGC, rGC, GC;
 			Time start_period = floor(start/period);
 			Time end_period = ceil(end/period);
 
@@ -103,8 +103,26 @@ namespace NP {
 													current_period*period + gc.upto()});
 				}
 			}
-			GC = merge_ints(mGC);
+			
+			rGC = merge_ints(mGC);
+
+			GC = remove_empty_ints(rGC);
+
 			return GC;
+		}
+
+		Intervals remove_empty_ints(Intervals remove_lists) const
+		{
+			Intervals result;
+			for(int i=0; i<remove_lists.size();i++)
+			{
+				if(remove_lists[i].from() == remove_lists[i].upto())
+					continue;
+				else
+					result.emplace_back(remove_lists[i]);
+			}
+
+			return result;
 		}
 
 		Intervals merge_ints(Intervals merge_lists) const
@@ -113,7 +131,7 @@ namespace NP {
 			Interval<Time> to_add = merge_lists[0];
 			for(int i=0;i<merge_lists.size();i++)
 			{
-				if(to_add.upto() <= merge_lists[i].from())
+				if(to_add.upto() >= merge_lists[i].from())
 				{
 					to_add = Interval<Time>{to_add.from(),merge_lists[i].upto()};
 				}
