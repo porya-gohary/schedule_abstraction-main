@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.8)
 
 project(NP_schedulabiliy_test)
 
-option(USE_TBB_MALLOC "Use the Intel TBB scalable memory allocator" ON)
+option(USE_TBB_MALLOC "Use the Intel TBB scalable memory allocator" OFF)
 option(USE_JE_MALLOC "Use the Facebook jemalloc scalable memory allocator" OFF)
 
 option(DEBUG "Enable debugging" OFF)

@@ -694,20 +694,12 @@ namespace NP {
 				// HP= contains the times when the gates are open for all the prioirty queues larger than 'j'
 				// ST= contains the interval of possible start times 
 				// FT= contains the interval of possible finish times
-				DM("Inside next_finish_time#############");
-				DM("\n EST = "<<est<<"\t t_wc = "<<t_wc<<"\n");
 
 				Intervals CP, HP, ST, FT;
 				ST.emplace_back(Interval<Time>{est, t_wc});
-				for(auto st:ST)
-					DM("ST:"<<st<<"\n");
 
 				CP = tasQueues[j.get_priority()].get_gates_close(est,t_wc);
-				for(auto cp:CP)
-					DM("CP:"<<cp<<"\n");
 				ST = overlap_delete(ST, CP);
-				for(auto st:ST)
-					DM("ST:"<<st<<"\n");
 
 				if(ST.size() == 0)
 					return FT;
@@ -718,21 +710,17 @@ namespace NP {
 					{
 						continue;
 					}
-					DM("HP entries: "<<get_trmax(n, i)<<" "<<t_wc<<"\n");
 					HP =tasQueues[i].get_gates_open(get_trmax(n, i), t_wc);
-					DM("HP Loop "<<i<<": ");
-					for(auto hp: HP)
-						DM(hp<<" ");
 					ST = overlap_delete(ST, HP);
+					if(ST.size() == 0)
+						break;
 				}
 
 				if(ST.size() == 0)
 					return FT;
 
-				DM("\nST: ");
 				for(auto st: ST)
 				{
-					DM(st<<" ");
 					FT.emplace_back(Interval<Time>{st.from() + j.least_cost(), st.upto() + j.maximal_cost()});
 				}
 
@@ -766,8 +754,7 @@ namespace NP {
 					Interval<Time> fr_ipg = Interval<Time>{fr.from()+c_ipg,fr.upto()+c_ipg};
 					if(!match->merge_states(fr_ipg))
 					{
-						DM("State not merged but added to the node");
-
+						DM("\nState not merged but added to the node\n");
 						State &st = new_state(fr_ipg);
 						match->add_state(&st);
 					}
@@ -784,7 +771,7 @@ namespace NP {
 					Interval<Time> fr_ipg = Interval<Time>{fr.from()+c_ipg,fr.upto()+c_ipg};
 					if(!match->merge_states(fr_ipg))
 					{
-						DM("State not merged but added to the node");
+						DM("\nState not merged but added to the node\n");
 						State &st = new_state(fr_ipg);
 						match->add_state(&st);
 					}
@@ -812,7 +799,7 @@ namespace NP {
 				{
 					if(!n_ref->merge_states(fr))
 					{
-						DM("State not merged but added to the node");
+						DM("\nState not merged but added to the node\n");
 						State &st = new_state(fr);
 						n_ref->add_state(&st);
 					}

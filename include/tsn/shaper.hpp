@@ -48,11 +48,7 @@ namespace NP {
 
 		Time next_open(Time check) const
 		{
-			DM("Inside next_open: check "<<check<<"\n");
 			Intervals gate_close = get_gates_close(check,check);
-
-			for(auto gci: gate_close)
-				DM("Gate:"<<gci<<" \n");
 
 			for(Interval<Time> gc: gate_close)
 			{
@@ -69,16 +65,27 @@ namespace NP {
 			Intervals GO;
 			Intervals GC = get_gates_close(start, end);
 			Time start_period = floor(start/period);
-			Time end_period = ceil(end/period);
+			Time end_period = ceil(end/period) + 1;
 			Time next_gate_open;
+			Time first = 0;
 
+			bool skip = false;
 			if(start_period*period < GC[0].from())
 				next_gate_open = start_period*period;
 			else
+			{
 				next_gate_open = GC[0].upto();
+				skip = true;
+			}
 
 			for(Interval<Time> gc : GC)
 			{
+				if(skip == true && first == 0)
+				{
+					first += 1;
+					continue;
+				}
+				first += 1;
 				GO.emplace_back(Interval<Time>{next_gate_open, gc.from()});
 				next_gate_open = gc.upto();
 			}
@@ -93,7 +100,7 @@ namespace NP {
 		{
 			Intervals mGC, rGC, GC;
 			Time start_period = floor(start/period);
-			Time end_period = ceil(end/period);
+			Time end_period = ceil(end/period) + 1;
 
 			for(Time current_period = start_period; current_period <= end_period; current_period += 1 )
 			{
