@@ -53,10 +53,13 @@ namespace NP {
 
 	inline void next_field(std::istream& in)
 	{
-		// eat up any trailing spaces
-		skip_all(in, ' ');
-		// eat up field separator
-		skip_one(in, ',');
+		while(in.peek() == ',' || in.peek()==' ')
+		{
+			// eat up any trailing spaces
+			skip_all(in, ' ');
+			// eat up field separator
+			skip_one(in, ',');
+		}
 	}
 
 	inline void next_line(std::istream& in)
@@ -160,8 +163,10 @@ namespace NP {
 
 	template<class Time> Time_Aware_Shaper<Time> parse_tas(std::istream& in)
 	{
-		Time prio, period, gc1, go1, gc2, go2;
+		Time prio, period, gb;
+		Time gate_close, gate_open;
 		Time curr_time = 0;
+		bool tas, cbs;
 
 		typename Time_Aware_Shaper<Time>::Intervals tas_queue;
 
@@ -173,36 +178,34 @@ namespace NP {
 		next_field(in);
 		in >> period;
 		next_field(in);
-		in >> gc1;
+		in >> cbs;
 		next_field(in);
-		in >> go1;
+		in >> tas;
 		next_field(in);
-		in >> gc2;
-		next_field(in);
-		in >> go2;
+		in >> gb;
 		next_field(in);
 
-		// while(more_fields_in_line(in)) {
-		// 	in >> gate_close;
-		// 	next_field(in);
-		// 	in >> gate_open;
-		// 	next_field(in);
+		if(tas == true)
+		{
+			while(more_fields_in_line(in)) {
+				in >> gate_close;
+				next_field(in);
+				in >> gate_open;
+				next_field(in);
 
-		// 	gate_close = curr_time + gate_close;
-		// 	curr_time = gate_close;
+				gate_close = curr_time + gate_close;
+				curr_time = gate_close;
 
-		// 	gate_open = curr_time + gate_open;
-		// 	curr_time = gate_open;
+				gate_open = curr_time + gate_open;
+				curr_time = gate_open;
 
-		// 	tas_queue.push_back(Interval<Time>{gate_close,gate_open});
-		// 	DM("\n"<<gate_close<<","<<gate_open<<"\n");
-		// }
-
-		tas_queue.push_back(Interval<Time>{gc1,go1+gc1});
-		tas_queue.push_back(Interval<Time>{gc2+go1+gc1,go2+gc2+go1+gc1});
+				tas_queue.push_back(Interval<Time>{gate_close,gate_open});
+				DM("\n"<<gate_close<<","<<gate_open<<"\n");
+			}
+		}
 
 		in.exceptions(state_before);
-		return Time_Aware_Shaper<Time>{prio, period, tas_queue};
+		return Time_Aware_Shaper<Time>{prio, period, tas, cbs, gb, tas_queue};
 	}
 
 	template<class Time>

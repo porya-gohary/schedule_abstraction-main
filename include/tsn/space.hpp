@@ -386,6 +386,13 @@ namespace NP {
 				return incomplete(n.get_scheduled_jobs(), j);
 			}
 
+			Time get_guard_band(const Job<Time>& j, Time priority)
+			{
+				if (tasQueues[priority].get_guardband()==20)
+					return j.maximal_cost();
+				return tasQueues[priority].get_guardband();
+			}
+
 			// find trmax, find the first incomplete job in the list of jobs sorted by latest arrival
 			Time get_trmax(const Node& n, Time priority) {
 				const Scheduled& already_scheduled = n.get_scheduled_jobs();
@@ -425,15 +432,14 @@ namespace NP {
 			// processor time is considered
 			// the next instant the gate is open in comparison to this maximum is computed and stored. The minimum of all 
 			// the stored values gives the t_wc
-			Time 
-			calc_t_wc(const Node& n, Time A_max)
+			Time calc_t_wc(const Node& n, Time A_max)
 			{
 				Time t_wc = Time_model::constants<Time>::infinity();
 				for(Time i = 0; i<num_fifo_queues; i++)
 				{
 					if(unscheduled(n,i))
 					{
-						t_wc = std::min(t_wc, tasQueues[i].next_open(std::max(A_max,get_trmax(n,i))));
+						t_wc = std::min(t_wc, get_tstart_Pi(n,i,A_max));
 						DM("t_wc mid:"<<t_wc<<"\n");
 					}
 				}
@@ -463,6 +469,23 @@ namespace NP {
 	        && (ppj_macro_local_j = ppj_macro_local_it->second); 	\
 	     ppj_macro_local_it++) \
 		if (incomplete(ppj_macro_local_n, *ppj_macro_local_j))
+
+			// find trmax, find the first incomplete job in the list of jobs sorted by latest arrival
+			Time get_tstart_Pi(const Node& n, Time priority, Time A_max) 
+			{
+				Time tstart_Pi = Time_model::constants<Time>::infinity();
+				Time guardband;
+
+				const Job<Time>* jp;
+				foreach_possibly_fifo_top_job(n, jp, priority)
+				{
+					const Job<Time>& j = *jp;
+					guardband = get_guard_band(j, priority);
+					tstart_Pi = std::min(tstart_Pi, tasQueues[priority].next_open(std::max(A_max,j.latest_arrival()),guardband));
+			    }
+
+			    return tstart_Pi;
+			}
 
 			// Find the earliest possible job release of all jobs in a node except for the ignored job
 			Time earliest_possible_job_release(
@@ -696,9 +719,11 @@ namespace NP {
 				// FT= contains the interval of possible finish times
 
 				Intervals CP, HP, ST, FT;
+				Time guardband = get_guard_band(j, j.get_priority());
+
 				ST.emplace_back(Interval<Time>{est, t_wc});
 
-				CP = tasQueues[j.get_priority()].get_gates_close(est,t_wc);
+				CP = tasQueues[j.get_priority()].get_gates_close(est,t_wc,guardband);
 				ST = overlap_delete(ST, CP);
 
 				if(ST.size() == 0)
@@ -710,10 +735,26 @@ namespace NP {
 					{
 						continue;
 					}
-					HP =tasQueues[i].get_gates_open(get_trmax(n, i), t_wc);
-					ST = overlap_delete(ST, HP);
-					if(ST.size() == 0)
-						break;
+					if(tasQueues[i].is_constant_gb())
+					{
+						HP =tasQueues[i].get_gates_open(get_trmax(n, i), t_wc, tasQueues[i].get_guardband());
+						ST = overlap_delete(ST, HP);
+						if(ST.size() == 0)
+							break;
+					}
+					else
+					{
+						const Job<Time>* jp;
+						foreach_possibly_fifo_top_job(n, jp, i)
+						{
+							const Job<Time>& j = *jp;
+							Time gband = get_guard_band(j,i);
+							HP =tasQueues[i].get_gates_open(get_trmax(n, i), t_wc, gband);
+							ST = overlap_delete(ST, HP);
+							if(ST.size() == 0)
+								break;
+						}
+					}
 				}
 
 				if(ST.size() == 0)

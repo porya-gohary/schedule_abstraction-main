@@ -1,4 +1,4 @@
-Priority,Period,Intervals,
-0,10,2,3
-1,30,11,6
-2,60,20,20
+Priority,Period,CBS,TAS,CGB,Intervals,,,
+0,10,0,1,0,2,3,0,0
+1,30,0,1,0,11,6,,
+2,60,0,1,0,20,20,,

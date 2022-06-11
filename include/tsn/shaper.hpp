@@ -25,14 +25,20 @@ namespace NP {
 	private:
 		Priority priority;
 		Period period;
+		bool TAS;
+		bool CBS;
+		Time guard_band;
 		Intervals tas_close_queue;
 
 	public:
 
 		Time_Aware_Shaper(Priority prio,
 			Period per,
+			bool tas,
+			bool cbs,
+			Time gb,
 			Intervals tascq)
-		: priority(prio), period(per), tas_close_queue(tascq)
+		: priority(prio), period(per), TAS(tas), CBS(cbs), guard_band(gb), tas_close_queue(tascq)
 		{
 		}
 
@@ -46,9 +52,21 @@ namespace NP {
 			return priority;
 		}
 
-		Time next_open(Time check) const
+		Time get_guardband() const
 		{
-			Intervals gate_close = get_gates_close(check,check);
+			return guard_band;
+		}
+
+		bool is_constant_gb() const
+		{
+			if(guard_band == 0)
+				return false;
+			return true;
+		}
+
+		Time next_open(Time check, Time gband) const
+		{
+			Intervals gate_close = get_gates_close(check,check,gband);
 
 			for(Interval<Time> gc: gate_close)
 			{
@@ -60,10 +78,10 @@ namespace NP {
 			return check;
 		}
 
-		Intervals get_gates_open(Time start, Time end) const
+		Intervals get_gates_open(Time start, Time end, Time gband) const
 		{
 			Intervals GO;
-			Intervals GC = get_gates_close(start, end);
+			Intervals GC = get_gates_close(start, end, gband);
 			Time start_period = floor(start/period);
 			Time end_period = ceil(end/period) + 1;
 			Time next_gate_open;
@@ -96,7 +114,7 @@ namespace NP {
 			return GO;
 		}
 
-		Intervals get_gates_close(Time start, Time end) const
+		Intervals get_gates_close(Time start, Time end, Time gband) const
 		{
 			Intervals mGC, rGC, GC;
 			Time start_period = floor(start/period);
@@ -106,7 +124,7 @@ namespace NP {
 			{
 				for(Interval<Time> gc: tas_close_queue)
 				{
-					mGC.emplace_back(Interval<Time>{current_period*period + gc.from(), 
+					mGC.emplace_back(Interval<Time>{current_period*period + gc.from() - gband, 
 													current_period*period + gc.upto()});
 				}
 			}
