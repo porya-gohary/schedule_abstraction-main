@@ -220,6 +220,7 @@ namespace NP {
 						merged_state->update_finish_range(new_st);
 						s_ref = states.erase(s_ref);
 						states.insert(merged_state);
+						DM("\nState merged\n");
 						return true;
 					}
 					else

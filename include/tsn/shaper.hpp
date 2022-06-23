@@ -27,6 +27,7 @@ namespace NP {
 		Period period;
 		bool TAS;
 		bool CBS;
+		bool isVar;
 		Time guard_band;
 		Intervals tas_close_queue;
 
@@ -36,9 +37,10 @@ namespace NP {
 			Period per,
 			bool tas,
 			bool cbs,
+			bool isvar,
 			Time gb,
 			Intervals tascq)
-		: priority(prio), period(per), TAS(tas), CBS(cbs), guard_band(gb), tas_close_queue(tascq)
+		: priority(prio), period(per), TAS(tas), CBS(cbs), isVar(isvar), guard_band(gb), tas_close_queue(tascq)
 		{
 		}
 
@@ -57,11 +59,9 @@ namespace NP {
 			return guard_band;
 		}
 
-		bool is_constant_gb() const
+		bool is_variable() const
 		{
-			if(guard_band == 0)
-				return false;
-			return true;
+			return isVar;
 		}
 
 		Time next_open(Time check, Time gband) const
@@ -120,7 +120,7 @@ namespace NP {
 			Time start_period = floor(start/period);
 			Time end_period = ceil(end/period) + 1;
 
-			for(Time current_period = start_period; current_period <= end_period; current_period += 1 )
+			for(Time current_period = start_period; current_period <= end_period; current_period += 1)
 			{
 				for(Interval<Time> gc: tas_close_queue)
 				{

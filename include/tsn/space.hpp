@@ -76,6 +76,12 @@ namespace NP {
 				return explore(p, o);
 			}
 
+			// convenience interface for tests of just the overlap_delete function
+			std::deque<Interval<Time>> od(std::deque<Interval<Time>> main, std::deque<Interval<Time>> remove)
+			{
+				return overlap_delete(main,remove);
+			}
+
 			// get_finish_times searches rta (stores the response time of all the jobs) for job j 
 			// and returns the finish time interval if j is found else returns the interval[0,infinity]
 			Interval<Time> get_finish_times(const Job<Time>& j) const
@@ -388,7 +394,8 @@ namespace NP {
 
 			Time get_guard_band(const Job<Time>& j, Time priority)
 			{
-				if (tasQueues[priority].get_guardband()==20)
+				DM("Maximal Cost:"<<j.maximal_cost());
+				if (tasQueues[priority].is_variable())
 					return j.maximal_cost();
 				return tasQueues[priority].get_guardband();
 			}
@@ -439,8 +446,10 @@ namespace NP {
 				{
 					if(unscheduled(n,i))
 					{
-						t_wc = std::min(t_wc, get_tstart_Pi(n,i,A_max));
-						DM("t_wc mid:"<<t_wc<<"\n");
+						if(tasQueues[i].is_variable())
+							t_wc = std::min(t_wc, get_tstart_Pi(n,i,A_max));
+						else
+							t_wc = std::min(t_wc, tasQueues[i].next_open(std::max(A_max,get_trmax(n,i)),tasQueues[i].get_guardband()));
 					}
 				}
 				return t_wc;
@@ -720,40 +729,50 @@ namespace NP {
 
 				Intervals CP, HP, ST, FT;
 				Time guardband = get_guard_band(j, j.get_priority());
+				DM("Guardband:"<<guardband<<std::endl);
 
 				ST.emplace_back(Interval<Time>{est, t_wc});
 
 				CP = tasQueues[j.get_priority()].get_gates_close(est,t_wc,guardband);
+				DM("Current Priority gates to be deleted:");
+				for(auto cp:CP)
+					DM(cp<<",");
+				DM(std::endl);
+
 				ST = overlap_delete(ST, CP);
 
 				if(ST.size() == 0)
 					return FT;
 
 				for(Time i=0; i<j.get_priority(); i+=1)
-				{
-					if(get_trmax(n, i) > t_wc)
-					{
-						continue;
-					}
-					if(tasQueues[i].is_constant_gb())
-					{
-						HP =tasQueues[i].get_gates_open(get_trmax(n, i), t_wc, tasQueues[i].get_guardband());
-						ST = overlap_delete(ST, HP);
-						if(ST.size() == 0)
-							break;
-					}
-					else
+				{	
+					if(tasQueues[i].is_variable())
 					{
 						const Job<Time>* jp;
 						foreach_possibly_fifo_top_job(n, jp, i)
 						{
+							if(j.latest_arrival() > t_wc)
+							{
+								continue;
+							}
 							const Job<Time>& j = *jp;
 							Time gband = get_guard_band(j,i);
-							HP =tasQueues[i].get_gates_open(get_trmax(n, i), t_wc, gband);
+							HP =tasQueues[i].get_gates_open(j.latest_arrival(), t_wc, gband);
 							ST = overlap_delete(ST, HP);
 							if(ST.size() == 0)
 								break;
 						}
+					}
+					else
+					{
+						if(get_trmax(n, i) > t_wc)
+						{
+							continue;
+						}
+						HP =tasQueues[i].get_gates_open(get_trmax(n, i), t_wc, tasQueues[i].get_guardband());
+						ST = overlap_delete(ST, HP);
+						if(ST.size() == 0)
+							break;
 					}
 				}
 
@@ -884,8 +903,6 @@ namespace NP {
 						{
 							const Job<Time>& j = *jp;
 
-							DM(j.least_cost());
-
 							// atleast_one_node keeps track of whether atleast one node has been created with the current job
 							// All other states that ensure that the job 'j' is eligible will merge into the same node. 
 							bool atleast_one_node = false;
@@ -902,9 +919,8 @@ namespace NP {
 								if(t_wc < est)
 									continue;
 
-								DM("t_wc and est calculated \n");
+								DM("\nt_wc and est calculated:"<<t_wc<<", "<<est<<"\n");
 								Intervals finish_ranges = next_finish_times(n, j, est, t_wc);
-								DM("finish ranges calculated \n");
 
 								// check if there are finish ranges present in finish_ranges, if empty then there is no
 								// eligible time when j can execute
@@ -936,7 +952,7 @@ namespace NP {
 											}
 										}
 
-										// if there exists no existing nodes where the new state can be merged into, then a new node is created
+										// if there are no existing nodes where the new state can be merged into, then a new node is created
 										if(atleast_one_node == false)
 										{
 											match = schedule_new(n, j, finish_ranges);

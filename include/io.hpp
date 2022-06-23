@@ -166,7 +166,7 @@ namespace NP {
 		Time prio, period, gb;
 		Time gate_close, gate_open;
 		Time curr_time = 0;
-		bool tas, cbs;
+		bool tas, cbs, isvar;
 
 		typename Time_Aware_Shaper<Time>::Intervals tas_queue;
 
@@ -174,6 +174,7 @@ namespace NP {
 
 		in.exceptions(std::istream::failbit | std::istream::badbit);
 
+		DM("start\n");
 		in >> prio;
 		next_field(in);
 		in >> period;
@@ -182,16 +183,22 @@ namespace NP {
 		next_field(in);
 		in >> tas;
 		next_field(in);
+		in >> isvar;
+		next_field(in);
 		in >> gb;
 		next_field(in);
+		DM("end\n");
+		DM(tas);
 
 		if(tas == true)
 		{
+			DM("true\n");
 			while(more_fields_in_line(in)) {
 				in >> gate_close;
 				next_field(in);
 				in >> gate_open;
 				next_field(in);
+				DM("gates in\n");
 
 				gate_close = curr_time + gate_close;
 				curr_time = gate_close;
@@ -205,7 +212,7 @@ namespace NP {
 		}
 
 		in.exceptions(state_before);
-		return Time_Aware_Shaper<Time>{prio, period, tas, cbs, gb, tas_queue};
+		return Time_Aware_Shaper<Time>{prio, period, tas, cbs, isvar, gb, tas_queue};
 	}
 
 	template<class Time>

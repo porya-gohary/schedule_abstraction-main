@@ -3,7 +3,6 @@
 #include <iostream>
 
 #include "uni/space.hpp"
-#include "tsn/space.hpp"
 
 using namespace NP;
 

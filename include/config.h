@@ -7,8 +7,8 @@
 
 // CDM: custom debug message -- this is used only when certain DM messages
 // are to be printed for help in debugging -- default it is disabled
-#define CDM(x) std::cerr << x 
-// #define CDM(x)
+// #define CDM(x) std::cerr << x 
+#define CDM(x)
 
 // #define CONFIG_COLLECT_SCHEDULE_GRAPH
 
