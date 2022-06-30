@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.8.0)
 
-project(NP_schedulabiliy_test VERSION 1.1.0 LANGUAGES CXX)
+project(NP_schedulabiliy_test VERSION 2.1.0 LANGUAGES CXX)
 
 include_directories(include)
 include_directories(lib/include)
@@ -23,11 +23,11 @@ else ()
 endif ()
 
 if (COLLECT_SCHEDULE_GRAPHS)
-    add_definitions(-DCONFIG_COLLECT_SCHEDULE_GRAPH)
+    add_compile_definitions(CONFIG_COLLECT_SCHEDULE_GRAPH)
 elseif (PARALLEL_RUN)
     find_package(TBB REQUIRED)
     set(TBB_LIB TBB::tbb)
-    add_definitions(-DCONFIG_PARALLEL)
+    add_compile_definitions(CONFIG_PARALLEL)
 endif ()
 
 if (USE_JE_MALLOC)
