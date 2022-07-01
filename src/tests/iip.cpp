@@ -3,7 +3,7 @@
 #include <iostream>
 
 
-#include "uni/space.hpp"
+#include "uni_iip/space.hpp"
 
 using namespace NP;
 
@@ -15,7 +15,7 @@ static const auto inf = Time_model::constants<dtime_t>::infinity();
 //     Motivations, Challenges, and Potential Solutions"
 TEST_CASE("[IIP] P-RM example (Figure 1)")
 {
-	Uniproc::State_space<dtime_t>::Workload jobs{
+	UniprocIIP::State_space<dtime_t>::Workload jobs{
 		// high-frequency task tau_1
 		Job<dtime_t>{1, Interval<dtime_t>( 0,  0), Interval<dtime_t>(1, 1), 10, 1, 1},
 		Job<dtime_t>{2, Interval<dtime_t>(10, 10), Interval<dtime_t>(1, 1), 20, 1, 1},
@@ -33,22 +33,22 @@ TEST_CASE("[IIP] P-RM example (Figure 1)")
 	};
 
 	SUBCASE("RM, naive exploration") {
-		auto space = Uniproc::State_space<dtime_t>::explore_naively(jobs);
+		auto space = UniprocIIP::State_space<dtime_t>::explore_naively(jobs);
 		CHECK(!space.is_schedulable());
 	}
 
 	SUBCASE("RM, exploration with state-merging") {
-		auto space = Uniproc::State_space<dtime_t>::explore(jobs);
+		auto space = UniprocIIP::State_space<dtime_t>::explore(jobs);
 		CHECK(!space.is_schedulable());
 	}
 
 	SUBCASE("P-RM, naive exploration") {
-		auto space = Uniproc::State_space<dtime_t, Uniproc::Precatious_RM_IIP<dtime_t>>::explore_naively(jobs);
+		auto space = UniprocIIP::State_space<dtime_t, UniprocIIP::Precatious_RM_IIP<dtime_t>>::explore_naively(jobs);
 		CHECK(space.is_schedulable());
 	}
 
 	SUBCASE("P-RM, exploration with state-merging") {
-		auto space = Uniproc::State_space<dtime_t, Uniproc::Precatious_RM_IIP<dtime_t>>::explore(jobs);
+		auto space = UniprocIIP::State_space<dtime_t, UniprocIIP::Precatious_RM_IIP<dtime_t>>::explore(jobs);
 		CHECK(space.is_schedulable());
 	}
 
@@ -59,7 +59,7 @@ TEST_CASE("[IIP] P-RM example (Figure 1)")
 //     Motivations, Challenges, and Potential Solutions"
 TEST_CASE("[IIP] P-RM negative example (Figure 2)")
 {
-	Uniproc::State_space<dtime_t>::Workload jobs{
+	UniprocIIP::State_space<dtime_t>::Workload jobs{
 		// high-frequency task tau_1
 		Job<dtime_t>{1, Interval<dtime_t>( 0,  0), Interval<dtime_t>(3, 3), 10, 1, 1},
 		Job<dtime_t>{2, Interval<dtime_t>(10, 10), Interval<dtime_t>(3, 3), 20, 1, 1},
@@ -80,22 +80,22 @@ TEST_CASE("[IIP] P-RM negative example (Figure 2)")
 	};
 
 	SUBCASE("RM, naive exploration") {
-		auto space = Uniproc::State_space<dtime_t>::explore_naively(jobs);
+		auto space = UniprocIIP::State_space<dtime_t>::explore_naively(jobs);
 		CHECK(!space.is_schedulable());
 	}
 
 	SUBCASE("RM, exploration with state-merging") {
-		auto space = Uniproc::State_space<dtime_t>::explore(jobs);
+		auto space = UniprocIIP::State_space<dtime_t>::explore(jobs);
 		CHECK(!space.is_schedulable());
 	}
 
 	SUBCASE("P-RM, naive exploration") {
-		auto space = Uniproc::State_space<dtime_t, Uniproc::Precatious_RM_IIP<dtime_t>>::explore_naively(jobs);
+		auto space = UniprocIIP::State_space<dtime_t, UniprocIIP::Precatious_RM_IIP<dtime_t>>::explore_naively(jobs);
 		CHECK(!space.is_schedulable());
 	}
 
 	SUBCASE("P-RM, exploration with state-merging") {
-		auto space = Uniproc::State_space<dtime_t, Uniproc::Precatious_RM_IIP<dtime_t>>::explore(jobs);
+		auto space = UniprocIIP::State_space<dtime_t, UniprocIIP::Precatious_RM_IIP<dtime_t>>::explore(jobs);
 		CHECK(!space.is_schedulable());
 	}
 
@@ -111,30 +111,36 @@ TEST_CASE("[IIP] P-RM example extra branch")
         };
 
     SUBCASE("RM, naive exploration") {
-        auto space = Uniproc::State_space<dtime_t>::explore_naively(jobs);
+        auto space = UniprocIIP::State_space<dtime_t>::explore_naively(jobs);
         CHECK(!space.is_schedulable());
         CHECK(space.number_of_states() == 5);
+        CHECK(space.number_of_nodes() == 5);
         CHECK(space.number_of_edges() == 4);
     }
 
     SUBCASE("RM, exploration with state-merging") {
-        auto space = Uniproc::State_space<dtime_t>::explore(jobs);
+        auto space = UniprocIIP::State_space<dtime_t>::explore(jobs);
         CHECK(!space.is_schedulable());
         CHECK(space.number_of_states() == 5);
+        CHECK(space.number_of_nodes() == 5);
         CHECK(space.number_of_edges() == 4);
     }
 
     SUBCASE("P-RM, naive exploration") {
-        auto space = Uniproc::State_space<dtime_t, Uniproc::Precatious_RM_IIP<dtime_t>>::explore_naively(jobs);
+        auto space = UniprocIIP::State_space<dtime_t, UniprocIIP::Precatious_RM_IIP<dtime_t>>::explore_naively(jobs);
         CHECK(!space.is_schedulable());
         CHECK(space.number_of_states() == 7);
+        CHECK(space.number_of_nodes() == 7);
         CHECK(space.number_of_edges() == 6);
     }
 
     SUBCASE("P-RM, exploration with state-merging") {
-        auto space = Uniproc::State_space<dtime_t, Uniproc::Precatious_RM_IIP<dtime_t>>::explore(jobs);
+    	// In this example we see a case where the number of nodes is actually less than the number of states
+    	// There is node in this graph which contains two states.
+        auto space = UniprocIIP::State_space<dtime_t, UniprocIIP::Precatious_RM_IIP<dtime_t>>::explore(jobs);
         CHECK(!space.is_schedulable());
         CHECK(space.number_of_states() == 7);
+        CHECK(space.number_of_nodes() == 6);
         CHECK(space.number_of_edges() == 6);
     }
 
@@ -145,7 +151,7 @@ TEST_CASE("[IIP] P-RM example extra branch")
 //     Motivations, Challenges, and Potential Solutions"
 TEST_CASE("[IIP] CW-EDF example (Figure 2)")
 {
-	Uniproc::State_space<dtime_t>::Workload jobs{
+	UniprocIIP::State_space<dtime_t>::Workload jobs{
 		// high-frequency task tau_1
 		Job<dtime_t>{1, Interval<dtime_t>( 0,  0), Interval<dtime_t>(3, 3), 10, 10, 1},
 		Job<dtime_t>{2, Interval<dtime_t>(10, 10), Interval<dtime_t>(3, 3), 20, 20, 1},
@@ -166,22 +172,22 @@ TEST_CASE("[IIP] CW-EDF example (Figure 2)")
 	};
 
 	SUBCASE("EDF, naive exploration") {
-		auto space = Uniproc::State_space<dtime_t>::explore_naively(jobs);
+		auto space = UniprocIIP::State_space<dtime_t>::explore_naively(jobs);
 		CHECK(!space.is_schedulable());
 	}
 
 	SUBCASE("EDF, exploration with state-merging") {
-		auto space = Uniproc::State_space<dtime_t>::explore(jobs);
+		auto space = UniprocIIP::State_space<dtime_t>::explore(jobs);
 		CHECK(!space.is_schedulable());
 	}
 
 	SUBCASE("CW-EDF, naive exploration") {
-		auto space = Uniproc::State_space<dtime_t, Uniproc::Critical_window_IIP<dtime_t>>::explore_naively(jobs);
+		auto space = UniprocIIP::State_space<dtime_t, UniprocIIP::Critical_window_IIP<dtime_t>>::explore_naively(jobs);
 		CHECK(space.is_schedulable());
 	}
 
 	SUBCASE("CW-EDF, exploration with state-merging") {
-		auto space = Uniproc::State_space<dtime_t, Uniproc::Critical_window_IIP<dtime_t>>::explore(jobs);
+		auto space = UniprocIIP::State_space<dtime_t, UniprocIIP::Critical_window_IIP<dtime_t>>::explore(jobs);
 		CHECK(space.is_schedulable());
 	}
 
@@ -190,7 +196,7 @@ TEST_CASE("[IIP] CW-EDF example (Figure 2)")
 
 TEST_CASE("[IIP] CW-EDF extra example")
 {
-	Uniproc::State_space<dtime_t>::Workload jobs{
+	UniprocIIP::State_space<dtime_t>::Workload jobs{
 		// high-frequency task tau_1
 		Job<dtime_t>{1, Interval<dtime_t>( 0,  0), Interval<dtime_t>(3, 3), 10, 10, 1},
 		Job<dtime_t>{2, Interval<dtime_t>(10, 10), Interval<dtime_t>(3, 3), 20, 20, 1},
@@ -210,22 +216,22 @@ TEST_CASE("[IIP] CW-EDF extra example")
 	};
 
 	SUBCASE("EDF, naive exploration") {
-		auto space = Uniproc::State_space<dtime_t>::explore_naively(jobs);
+		auto space = UniprocIIP::State_space<dtime_t>::explore_naively(jobs);
 		CHECK(!space.is_schedulable());
 	}
 
 	SUBCASE("EDF, exploration with state-merging") {
-		auto space = Uniproc::State_space<dtime_t>::explore(jobs);
+		auto space = UniprocIIP::State_space<dtime_t>::explore(jobs);
 		CHECK(!space.is_schedulable());
 	}
 
 	SUBCASE("CW-EDF, naive exploration") {
-		auto space = Uniproc::State_space<dtime_t, Uniproc::Critical_window_IIP<dtime_t>>::explore_naively(jobs);
+		auto space = UniprocIIP::State_space<dtime_t, UniprocIIP::Critical_window_IIP<dtime_t>>::explore_naively(jobs);
 		CHECK(space.is_schedulable());
 	}
 
 	SUBCASE("CW-EDF, exploration with state-merging") {
-		auto space = Uniproc::State_space<dtime_t, Uniproc::Critical_window_IIP<dtime_t>>::explore(jobs);
+		auto space = UniprocIIP::State_space<dtime_t, UniprocIIP::Critical_window_IIP<dtime_t>>::explore(jobs);
 		CHECK(space.is_schedulable());
 	}
 
@@ -233,7 +239,7 @@ TEST_CASE("[IIP] CW-EDF extra example")
 
 TEST_CASE("[IIP] P-RM idle time")
 {
-	Uniproc::State_space<dtime_t>::Workload jobs{
+	UniprocIIP::State_space<dtime_t>::Workload jobs{
 		// high-frequency task
 		Job<dtime_t>{1, Interval<dtime_t>( 0,  0), Interval<dtime_t>(3, 3), 10, 1, 1},
 		Job<dtime_t>{2, Interval<dtime_t>(10, 10), Interval<dtime_t>(3, 3), 20, 1, 1},
@@ -247,12 +253,12 @@ TEST_CASE("[IIP] P-RM idle time")
 	};
 
 	SUBCASE("naive exploration") {
-		auto space = Uniproc::State_space<dtime_t, Uniproc::Precatious_RM_IIP<dtime_t>>::explore_naively(jobs);
+		auto space = UniprocIIP::State_space<dtime_t, UniprocIIP::Precatious_RM_IIP<dtime_t>>::explore_naively(jobs);
 		CHECK(space.is_schedulable());
 	}
 
 	SUBCASE("exploration with state-merging") {
-		auto space = Uniproc::State_space<dtime_t, Uniproc::Precatious_RM_IIP<dtime_t>>::explore(jobs);
+		auto space = UniprocIIP::State_space<dtime_t, UniprocIIP::Precatious_RM_IIP<dtime_t>>::explore(jobs);
 		CHECK(space.is_schedulable());
 	}
 

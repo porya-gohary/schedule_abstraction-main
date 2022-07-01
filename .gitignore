@@ -6,3 +6,5 @@ nptest
 *.dot
 *.pdf
 comparison/
+.cproject
+.project

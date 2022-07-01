@@ -4,6 +4,7 @@
 #include "jobs.hpp"
 #include "precedence.hpp"
 #include "aborts.hpp"
+#include "tsn/shaper.hpp"
 
 namespace NP {
 
@@ -13,14 +14,18 @@ namespace NP {
 
 		typedef typename Job<Time>::Job_set Workload;
 		typedef typename std::vector<Abort_action<Time>> Abort_actions;
+		typedef typename Time_Aware_Shaper<Time>::TAS_set TAS_queues;
+
 
 		// ** Description of the workload:
-		// (1) a set of jobs
+		// (1) a set of jobs or packets if for TSN
 		Workload jobs;
 		// (2) a set of precedence constraints among the jobs
 		Precedence_constraints dag;
 		// (3) abort actions for (some of) the jobs
 		Abort_actions aborts;
+		// (4) shaper file for Time-aware shapers if for TSN
+		TAS_queues tasQueues;
 
 		// ** Platform model:
 		// on how many (identical) processors are the jobs being
@@ -38,7 +43,7 @@ namespace NP {
 			validate_prec_refs<Time>(dag, jobs);
 		}
 
-		// Full constructor with abort actions
+		// Constructor with abort actions
 		Scheduling_problem(Workload jobs, Precedence_constraints dag,
 		                   Abort_actions aborts,
 		                   unsigned int num_processors)
@@ -50,6 +55,22 @@ namespace NP {
 			assert(num_processors > 0);
 			validate_prec_refs<Time>(dag, jobs);
 			validate_abort_refs<Time>(aborts, jobs);
+		}
+
+		//Full Constructor with abort actions and shaper files
+		Scheduling_problem(Workload jobs, Precedence_constraints dag, 
+		                   Abort_actions aborts, TAS_queues tasQueues,
+		                   unsigned int num_processors)
+		: num_processors(num_processors)
+		, jobs(jobs)
+		, dag(dag)
+		, aborts(aborts)
+		, tasQueues(tasQueues)
+		{
+			assert(num_processors > 0);
+			validate_prec_refs<Time>(dag, jobs);
+			validate_abort_refs<Time>(aborts, jobs);
+			validate_tas_refs<Time>(tasQueues, jobs);
 		}
 
 		// Convenience constructor: no DAG, no abort actions

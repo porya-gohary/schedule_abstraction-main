@@ -1,6 +1,7 @@
 #include <iostream>
 #include <ostream>
 #include <cassert>
+
 #include <algorithm>
 
 #include <set>
@@ -13,7 +14,7 @@ namespace NP {
 
 	// use pointers as a primitive form of unique ID
 
-	namespace Uniproc {
+	namespace UniprocIIP {
 
 		typedef Index_set Job_set;
 		template<class Time> class Schedule_state;
@@ -25,10 +26,6 @@ namespace NP {
 
 			// holds tthe finish time interval of the state
 			Interval<Time> finish_time;
-			// holds information about the state being a dead end or not
-			// It is first intialized to be a deadend, if a job is found that can be scheduled from this state then
-			// will converted to false.
-			bool deadend = true;
 
 			// no accidental copies
 			Schedule_state(const Schedule_state& origin)  = delete;
@@ -45,16 +42,6 @@ namespace NP {
 			Schedule_state(Interval<Time> ftimes)
 			: finish_time{ftimes}
 			{
-			}
-
-			bool is_deadend()
-			{
-				return deadend;
-			}
-
-			void not_deadend()
-			{
-				deadend = false;
 			}
 
 			Time earliest_finish_time() const
@@ -189,18 +176,6 @@ namespace NP {
 			int states_size() const
 			{
 				return states.size();
-			}
-
-			const State* get_first_state() const
-			{
-				auto first = states.begin();
-				return *first;
-			}
-
-			const State* get_last_state() const
-			{
-				auto last = --(states.end());
-				return *last;
 			}
 
 			const State_ref_queue* get_states() const

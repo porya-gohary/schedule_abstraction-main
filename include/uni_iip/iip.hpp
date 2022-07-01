@@ -3,12 +3,13 @@
 
 namespace NP {
 
-	namespace Uniproc {
+	namespace UniprocIIP {
 
 		template<class Time> class Null_IIP
 		{
 			public:
 
+			typedef Schedule_node<Time> Node;
 			typedef Schedule_state<Time> State;
 			typedef State_space<Time, Null_IIP> Space;
 			typedef typename State_space<Time, Null_IIP>::Workload Jobs;
@@ -19,7 +20,7 @@ namespace NP {
 
 			Null_IIP(const Space &space, const Jobs &jobs) {}
 
-			Time latest_start(const Job<Time>& j, Time t, const State& s)
+			Time latest_start(const Job<Time>& j, Time t, const State& s, const Node& n)
 			{
 				return Time_model::constants<Time>::infinity();
 			}
@@ -29,6 +30,7 @@ namespace NP {
 		{
 			public:
 
+			typedef Schedule_node<Time> Node;
 			typedef Schedule_state<Time> State;
 			typedef State_space<Time, Precatious_RM_IIP> Space;
 			typedef typename State_space<Time, Precatious_RM_IIP>::Workload Jobs;
@@ -46,7 +48,7 @@ namespace NP {
 				DM("IIP max priority = " << max_priority);
 			}
 
-			Time latest_start(const Job<Time>& j, Time t, const State& s)
+			Time latest_start(const Job<Time>& j, Time t, const State& s, const Node& n)
 			{
 				DM("IIP P-RM for " << j << ": ");
 
@@ -58,7 +60,7 @@ namespace NP {
 
 				for (auto it = hp_jobs.upper_bound(t); it != hp_jobs.end(); it++) {
 					const Job<Time>& h = *it->second;
-					if (space.incomplete(s, h)) {
+					if (space.incomplete(n, h)) {
 						Time latest = h.get_deadline()
 						              - h.maximal_cost()
 						              - j.maximal_cost();
@@ -95,6 +97,7 @@ namespace NP {
 		{
 			public:
 
+			typedef Schedule_node<Time> Node;
 			typedef Schedule_state<Time> State;
 			typedef State_space<Time, Critical_window_IIP> Space;
 			typedef typename State_space<Time, Critical_window_IIP>::Workload Jobs;
@@ -110,10 +113,10 @@ namespace NP {
 			{
 			}
 
-			Time latest_start(const Job<Time>& j, Time t, const State& s)
+			Time latest_start(const Job<Time>& j, Time t, const State& s, const Node& n)
 			{
 				DM("IIP CW for " << j << ": ");
-				auto ijs = influencing_jobs(j, t, s);
+				auto ijs = influencing_jobs(j, t, s, n);
 				Time latest = Time_model::constants<Time>::infinity();
 				// travers from job with latest to job with earliest deadline
 				for (auto it  = ijs.rbegin(); it != ijs.rend(); it++)
@@ -148,7 +151,8 @@ namespace NP {
 			std::vector<const Job<Time>*> influencing_jobs(
 				const Job<Time>& j_i,
 				Time at,
-				const State& s)
+				const State& s,
+				const Node& n)
 			{
 				// influencing jobs
 				std::unordered_map<unsigned long, const Job<Time>*> ijs;
@@ -156,14 +160,14 @@ namespace NP {
 				// first, check everything that's already pending at time t
 				// is accounted for
 				for (auto it = space.jobs_by_earliest_arrival
-				                    .lower_bound(s.earliest_job_release());
+				                    .lower_bound(n.earliest_job_release());
 				     it != space.jobs_by_earliest_arrival.end()
 				     && it->second->earliest_arrival() <= at;
 				     it++) {
 					const Job<Time>& j = *(it->second);
 					auto tid = j.get_task_id();
 					if (j_i.get_task_id() != tid
-					    && space.incomplete(s, j)
+					    && space.incomplete(n, j)
 					    && (ijs.find(tid) == ijs.end()
 					        || ijs[tid]->earliest_arrival()
 					           > j.earliest_arrival())) {
@@ -188,7 +192,7 @@ namespace NP {
 					auto tid = j.get_task_id();
 
 					// future jobs should still be pending...
-					assert(space.incomplete(s, j));
+					assert(space.incomplete(n, j));
 
 					if (ijs.find(tid) == ijs.end()) {
 						ijs[tid] = &j;

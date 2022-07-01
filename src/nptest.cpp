@@ -17,10 +17,11 @@
 
 #include "problem.hpp"
 #include "uni/space.hpp"
+#include "uni_iip/space.hpp"
 #include "global/space.hpp"
+#include "tsn/space.hpp"
 #include "io.hpp"
 #include "clock.hpp"
-
 
 #define MAX_PROCESSORS 512
 
@@ -29,6 +30,11 @@ static bool want_naive;
 static bool want_dense;
 static bool want_prm_iip;
 static bool want_cw_iip;
+
+// command line options for shapers (TAS and CBS) which allows for input of packets file and shaper file
+static bool want_tas_tsn = false;
+static bool want_cbs_tsn = false;
+static std::string shaper_file;
 
 static bool want_precedence = false;
 static std::string precedence_file;
@@ -56,7 +62,7 @@ static unsigned int num_worker_threads = 0;
 struct Analysis_result {
 	bool schedulable;
 	bool timeout;
-	unsigned long number_of_states, number_of_edges, max_width, number_of_jobs;
+	unsigned long number_of_nodes, number_of_states, number_of_edges, max_width, number_of_jobs;
 	double cpu_time;
 	std::string graph;
 	std::string response_times_csv;
@@ -66,18 +72,22 @@ template<class Time, class Space>
 static Analysis_result analyze(
 	std::istream &in,
 	std::istream &dag_in,
-	std::istream &aborts_in)
+	std::istream &aborts_in,
+	std::istream &shaper_in)
 {
+	
 #ifdef CONFIG_PARALLEL
 	tbb::task_scheduler_init init(
 		num_worker_threads ? num_worker_threads : tbb::task_scheduler_init::automatic);
 #endif
+
 
 	// Parse input files and create NP scheduling problem description
 	NP::Scheduling_problem<Time> problem{
 		NP::parse_file<Time>(in),
 		NP::parse_dag_file(dag_in),
 		NP::parse_abort_file<Time>(aborts_in),
+		NP::parse_tas_file<Time>(shaper_in),
 		num_processors};
 
 	// Set common analysis options
@@ -90,7 +100,7 @@ static Analysis_result analyze(
 
 	// Actually call the analysis engine
 	auto space = Space::explore(problem, opts);
-
+	
 	// Extract the analysis results
 	auto graph = std::ostringstream();
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
@@ -119,6 +129,7 @@ static Analysis_result analyze(
 	return {
 		space.is_schedulable(),
 		space.was_timed_out(),
+		space.number_of_nodes(),
 		space.number_of_states(),
 		space.number_of_edges(),
 		space.max_exploration_front_width(),
@@ -132,24 +143,29 @@ static Analysis_result analyze(
 static Analysis_result process_stream(
 	std::istream &in,
 	std::istream &dag_in,
-	std::istream &aborts_in)
+	std::istream &aborts_in,
+	std::istream &shaper_in)
 {
 	if (want_multiprocessor && want_dense)
-		return analyze<dense_t, NP::Global::State_space<dense_t>>(in, dag_in, aborts_in);
+		return analyze<dense_t, NP::Global::State_space<dense_t>>(in, dag_in, aborts_in, shaper_in);
 	else if (want_multiprocessor && !want_dense)
-		return analyze<dtime_t, NP::Global::State_space<dtime_t>>(in, dag_in, aborts_in);
+		return analyze<dtime_t, NP::Global::State_space<dtime_t>>(in, dag_in, aborts_in, shaper_in);
 	else if (want_dense && want_prm_iip)
-		return analyze<dense_t, NP::Uniproc::State_space<dense_t, NP::Uniproc::Precatious_RM_IIP<dense_t>>>(in, dag_in, aborts_in);
+		return analyze<dense_t, NP::UniprocIIP::State_space<dense_t, NP::UniprocIIP::Precatious_RM_IIP<dense_t>>>(in, dag_in, aborts_in, shaper_in);
 	else if (want_dense && want_cw_iip)
-		return analyze<dense_t, NP::Uniproc::State_space<dense_t, NP::Uniproc::Critical_window_IIP<dense_t>>>(in, dag_in, aborts_in);
+		return analyze<dense_t, NP::UniprocIIP::State_space<dense_t, NP::UniprocIIP::Critical_window_IIP<dense_t>>>(in, dag_in, aborts_in, shaper_in);
 	else if (want_dense && !want_prm_iip)
-		return analyze<dense_t, NP::Uniproc::State_space<dense_t>>(in, dag_in, aborts_in);
+		return analyze<dense_t, NP::Uniproc::State_space<dense_t>>(in, dag_in, aborts_in,shaper_in);
 	else if (!want_dense && want_prm_iip)
-		return analyze<dtime_t, NP::Uniproc::State_space<dtime_t, NP::Uniproc::Precatious_RM_IIP<dtime_t>>>(in, dag_in, aborts_in);
+		return analyze<dtime_t, NP::UniprocIIP::State_space<dtime_t, NP::UniprocIIP::Precatious_RM_IIP<dtime_t>>>(in, dag_in, aborts_in, shaper_in);
 	else if (!want_dense && want_cw_iip)
-		return analyze<dtime_t, NP::Uniproc::State_space<dtime_t, NP::Uniproc::Critical_window_IIP<dtime_t>>>(in, dag_in, aborts_in);
+		return analyze<dtime_t, NP::UniprocIIP::State_space<dtime_t, NP::UniprocIIP::Critical_window_IIP<dtime_t>>>(in, dag_in, aborts_in, shaper_in);
+	else if (want_tas_tsn && !want_dense)
+		return analyze<dtime_t, NP::TSN::State_space<dtime_t>>(in, dag_in, aborts_in, shaper_in);
+	else if (want_tas_tsn && want_dense)
+		return analyze<dense_t, NP::TSN::State_space<dense_t>>(in, dag_in, aborts_in, shaper_in);
 	else
-		return analyze<dtime_t, NP::Uniproc::State_space<dtime_t>>(in, dag_in, aborts_in);
+		return analyze<dtime_t, NP::Uniproc::State_space<dtime_t>>(in, dag_in, aborts_in, shaper_in);
 }
 
 static void process_file(const std::string& fname)
@@ -159,14 +175,19 @@ static void process_file(const std::string& fname)
 
 		auto empty_dag_stream = std::istringstream("\n");
 		auto empty_aborts_stream = std::istringstream("\n");
+		auto empty_shaper_stream = std::istringstream("\n");
 		auto dag_stream = std::ifstream();
 		auto aborts_stream = std::ifstream();
+		auto shaper_stream = std::ifstream();
 
 		if (want_precedence)
 			dag_stream.open(precedence_file);
 
 		if (want_aborts)
 			aborts_stream.open(aborts_file);
+
+		if (want_tas_tsn)
+			shaper_stream.open(shaper_file);
 
 		std::istream &dag_in = want_precedence ?
 			static_cast<std::istream&>(dag_stream) :
@@ -176,13 +197,18 @@ static void process_file(const std::string& fname)
 			static_cast<std::istream&>(aborts_stream) :
 			static_cast<std::istream&>(empty_aborts_stream);
 
+		std::istream &shaper_in = want_tas_tsn ?
+			static_cast<std::istream&>(shaper_stream) :
+			static_cast<std::istream&>(empty_shaper_stream);
+
 		if (fname == "-")
-			result = process_stream(std::cin, dag_in, aborts_in);
+			result = process_stream(std::cin, dag_in, aborts_in, shaper_in);
 		else {
 			auto in = std::ifstream(fname, std::ios::in);
-			result = process_stream(in, dag_in, aborts_in);
+			result = process_stream(in, dag_in, aborts_in, shaper_in);
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
 			if (want_dot_graph) {
+				DM("\nDot graph being made");
 				std::string dot_name = fname;
 				auto p = dot_name.find(".csv");
 				if (p != std::string::npos) {
@@ -219,6 +245,7 @@ static void process_file(const std::string& fname)
 			std::cout << ",  " << (int) result.schedulable;
 
 		std::cout << ",  " << result.number_of_jobs
+				  << ",  " << result.number_of_nodes
 		          << ",  " << result.number_of_states
 		          << ",  " << result.number_of_edges
 		          << ",  " << result.max_width
@@ -253,9 +280,10 @@ static void process_file(const std::string& fname)
 }
 
 static void print_header(){
-	std::cout << "# file name"
+	std::cout << "\n# file name"
 	          << ", schedulable?"
 	          << ", #jobs"
+	          << ", #nodes"
 	          << ", #states"
 	          << ", #edges"
 	          << ", max width"
@@ -294,6 +322,14 @@ int main(int argc, char** argv)
 	      .choices({"none", "P-RM", "CW"}).set_default("none")
 	      .help("the IIP to use (default: none)");
 
+	parser.add_option("--tsn").dest("tsn")
+	      .choices({"none","TAS", "CBS"}).set_default("none")
+	      .help("the TSN analysis to use (default: TAS)");     
+
+	parser.add_option("--shaper").dest("shaper")
+		  .help("name of the file that contains information about the shaper")
+		  .set_default("");
+
 	parser.add_option("-p", "--precedence").dest("precedence_file")
 	      .help("name of the file that contains the job set's precedence DAG")
 	      .set_default("");
@@ -331,6 +367,8 @@ int main(int argc, char** argv)
 
 
 	auto options = parser.parse_args(argc, argv);
+	//all the options that could have been entered above are processed below and appropriate variables
+	// are assigned their respective values.
 
 	const std::string& time_model = options.get("time_model");
 	want_dense = time_model == "dense";
@@ -341,6 +379,17 @@ int main(int argc, char** argv)
 	const std::string& iip = options.get("iip");
 	want_prm_iip = iip == "P-RM";
 	want_cw_iip = iip == "CW";
+
+	const std::string& tsn = options.get("tsn");
+	want_tas_tsn = tsn == "TAS";
+	want_cbs_tsn = tsn == "CBS";
+
+	if(want_tas_tsn && parser.args().size() >1) {
+		std::cerr << "[!!] Warning: multiple packet sets "
+		          << "with a single gate information file specified."
+		          << std::endl;
+	}
+	shaper_file = (const std::string&) options.get("shaper");
 
 	want_naive = options.get("naive");
 
@@ -384,6 +433,7 @@ int main(int argc, char** argv)
 
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
 	want_dot_graph = options.get("dot");
+	DM("Dot graph"<<want_dot_graph<<std::endl);
 #else
 	if (options.is_set_by_user("dot")) {
 		std::cerr << "Error: graph collection support must be enabled "
@@ -404,9 +454,11 @@ int main(int argc, char** argv)
 	}
 #endif
 
+	// this prints the header in the output on the console
 	if (options.get("print_header"))
 		print_header();
 
+	// process_file is given the arguments that have been passed
 	for (auto f : parser.args())
 		process_file(f);
 

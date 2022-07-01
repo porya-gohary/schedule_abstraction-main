@@ -13,7 +13,7 @@ namespace NP {
 
 	// use pointers as a primitive form of unique ID
 
-	namespace Uniproc {
+	namespace TSN {
 
 		typedef Index_set Job_set;
 		template<class Time> class Schedule_state;
@@ -220,6 +220,7 @@ namespace NP {
 						merged_state->update_finish_range(new_st);
 						s_ref = states.erase(s_ref);
 						states.insert(merged_state);
+						DM("\nState merged\n");
 						return true;
 					}
 					else

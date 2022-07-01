@@ -76,6 +76,21 @@ template<class T> class Interval {
 		return from() <= point && point <= until();
 	}
 
+	bool disjoint_before(const Interval<T>& other) const
+	{
+		return other.until() < from();
+	}
+
+	bool disjoint_after(const Interval<T>& other) const
+	{
+		return until() < other.from();
+	}
+
+	bool overlap(const Interval<T>& other) const
+	{
+		return (not (disjoint_before(other)) || (disjoint_after(other)));
+	}
+
 	bool disjoint(const Interval<T>& other) const
 	{
 		//consecutive intervals are not considered to be disjoint
@@ -122,6 +137,12 @@ template<class T> class Interval {
 	{
 		a = std::min(from(), other.from());
 		b = std::max(until(), other.until());
+	}
+
+	void equate(const Interval<T>& other)
+	{
+		a = other.from();
+		b = other.until();
 	}
 
 	Interval<T> operator|(const Interval<T>& other) const

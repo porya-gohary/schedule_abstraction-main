@@ -95,6 +95,12 @@ namespace NP {
 				return timed_out;
 			}
 
+			//currently unused, only required to compile nptest.cpp correctly
+			unsigned long number_of_nodes() const
+			{
+				return num_nodes;
+			}
+
 			unsigned long number_of_states() const
 			{
 				return num_states;
@@ -237,7 +243,7 @@ namespace NP {
 
 			States_map states_by_key;
 			// updated only by main thread
-			unsigned long num_states, width;
+			unsigned long num_nodes, num_states, width;
 			unsigned long current_job_count;
 			unsigned long num_edges;
 
