@@ -103,7 +103,7 @@ TEST_CASE("[IIP] P-RM negative example (Figure 2)")
 
 TEST_CASE("[IIP] P-RM example extra branch")
 {
-    Uniproc::State_space<dtime_t>::Workload jobs{
+    UniprocIIP::State_space<dtime_t>::Workload jobs{
         Job<dtime_t>{0, Interval<dtime_t>( 1,  1), Interval<dtime_t>(1, 1), 3, 0, 0},
         Job<dtime_t>{1, Interval<dtime_t>(4, 4), Interval<dtime_t>(1, 1), 6, 0, 0},
         Job<dtime_t>{2, Interval<dtime_t>( 0,  0), Interval<dtime_t>(1, 2), 3, 1, 1},
