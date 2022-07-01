@@ -33,20 +33,20 @@ TEST_CASE("Intervals") {
 	for (auto i : ivals)
 		CHECK(i.intersects(i4));
 
-	CHECK(i1.merge(i2).merge(i3) == I(10, 30));
+	CHECK(i1.merge(i2).merge(i3) == Interval<dtime_t>(10, 30));
 
 	//to check if i1 and  i3 are not disjoint as they are consecutive intervals
-	CHECK(i1.merge(i3) == I(10,30));	
+	CHECK(i1.merge(i3) == Interval<dtime_t>(10,30));	
 
-	CHECK(I(10, 20).intersects(I(10, 20)));
+	CHECK(Interval<dtime_t>(10, 20).intersects(Interval<dtime_t>(10, 20)));
 }
 
 
 
 TEST_CASE("Job hashes work") {
-	Job<dtime_t> j1{9,  I(0, 0), I(3, 13), 60, 60};
-	Job<dtime_t> j2{9,  I(0, 0), I(3, 13), 60, 60};
-	Job<dtime_t> j3{10, I(0, 0), I(3, 13), 60, 60};
+	Job<dtime_t> j1{9,  Interval<dtime_t>(0, 0), Interval<dtime_t>(3, 13), 60, 60};
+	Job<dtime_t> j2{9,  Interval<dtime_t>(0, 0), Interval<dtime_t>(3, 13), 60, 60};
+	Job<dtime_t> j3{10, Interval<dtime_t>(0, 0), Interval<dtime_t>(3, 13), 60, 60};
 
 	auto h = std::hash<Job<dtime_t>>{};
 
@@ -57,9 +57,9 @@ TEST_CASE("Job hashes work") {
 
 TEST_CASE("Interval LUT") {
 
-	Interval_lookup_table<dtime_t, Job<dtime_t>, &Job<dtime_t>::scheduling_window> lut(I(0, 60), 10);
+	Interval_lookup_table<dtime_t, Job<dtime_t>, &Job<dtime_t>::scheduling_window> lut(Interval<dtime_t>(0, 60), 10);
 
-	Job<dtime_t> j1{10, I(0, 0), I(3, 13), 60, 60};
+	Job<dtime_t> j1{10, Interval<dtime_t>(0, 0), Interval<dtime_t>(3, 13), 60, 60};
 
 	lut.insert(j1);
 
@@ -82,7 +82,7 @@ TEST_CASE("state space") {
 
 	CHECK(h(s0) == 0);
 
-	Job<dtime_t> j1{10, I(0, 0), I(3, 13), 60, 60};
+	Job<dtime_t> j1{10, Interval<dtime_t>(0, 0), Interval<dtime_t>(3, 13), 60, 60};
 
 	CHECK(j1.least_cost() == 3);
 	CHECK(j1.maximal_cost() == 13);
