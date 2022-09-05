@@ -12,26 +12,47 @@ using namespace NP;
 
 static const auto inf = Time_model::constants<dtime_t>::infinity();
 
-const std::string TAS_constGB_packets_file =
+const std::string TAS_nobranch_packets_file =
 "TID, JID, Rmin, Rmax, Cmin, Cmax,  DL, Prio\n"
 "   1,  1,    0,    0,    1,    2,  10,    0\n"
 "   1,  2,   10,   10,    1,    2,  20,    0\n"
 "   1,  3,   20,   20,    1,    2,  30,    0\n"
 "   2,  1,   10,   12,    5,    7,  30,    1\n"
-"   3,  1,   25,   25,   15,   19,  60,    2\n"
-"   4,  1,   10,   12,    5,    7,  10,    0\n";
+"   3,  1,   25,   25,   15,   19,  60,    2\n";
 
-const std::string TAS_constGB_shaper_file =
+const std::string TAS_branch_packets_file =
+"TID, JID, Rmin, Rmax, Cmin, Cmax,  DL, Prio\n"
+"   1,  1,    0,    0,    1,    2,  10,    0\n"
+"   1,  2,   10,   10,    1,    2,  20,    0\n"
+"   1,  3,   20,   20,    1,    2,  40,    0\n"
+"   1,  4,   25,   25,    1,    2,  40,    0\n"
+"   2,  1,   10,   12,    5,    7,  30,    1\n"
+"   2,  2,   20,   22,    5,    7,  50,    1\n"
+"   3,  1,   25,   25,   15,   19,  60,    2\n";
+
+const std::string TAS_constGB0_shaper_file =
 "Prio, Per, CBS, TAS, isVar, CGB, Ints\n"
-"   0,  10,   0,   1,     0,   1,    2,  2, 0, 0\n"
-"   1,  30,   0,   1,     0,   1,   11,  4\n"
-"   2,  60,   0,   1,     0,   1,   20, 17\n";
+"   0,  10,   0,   1,     0,   0,    2,  2, 0, 0\n"
+"   1,  30,   0,   1,     0,   0,   11,  4\n"
+"   2,  60,   0,   1,     0,   0,   20, 17\n";
 
-TEST_CASE("[TSN] Constant Guardband for TAS") {
-	auto jobs_in = std::istringstream(TAS_constGB_packets_file);
+const std::string TAS_varGB_ndm_shaper_file =
+"Prio, Per, CBS, TAS, isVar, CGB, Ints\n"
+"   0,  10,   0,   1,     1,   0,    2,  2, 0, 0\n"
+"   1,  30,   0,   1,     1,   0,   11,  4\n"
+"   2,  60,   0,   1,     1,   0,   20, 17\n";
+
+const std::string TAS_varGB_dm_shaper_file =
+"Prio, Per, CBS, TAS, isVar, CGB, Ints\n"
+"   0,  10,   0,   1,     1,   0,    2,  2, 0, 0\n"
+"   1,  30,   0,   1,     1,   0,   11,  2\n"
+"   2,  60,   0,   1,     1,   0,   20, 17\n";
+
+TEST_CASE("[TSN] Constant Guardband for TAS with no branching and IPG=0") {
+	auto jobs_in = std::istringstream(TAS_nobranch_packets_file);
 	auto dag_in  = std::istringstream("\n");
 	auto aborts_in = std::istringstream("\n");
-	auto shaper_in = std::istringstream(TAS_constGB_shaper_file);
+	auto shaper_in = std::istringstream(TAS_constGB0_shaper_file);
 
 	Scheduling_problem<dtime_t> prob{
 		parse_file<dtime_t>(jobs_in),
@@ -45,32 +66,97 @@ TEST_CASE("[TSN] Constant Guardband for TAS") {
 	opts.early_exit = false;
 
 	auto space = TSN::State_space<dtime_t>::explore(prob, opts);
-	CHECK(!space.is_schedulable());
+	CHECK(space.is_schedulable());
 
-	CHECK(space.get_finish_times(prob.jobs[2]).min() == 21);
-	CHECK(space.get_finish_times(prob.jobs[2]).max() == 31);
+	CHECK(space.get_finish_times(prob.jobs[0]).min() == 1);
+	CHECK(space.get_finish_times(prob.jobs[0]).max() == 2);
+	CHECK(space.get_finish_times(prob.jobs[1]).min() == 11);
+	CHECK(space.get_finish_times(prob.jobs[1]).max() == 12);
+	CHECK(space.get_finish_times(prob.jobs[2]).min() == 22);
+	CHECK(space.get_finish_times(prob.jobs[2]).max() == 27);
+	CHECK(space.get_finish_times(prob.jobs[3]).min() == 21);
+	CHECK(space.get_finish_times(prob.jobs[3]).max() == 23);
+	CHECK(space.get_finish_times(prob.jobs[4]).min() == 53);
+	CHECK(space.get_finish_times(prob.jobs[4]).max() == 57);
 
 };
 
-const std::string TAS_varGB_packets_file =
-"TID, JID, Rmin, Rmax, Cmin, Cmax,  DL, Prio\n"
-"   1,  1,    0,    0,    1,    2,  10,    0\n"
-"   1,  2,   10,   10,    1,    2,  20,    0\n"
-"   1,  3,   20,   20,    1,    2,  30,    0\n"
-"   2,  1,   10,   12,    5,    7,  30,    1\n"
-"   3,  1,   25,   25,   15,   19,  60,    2\n";
-
-const std::string TAS_varGB_shaper_file =
-"Prio, Per, CBS, TAS, isVar, CGB, Ints\n"
-"   0,  10,   0,   1,     1,   0,    2,  2, 0, 0\n"
-"   1,  30,   0,   1,     1,   0,   11,  4\n"
-"   2,  60,   0,   1,     1,   0,   20, 17\n";
-
-TEST_CASE("[TSN] Variable Guardband for TAS") {
-	auto jobs_in = std::istringstream(TAS_varGB_packets_file);
+TEST_CASE("[TSN] Constant Guardband for TAS with no branching and IPG=1") {
+	auto jobs_in = std::istringstream(TAS_nobranch_packets_file);
 	auto dag_in  = std::istringstream("\n");
 	auto aborts_in = std::istringstream("\n");
-	auto shaper_in = std::istringstream(TAS_varGB_shaper_file);
+	auto shaper_in = std::istringstream(TAS_constGB0_shaper_file);
+
+	Scheduling_problem<dtime_t> prob{
+		parse_file<dtime_t>(jobs_in),
+		parse_dag_file(dag_in),
+		parse_abort_file<dtime_t>(aborts_in),
+		parse_tas_file<dtime_t>(shaper_in),
+		1
+	};
+
+	Analysis_options opts;
+	opts.c_ipg = 1;
+	opts.early_exit = false;
+
+	auto space = TSN::State_space<dtime_t>::explore(prob, opts);
+	CHECK(space.is_schedulable());
+
+	CHECK(space.get_finish_times(prob.jobs[0]).min() == 1);
+	CHECK(space.get_finish_times(prob.jobs[0]).max() == 2);
+	CHECK(space.get_finish_times(prob.jobs[1]).min() == 11);
+	CHECK(space.get_finish_times(prob.jobs[1]).max() == 12);
+	CHECK(space.get_finish_times(prob.jobs[2]).min() == 26);
+	CHECK(space.get_finish_times(prob.jobs[2]).max() == 27);
+	CHECK(space.get_finish_times(prob.jobs[3]).min() == 21);
+	CHECK(space.get_finish_times(prob.jobs[3]).max() == 23);
+	CHECK(space.get_finish_times(prob.jobs[4]).min() == 53);
+	CHECK(space.get_finish_times(prob.jobs[4]).max() == 57);
+
+};
+
+TEST_CASE("[TSN] Constant Guardband for TAS with branching and IPG=0") {
+	auto jobs_in = std::istringstream(TAS_branch_packets_file);
+	auto dag_in  = std::istringstream("\n");
+	auto aborts_in = std::istringstream("\n");
+	auto shaper_in = std::istringstream(TAS_constGB0_shaper_file);
+
+	Scheduling_problem<dtime_t> prob{
+		parse_file<dtime_t>(jobs_in),
+		parse_dag_file(dag_in),
+		parse_abort_file<dtime_t>(aborts_in),
+		parse_tas_file<dtime_t>(shaper_in),
+		1
+	};
+
+	Analysis_options opts;
+	opts.early_exit = false;
+
+	auto space = TSN::State_space<dtime_t>::explore(prob, opts);
+	CHECK(space.is_schedulable());
+
+	CHECK(space.get_finish_times(prob.jobs[0]).min() == 1);
+	CHECK(space.get_finish_times(prob.jobs[0]).max() == 2);
+	CHECK(space.get_finish_times(prob.jobs[1]).min() == 11);
+	CHECK(space.get_finish_times(prob.jobs[1]).max() == 12);
+	CHECK(space.get_finish_times(prob.jobs[2]).min() == 22);
+	CHECK(space.get_finish_times(prob.jobs[2]).max() == 32);
+	CHECK(space.get_finish_times(prob.jobs[3]).min() == 28);
+	CHECK(space.get_finish_times(prob.jobs[3]).max() == 37);
+	CHECK(space.get_finish_times(prob.jobs[4]).min() == 21);
+	CHECK(space.get_finish_times(prob.jobs[4]).max() == 23);
+	CHECK(space.get_finish_times(prob.jobs[5]).min() == 27);
+	CHECK(space.get_finish_times(prob.jobs[5]).max() == 30);
+	CHECK(space.get_finish_times(prob.jobs[6]).min() == 53);
+	CHECK(space.get_finish_times(prob.jobs[6]).max() == 57);
+
+};
+
+TEST_CASE("[TSN] Variable Guardband for TAS with no deadline miss and IPG=0") {
+	auto jobs_in = std::istringstream(TAS_nobranch_packets_file);
+	auto dag_in  = std::istringstream("\n");
+	auto aborts_in = std::istringstream("\n");
+	auto shaper_in = std::istringstream(TAS_varGB_ndm_shaper_file);
 
 	Scheduling_problem<dtime_t> prob{
 		parse_file<dtime_t>(jobs_in),
@@ -96,6 +182,33 @@ TEST_CASE("[TSN] Variable Guardband for TAS") {
 	CHECK(space.get_finish_times(prob.jobs[3]).max() == 24);
 	CHECK(space.get_finish_times(prob.jobs[4]).min() == 53);
 	CHECK(space.get_finish_times(prob.jobs[4]).max() == 57);
+
+};
+
+TEST_CASE("[TSN] Variable Guardband for TAS with deadline miss and IPG=0") {
+	auto jobs_in = std::istringstream(TAS_nobranch_packets_file);
+	auto dag_in  = std::istringstream("\n");
+	auto aborts_in = std::istringstream("\n");
+	auto shaper_in = std::istringstream(TAS_varGB_dm_shaper_file);
+
+	Scheduling_problem<dtime_t> prob{
+		parse_file<dtime_t>(jobs_in),
+		parse_dag_file(dag_in),
+		parse_abort_file<dtime_t>(aborts_in),
+		parse_tas_file<dtime_t>(shaper_in),
+		1
+	};
+
+	Analysis_options opts;
+	opts.early_exit = false;
+
+	auto space = TSN::State_space<dtime_t>::explore(prob, opts);
+	CHECK(!space.is_schedulable());
+
+	CHECK(space.get_finish_times(prob.jobs[0]).min() == 6);
+	CHECK(space.get_finish_times(prob.jobs[0]).max() == 7);
+	CHECK(space.get_finish_times(prob.jobs[3]).min() == 19);
+	CHECK(space.get_finish_times(prob.jobs[3]).max() == 21);
 
 };
 

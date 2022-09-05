@@ -92,7 +92,7 @@ namespace NP {
 				next_gate_open = start_period*period;
 			else
 			{
-				next_gate_open = GC[0].upto();
+				next_gate_open = GC[0].upto()+1;
 				skip = true;
 			}
 
@@ -104,13 +104,13 @@ namespace NP {
 					continue;
 				}
 				first += 1;
-				GO.emplace_back(Interval<Time>{next_gate_open, gc.from()});
-				next_gate_open = gc.upto();
+				GO.emplace_back(Interval<Time>{next_gate_open, gc.from()-1});
+				next_gate_open = gc.upto()+1;
 			}
 
 			if(next_gate_open < end_period*period)
 				GO.emplace_back(Interval<Time>{next_gate_open, end_period*period});
-			
+
 			return GO;
 		}
 

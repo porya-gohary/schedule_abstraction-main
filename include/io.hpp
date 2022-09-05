@@ -43,6 +43,13 @@ namespace NP {
 
 	inline bool more_fields_in_line(std::istream& in)
 	{
+		while(in.peek() == ',' || in.peek()==' ')
+		{
+			// eat up any trailing spaces
+			skip_all(in, ' ');
+			// eat up field separator
+			skip_one(in, ',');
+		}
 		if(in.peek() == '\n')
 		{
 			return false;

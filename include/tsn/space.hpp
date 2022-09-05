@@ -48,7 +48,7 @@ namespace NP {
 				assert(prob.num_processors == 1);
 
 				auto s = State_space(prob.jobs, prob.dag, prob.aborts, prob.tasQueues,
-				                     opts.timeout, opts.max_depth,
+				                     opts.timeout, opts.max_depth, opts.c_ipg,
 				                     opts.num_buckets, opts.early_exit);
 				s.cpu_time.start();
 				if (opts.be_naive)
@@ -274,8 +274,8 @@ namespace NP {
 
 			static const std::size_t num_todo_queues = 3;
 
-			//value of the inter_packet_gap is set here
-			const Time c_ipg = 0;
+			//c_ipg stores the ipg value that it recieves from analysis options
+			int c_ipg;
 
 			Todo_queue todo[num_todo_queues];
 			int todo_idx;
@@ -296,6 +296,7 @@ namespace NP {
 			            const TAS_queues& tasQueues,
 			            double max_cpu_time = 0,
 			            unsigned int max_depth = 0,
+			            int c_ipg = 0,
 			            std::size_t num_buckets = 1000,
 			            bool early_exit = true)
 			: jobs(jobs)
@@ -303,6 +304,7 @@ namespace NP {
 			, timed_out(false)
 			, timeout(max_cpu_time)
 			, max_depth(max_depth)
+			, c_ipg(c_ipg)
 			, num_nodes(0)
 			, num_states(0)
 			, num_edges(0)
@@ -394,7 +396,7 @@ namespace NP {
 
 			Time get_guard_band(const Job<Time>& j, Time priority)
 			{
-				DM("Maximal Cost:"<<j.maximal_cost());
+				DM("Maximal Cost:"<<j.maximal_cost()<<" ");
 				if (tasQueues[priority].is_variable())
 					return j.maximal_cost();
 				return tasQueues[priority].get_guardband();
@@ -536,12 +538,12 @@ namespace NP {
 			template <typename... Args>
 			Node& new_node(Args&&... args)
 			{
-				DM("\nCreated Node\n");
+				DM("\nCreated Node: ");
 				nodes.emplace_back(std::forward<Args>(args)...);
 				Node_ref n_ref = --nodes.end();
 
 				Interval<Time> fr_ipg = Interval<Time>{n_ref->finish_range().from() + c_ipg, n_ref->finish_range().upto() +c_ipg};
-
+				
 				State &st = (n_ref->get_key()==0) ?
 					new_state() :
 					new_state(fr_ipg);
@@ -567,6 +569,7 @@ namespace NP {
 			template <typename... Args>
 			State& new_state()
 			{
+				DM("Created state [0,0]");
 				states.emplace_back();
 				State_ref s_ref = --states.end();
 				num_states++;
@@ -576,6 +579,7 @@ namespace NP {
 			template <typename... Args>
 			State& new_state(Interval<Time> ftimes)
 			{
+				DM("Created state ["<<ftimes.from()<<","<<ftimes.until()<<"]\n");
 				states.emplace_back(ftimes);
 				State_ref s_ref = --states.end();
 				num_states++;
@@ -733,13 +737,22 @@ namespace NP {
 
 				ST.emplace_back(Interval<Time>{est, t_wc});
 
+				DM("\n\n[t_lb,t_wc]:");
+				for(auto st:ST)
+					DM(st<<",");
+				DM(std::endl);
+
 				CP = tasQueues[j.get_priority()].get_gates_close(est,t_wc,guardband);
-				DM("Current Priority gates to be deleted:");
+				DM("CP:");
 				for(auto cp:CP)
 					DM(cp<<",");
 				DM(std::endl);
 
 				ST = overlap_delete(ST, CP);
+				DM("ST-CP:");
+				for(auto st:ST)
+					DM(st<<",");
+				DM(std::endl);
 
 				if(ST.size() == 0)
 					return FT;
@@ -774,8 +787,13 @@ namespace NP {
 						if(ST.size() == 0)
 							break;
 					}
+
 				}
 
+				DM("ST-HP:");
+				for(auto st:ST)
+					DM(st<<",");
+				DM(std::endl);
 				if(ST.size() == 0)
 					return FT;
 
@@ -841,7 +859,7 @@ namespace NP {
 				process_new_edge(n, *match, j, f_r);
 			}
 
-			// In schedule_new, the funtion does not attempt to merge but instead creates a new node for the new state
+			// In schedule_new, the function does not attempt to merge but instead creates a new node for the new state
 			Node_ref schedule_new(const Node& n, const Job<Time> &j, Intervals finish_ranges)
 			{
 				DM("Creating a new node"<<std::endl);
@@ -857,10 +875,11 @@ namespace NP {
 
 				for(auto fr: finish_ranges)
 				{
-					if(!n_ref->merge_states(fr))
+					Interval<Time> fr_ipg = Interval<Time>{fr.from()+c_ipg,fr.upto()+c_ipg};
+					if(!n_ref->merge_states(fr_ipg))
 					{
 						DM("\nState not merged but added to the node\n");
-						State &st = new_state(fr);
+						State &st = new_state(fr_ipg);
 						n_ref->add_state(&st);
 					}
 					update_finish_times(j, fr);
@@ -877,6 +896,7 @@ namespace NP {
 			void explore()
 			{
 				make_initial_node();
+				DM("2.cipg"<<c_ipg);
 
 				while (not_done() && !aborted) 
 				{
@@ -913,6 +933,8 @@ namespace NP {
 							DM("\n---\nChecking for states to expand to for job "<< j.get_id()<<std::endl);
 							for(State *s: *n_states)
 							{
+								DM("\n---\nInside state: ["<<s->earliest_finish_time()<<","<<s->latest_finish_time()<<"]"<<std::endl);
+							
 								Time t_wc = calc_t_wc(n,s->latest_finish_time());
 								Time est = std::max(j.earliest_arrival(),s->earliest_finish_time());
 
@@ -921,6 +943,10 @@ namespace NP {
 
 								DM("\nt_wc and est calculated:"<<t_wc<<", "<<est<<"\n");
 								Intervals finish_ranges = next_finish_times(n, j, est, t_wc);
+								DM("FT:");
+								for(auto ft:finish_ranges)
+									DM(ft<<",");
+								DM(std::endl);
 
 								// check if there are finish ranges present in finish_ranges, if empty then there is no
 								// eligible time when j can execute

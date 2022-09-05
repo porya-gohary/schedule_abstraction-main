@@ -31,10 +31,10 @@ static bool want_dense;
 static bool want_prm_iip;
 static bool want_cw_iip;
 
-// command line options for shapers (TAS and CBS) which allows for input of packets file and shaper file
-static bool want_tas_tsn = false;
-static bool want_cbs_tsn = false;
+// command line options for shaper file and ipg value
 static std::string shaper_file;
+static int c_ipg = 0;
+static bool want_tsn = false;
 
 static bool want_precedence = false;
 static std::string precedence_file;
@@ -97,6 +97,7 @@ static Analysis_result analyze(
 	opts.early_exit = !continue_after_dl_miss;
 	opts.num_buckets = problem.jobs.size();
 	opts.be_naive = want_naive;
+	opts.c_ipg = c_ipg;
 
 	// Actually call the analysis engine
 	auto space = Space::explore(problem, opts);
@@ -160,9 +161,9 @@ static Analysis_result process_stream(
 		return analyze<dtime_t, NP::UniprocIIP::State_space<dtime_t, NP::UniprocIIP::Precatious_RM_IIP<dtime_t>>>(in, dag_in, aborts_in, shaper_in);
 	else if (!want_dense && want_cw_iip)
 		return analyze<dtime_t, NP::UniprocIIP::State_space<dtime_t, NP::UniprocIIP::Critical_window_IIP<dtime_t>>>(in, dag_in, aborts_in, shaper_in);
-	else if (want_tas_tsn && !want_dense)
+	else if (want_tsn && !want_dense)
 		return analyze<dtime_t, NP::TSN::State_space<dtime_t>>(in, dag_in, aborts_in, shaper_in);
-	else if (want_tas_tsn && want_dense)
+	else if (want_tsn && want_dense)
 		return analyze<dense_t, NP::TSN::State_space<dense_t>>(in, dag_in, aborts_in, shaper_in);
 	else
 		return analyze<dtime_t, NP::Uniproc::State_space<dtime_t>>(in, dag_in, aborts_in, shaper_in);
@@ -186,7 +187,7 @@ static void process_file(const std::string& fname)
 		if (want_aborts)
 			aborts_stream.open(aborts_file);
 
-		if (want_tas_tsn)
+		if (want_tsn)
 			shaper_stream.open(shaper_file);
 
 		std::istream &dag_in = want_precedence ?
@@ -197,7 +198,7 @@ static void process_file(const std::string& fname)
 			static_cast<std::istream&>(aborts_stream) :
 			static_cast<std::istream&>(empty_aborts_stream);
 
-		std::istream &shaper_in = want_tas_tsn ?
+		std::istream &shaper_in = want_tsn ?
 			static_cast<std::istream&>(shaper_stream) :
 			static_cast<std::istream&>(empty_shaper_stream);
 
@@ -208,7 +209,7 @@ static void process_file(const std::string& fname)
 			result = process_stream(in, dag_in, aborts_in, shaper_in);
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
 			if (want_dot_graph) {
-				DM("\nDot graph being made");
+				DM("\nDot graph being made\n");
 				std::string dot_name = fname;
 				auto p = dot_name.find(".csv");
 				if (p != std::string::npos) {
@@ -322,9 +323,9 @@ int main(int argc, char** argv)
 	      .choices({"none", "P-RM", "CW"}).set_default("none")
 	      .help("the IIP to use (default: none)");
 
-	parser.add_option("--tsn").dest("tsn")
-	      .choices({"none","TAS", "CBS"}).set_default("none")
-	      .help("the TSN analysis to use (default: TAS)");     
+	parser.add_option("--ipg").dest("ipg")
+	      .set_default("0")
+	      .help("the interpacket gap is to be entered in terms of number of time units");     
 
 	parser.add_option("--shaper").dest("shaper")
 		  .help("name of the file that contains information about the shaper")
@@ -380,16 +381,17 @@ int main(int argc, char** argv)
 	want_prm_iip = iip == "P-RM";
 	want_cw_iip = iip == "CW";
 
-	const std::string& tsn = options.get("tsn");
-	want_tas_tsn = tsn == "TAS";
-	want_cbs_tsn = tsn == "CBS";
-
-	if(want_tas_tsn && parser.args().size() >1) {
-		std::cerr << "[!!] Warning: multiple packet sets "
-		          << "with a single gate information file specified."
-		          << std::endl;
+	c_ipg = options.get("ipg");
+	if (options.is_set_by_user("ipg")) {
+		if (c_ipg < 0) {
+			std::cerr << "Error: invalid c_ipg value\n" << std::endl;
+			return 1;
+		}
 	}
+
 	shaper_file = (const std::string&) options.get("shaper");
+	if (options.is_set_by_user("shaper"))
+		want_tsn = true;
 
 	want_naive = options.get("naive");
 

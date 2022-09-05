@@ -107,12 +107,18 @@ namespace NP {
 		// of the main workload index be?
 		std::size_t num_buckets;
 
+		// What should be the value of the interpacket gap in the case that
+		// the SAG is used to analyse packets that are transmitted through
+		// a time-sensitiv network
+		int c_ipg;
+
 		Analysis_options()
 		: timeout(0)
 		, max_depth(0)
 		, early_exit(true)
 		, num_buckets(1000)
 		, be_naive(false)
+		, c_ipg(0)
 		{
 		}
 	};
