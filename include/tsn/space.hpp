@@ -396,7 +396,6 @@ namespace NP {
 
 			Time get_guard_band(const Job<Time>& j, Time priority)
 			{
-				DM("Maximal Cost:"<<j.maximal_cost()<<" ");
 				if (tasQueues[priority].is_variable())
 					return j.maximal_cost();
 				return tasQueues[priority].get_guardband();
@@ -449,7 +448,9 @@ namespace NP {
 					if(unscheduled(n,i))
 					{
 						if(tasQueues[i].is_variable())
+						{
 							t_wc = std::min(t_wc, get_tstart_Pi(n,i,A_max));
+						}
 						else
 							t_wc = std::min(t_wc, tasQueues[i].next_open(std::max(A_max,get_trmax(n,i)),tasQueues[i].get_guardband()));
 					}
@@ -544,7 +545,7 @@ namespace NP {
 
 				Interval<Time> fr_ipg = Interval<Time>{n_ref->finish_range().from() + c_ipg, n_ref->finish_range().upto() +c_ipg};
 				
-				State &st = (n_ref->get_key()==0) ?
+				State &st = (n_ref->finish_range().upto()==0) ?
 					new_state() :
 					new_state(fr_ipg);
 
@@ -764,16 +765,23 @@ namespace NP {
 						const Job<Time>* jp;
 						foreach_possibly_fifo_top_job(n, jp, i)
 						{
-							if(j.latest_arrival() > t_wc)
+							const Job<Time>& hpj = *jp;
+							if(hpj.latest_arrival() > t_wc)
 							{
 								continue;
 							}
-							const Job<Time>& j = *jp;
-							Time gband = get_guard_band(j,i);
-							HP =tasQueues[i].get_gates_open(j.latest_arrival(), t_wc, gband);
+							Time gband = get_guard_band(hpj,i);
+							DM("B"<<hpj.latest_arrival()<<","<< t_wc<<","<< gband);
+							HP =tasQueues[i].get_gates_open(hpj.latest_arrival(), t_wc, gband);
+							
 							ST = overlap_delete(ST, HP);
+							DM("ST-HP"<<hpj.get_id()<<":");
+							for(auto st:HP)
+								DM(st<<",");
+							DM(std::endl);
+
 							if(ST.size() == 0)
-								break;
+								return FT;
 						}
 					}
 					else
@@ -785,7 +793,7 @@ namespace NP {
 						HP =tasQueues[i].get_gates_open(get_trmax(n, i), t_wc, tasQueues[i].get_guardband());
 						ST = overlap_delete(ST, HP);
 						if(ST.size() == 0)
-							break;
+							return FT;
 					}
 
 				}
@@ -863,6 +871,11 @@ namespace NP {
 			Node_ref schedule_new(const Node& n, const Job<Time> &j, Intervals finish_ranges)
 			{
 				DM("Creating a new node"<<std::endl);
+				DM("FR:");
+				for(auto st:finish_ranges)
+					DM(st<<",");
+				DM(std::endl);
+				DM("FR0:"<<finish_ranges[0]);
 				const Node& next =
 					new_node(n, j, index_of(j),
 					          finish_ranges[0],

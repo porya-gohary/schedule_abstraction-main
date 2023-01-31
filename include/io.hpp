@@ -43,14 +43,7 @@ namespace NP {
 
 	inline bool more_fields_in_line(std::istream& in)
 	{
-		while(in.peek() == ',' || in.peek()==' ')
-		{
-			// eat up any trailing spaces
-			skip_all(in, ' ');
-			// eat up field separator
-			skip_one(in, ',');
-		}
-		if(in.peek() == '\n')
+		if(in.peek() == (int) '\n')
 		{
 			return false;
 		}
@@ -195,18 +188,17 @@ namespace NP {
 		in >> gb;
 		next_field(in);
 		DM("end\n");
-		DM(tas);
 
 		if(tas == true)
 		{
-			DM("true\n");
 			while(more_fields_in_line(in)) {
+				DM("gates");
 				in >> gate_close;
 				next_field(in);
 				in >> gate_open;
-				next_field(in);
-				DM("gates in\n");
-
+				if( in.peek() != '\n')
+					next_field(in);
+				
 				gate_close = curr_time + gate_close;
 				curr_time = gate_close;
 

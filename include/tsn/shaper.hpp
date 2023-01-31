@@ -82,6 +82,15 @@ namespace NP {
 		{
 			Intervals GO;
 			Intervals GC = get_gates_close(start, end, gband);
+			DM("GC:");
+			for(auto st:GC)
+				DM(st<<",");
+			DM(std::endl);
+			if(GC.size() == 0)
+			{
+				GO.emplace_back(Interval<Time>{start,end});
+				return GO;
+			}
 			Time start_period = floor(start/period);
 			Time end_period = ceil(end/period) + 1;
 			Time next_gate_open;
@@ -119,15 +128,20 @@ namespace NP {
 			Intervals mGC, rGC, GC;
 			Time start_period = floor(start/period);
 			Time end_period = ceil(end/period) + 1;
-
+			
 			for(Time current_period = start_period; current_period <= end_period; current_period += 1)
 			{
 				for(Interval<Time> gc: tas_close_queue)
 				{
+					if(gc.from() == gc.upto())
+						continue;
 					mGC.emplace_back(Interval<Time>{current_period*period + gc.from() - gband, 
-													current_period*period + gc.upto()});
+													(current_period*period + gc.upto()) - 1});
 				}
 			}
+
+			if(mGC.size()==0)
+				return GC;
 			
 			rGC = merge_ints(mGC);
 
@@ -146,7 +160,6 @@ namespace NP {
 				else
 					result.emplace_back(remove_lists[i]);
 			}
-
 			return result;
 		}
 
@@ -154,7 +167,7 @@ namespace NP {
 		{
 			Intervals merged;
 			Interval<Time> to_add = merge_lists[0];
-			for(int i=0;i<merge_lists.size();i++)
+			for(int i=1;i<merge_lists.size();i++)
 			{
 				if(to_add.upto() >= merge_lists[i].from())
 				{
