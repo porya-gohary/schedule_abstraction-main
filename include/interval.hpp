@@ -6,7 +6,6 @@
 #include <memory>
 #include <vector>
 #include <limits>
-
 #include "time.hpp"
 
 template<class T> class Interval {
