@@ -22,17 +22,6 @@ namespace NP {
 			public:
 
 			// initial state -- nothing yet has finished, nothing is running
-			Schedule_state(unsigned int num_processors)
-			: scheduled_jobs()
-			, num_jobs_scheduled(0)
-			, core_avail{num_processors, Interval<Time>(Time(0), Time(0))}
-			, lookup_key{0x9a9a9a9a9a9a9a9aUL}
-			{
-				assert(core_avail.size() > 0);
-			}
-
-			// transition: new state by scheduling a job in an existing state,
-			//             by replacing a given running job.
 			Schedule_state(
 				const Schedule_state& from,
 				Job_index j,
@@ -40,9 +29,9 @@ namespace NP {
 				Interval<Time> start_times,
 				Interval<Time> finish_times,
 				hash_value_t key)
-			: num_jobs_scheduled(from.num_jobs_scheduled + 1)
-			, scheduled_jobs{from.scheduled_jobs, j}
-			, lookup_key{from.lookup_key ^ key}
+				: num_jobs_scheduled(from.num_jobs_scheduled + 1)
+				, scheduled_jobs{ from.scheduled_jobs, j }
+				, lookup_key{ from.lookup_key ^ key }
 			{
 				auto est = start_times.min();
 				auto lst = start_times.max();
@@ -50,21 +39,11 @@ namespace NP {
 				auto lft = finish_times.max();
 
 				DM("est: " << est << std::endl
-				<< "lst: " << lst << std::endl
-				<< "eft: " << eft << std::endl
-				<< "lft: " << lft << std::endl);
+					<< "lst: " << lst << std::endl
+					<< "eft: " << eft << std::endl
+					<< "lft: " << lft << std::endl);
 
-				std::vector<Time> ca, pa;
-
-				pa.push_back(eft);
-				ca.push_back(lft);
-
-				// skip first element in from.core_avail
-				for (int i = 1; i < from.core_avail.size(); i++) {
-					pa.push_back(std::max(est, from.core_avail[i].min()));
-					ca.push_back(std::max(est, from.core_avail[i].max()));
-				}
-
+				int n_prec = 0;
 				// update scheduled jobs
 				// keep it sorted to make it easier to merge
 				bool added_j = false;
@@ -73,12 +52,9 @@ namespace NP {
 					auto x_eft = rj.second.min();
 					auto x_lft = rj.second.max();
 					if (contains(predecessors, x)) {
-						if (lst < x_lft) {
-							auto pos = std::find(ca.begin(), ca.end(), x_lft);
-							if (pos != ca.end())
-								*pos = lst;
-						}
-					} else if (lst <= x_eft) {
+						n_prec++; // keep track of the number of predecessors of j that are certainly running
+					}
+					else if (lst <= x_eft) {
 						if (!added_j && rj.first > j) {
 							// right place to add j
 							certain_jobs.emplace_back(j, finish_times);
@@ -91,6 +67,32 @@ namespace NP {
 				if (!added_j)
 					certain_jobs.emplace_back(j, finish_times);
 
+
+				// update the cores availability intervals
+				std::vector<Time> ca, pa;
+
+				pa.push_back(eft);
+				ca.push_back(lft);
+
+				// note, we must skip the first element in from.core_avail
+				if (n_prec > 1) {
+					// if there are n_prec predecessors running, n_prec cores must be available when j starts
+					for (int i = 1; i < n_prec; i++) {
+						pa.push_back(std::max(est, from.core_avail[i].min()));
+						ca.push_back(std::min(lst, from.core_avail[i].max()));
+					}
+
+					for (int i = n_prec; i < from.core_avail.size(); i++) {
+						pa.push_back(std::max(est, from.core_avail[i].min()));
+						ca.push_back(std::max(est, from.core_avail[i].max()));
+					}
+				}
+				else {
+					for (int i = 1; i < from.core_avail.size(); i++) {
+						pa.push_back(std::max(est, from.core_avail[i].min()));
+						ca.push_back(std::max(est, from.core_avail[i].max()));
+					}
+				}
 
 				// sort in non-decreasing order
 				std::sort(pa.begin(), pa.end());
