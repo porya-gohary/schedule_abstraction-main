@@ -90,7 +90,7 @@ namespace NP {
 					// if there are n_prec predecessors running, n_prec cores must be available when j starts
 					for (int i = 1; i < n_prec; i++) {
 						pa.push_back(std::max(est, from.core_avail[i].min()));
-						ca.push_back(std::min(lst, from.core_avail[i].max()));
+						ca.push_back(std::min(lst, std::max(est, from.core_avail[i].max())));
 					}
 
 					for (int i = n_prec; i < from.core_avail.size(); i++) {
