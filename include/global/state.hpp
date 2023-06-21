@@ -22,6 +22,17 @@ namespace NP {
 			public:
 
 			// initial state -- nothing yet has finished, nothing is running
+			Schedule_state(unsigned int num_processors)
+			: scheduled_jobs()
+			, num_jobs_scheduled(0)
+			, core_avail{num_processors, Interval<Time>(Time(0), Time(0))}
+			, lookup_key{0x9a9a9a9a9a9a9a9aUL}
+			{
+				assert(core_avail.size() > 0);
+			}
+
+			// transition: new state by scheduling a job in an existing state,
+			//             by replacing a given running job.
 			Schedule_state(
 				const Schedule_state& from,
 				Job_index j,
@@ -74,7 +85,7 @@ namespace NP {
 				pa.push_back(eft);
 				ca.push_back(lft);
 
-				// note, we must skip the first element in from.core_avail
+				// note, we must skip first element in from.core_avail
 				if (n_prec > 1) {
 					// if there are n_prec predecessors running, n_prec cores must be available when j starts
 					for (int i = 1; i < n_prec; i++) {
