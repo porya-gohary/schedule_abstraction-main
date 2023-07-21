@@ -199,6 +199,15 @@ examples/abort.jobs.csv,  0,  4,  5,  4,  0,  0.000088,  1760.000000,  0,  1
 
 Without the job abort action specified in [examples/abort.actions.csv](examples/abort.actions.csv), the workload can indeed miss deadlines and is thus unschedulable.
 
+### Self Suspending Tasks
+
+To run the analysis for self-suspending tasks, provide the DAG structure along with the minimum and maximum suspension times in a seperate CSV file via the `--selfsuspending` option. For example:
+
+```
+$ build/nptest examples/susp_jobs.csv --selfsuspending examples/susp_dag.csv
+examples/susp_jobs.csv,  1,  2,  3,  3,  2,  0,  0.000066,  3.226562,  0,  1
+```
+
 ## Output Format
 
 The output is provided in CSV format and consists of the following columns:
@@ -208,13 +217,14 @@ The output is provided in CSV format and consists of the following columns:
     - 1 if the job is *is* schedulable (i.e., the tool could prove the absence of deadline misses),
     - 0 if it is *not*, or if the analysis timed out, if it reached the depth limit, or if the analysis cannot prove the absence of deadline misses (while the RTSS'17 analysis is exact, the ECRTS'19 analysis is only sufficient, but not exact). 
 3. The number of jobs in the job set.
-4. The number of states that were explored.
-5. The number of edges that were discovered. 
-6. The maximum “exploration front width” of the schedule graph, which is the maximum number of unprocessed states  that are queued for exploration (at any point in time). 
-7. The CPU time used in the analysis (in seconds).
-8. The peak amount of memory used (as reported by `getrusage()`), divided by 1024. Due to non-portable differences in `getrusage()`, on Linux this reports the memory usage in megabytes, whereas on macOS it reports the memory usage in kilobytes.
-9. A timeout indicator: 1 if the state-space exploration was aborted due to reaching the time limit (as set with the `-l` option); 0 otherwise. 
-10. The number of processors assumed during the analysis. 
+4. The number of nodes that were explored.
+5. The number of states that were explored.
+6. The number of edges that were discovered. 
+7. The maximum “exploration front width” of the schedule graph, which is the maximum number of unprocessed states  that are queued for exploration (at any point in time). 
+8. The CPU time used in the analysis (in seconds).
+9. The peak amount of memory used (as reported by `getrusage()`), divided by 1024. Due to non-portable differences in `getrusage()`, on Linux this reports the memory usage in megabytes, whereas on macOS it reports the memory usage in kilobytes.
+10. A timeout indicator: 1 if the state-space exploration was aborted due to reaching the time limit (as set with the `-l` option); 0 otherwise. 
+11. The number of processors assumed during the analysis. 
 
 Pass the `--header` flag to `nptest` to print out column headers. 
 
