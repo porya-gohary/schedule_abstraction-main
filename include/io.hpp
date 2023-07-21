@@ -8,6 +8,7 @@
 #include "time.hpp"
 #include "jobs.hpp"
 #include "precedence.hpp"
+#include "selfsuspending.hpp"
 #include "aborts.hpp"
 
 namespace NP {
@@ -62,6 +63,7 @@ namespace NP {
 		return JobID(jid, tid);
 	}
 
+	//Functions that help parse precedence constraints files
 	inline Precedence_constraint parse_precedence_constraint(std::istream &in)
 	{
 		std::ios_base::iostate state_before = in.exceptions();
@@ -97,6 +99,55 @@ namespace NP {
 		return edges;
 	}
 
+	//Functions that help parse selfsuspending tasks file
+	template<class Time>
+	Suspending_Task<Time> parse_suspending_task(std::istream &in)
+	{
+		unsigned long from_tid, from_jid, to_tid, to_jid;
+		Time sus_min, sus_max;
+
+		std::ios_base::iostate state_before = in.exceptions();
+
+		in.exceptions(std::istream::failbit | std::istream::badbit);
+
+		in >> from_tid;
+		next_field(in);
+		in >> from_jid;
+		next_field(in);
+		in >> to_tid;
+		next_field(in);
+		in >> to_jid;
+		next_field(in);
+		in >> sus_min;
+		next_field(in);
+		in >> sus_max;
+
+		in.exceptions(state_before);
+
+		return Suspending_Task<Time>{JobID{from_jid, from_tid},
+									 JobID{to_jid, to_tid},
+		                          	 Interval<Time>{sus_min, sus_max}};
+	}
+
+	template<class Time>
+	std::vector<Suspending_Task<Time>> parse_suspending_file(std::istream& in)
+	{
+		// skip column headers
+		next_line(in);
+
+		std::vector<Suspending_Task<Time>> suspending_tasks;
+
+		// parse all rows
+		while (more_data(in)) {
+			// each row contains one self-suspending constraint
+			suspending_tasks.push_back(parse_suspending_task<Time>(in));
+			next_line(in);
+		}
+
+		return suspending_tasks;
+	}
+	
+	//Functions that help parse the main job workload
 	template<class Time> Job<Time> parse_job(std::istream& in)
 	{
 		unsigned long tid, jid;
@@ -146,6 +197,7 @@ namespace NP {
 		return jobs;
 	}
 
+	//Functions that help parse the abort actions file
 	template<class Time>
 	Abort_action<Time> parse_abort_action(std::istream& in)
 	{

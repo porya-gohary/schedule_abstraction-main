@@ -11,7 +11,7 @@
 
 #ifdef CONFIG_PARALLEL
 
-#include "tbb/task_scheduler_init.h"
+// #include "tbb/task_scheduler_init.h"
 
 #endif
 
@@ -24,6 +24,10 @@
 
 #define MAX_PROCESSORS 512
 
+#define NOSUSP 0
+#define GENERAL_SUSP 1
+#define PATHWISE_SUSP 2
+
 // command line options
 static bool want_naive;
 static bool want_dense;
@@ -32,6 +36,10 @@ static bool want_cw_iip;
 
 static bool want_precedence = false;
 static std::string precedence_file;
+
+static bool want_selfsuspending = false;
+static bool want_pathwise = false;
+static std::string selfsuspending_file;
 
 static bool want_aborts = false;
 static std::string aborts_file;
@@ -66,8 +74,10 @@ template<class Time, class Space>
 static Analysis_result analyze(
 	std::istream &in,
 	std::istream &dag_in,
+	std::istream &selfsuspending_in,
 	std::istream &aborts_in)
 {
+
 #ifdef CONFIG_PARALLEL
 	tbb::task_scheduler_init init(
 		num_worker_threads ? num_worker_threads : tbb::task_scheduler_init::automatic);
@@ -77,6 +87,7 @@ static Analysis_result analyze(
 	NP::Scheduling_problem<Time> problem{
 		NP::parse_file<Time>(in),
 		NP::parse_dag_file(dag_in),
+		NP::parse_suspending_file<Time>(selfsuspending_in),
 		NP::parse_abort_file<Time>(aborts_in),
 		num_processors};
 
@@ -87,6 +98,7 @@ static Analysis_result analyze(
 	opts.early_exit = !continue_after_dl_miss;
 	opts.num_buckets = problem.jobs.size();
 	opts.be_naive = want_naive;
+	opts.use_self_suspensions = want_selfsuspending ? (want_pathwise ? PATHWISE_SUSP : GENERAL_SUSP) : NOSUSP;
 
 	// Actually call the analysis engine
 	auto space = Space::explore(problem, opts);
@@ -133,24 +145,25 @@ static Analysis_result analyze(
 static Analysis_result process_stream(
 	std::istream &in,
 	std::istream &dag_in,
+	std::istream &selfsuspending_in,
 	std::istream &aborts_in)
 {
 	if (want_multiprocessor && want_dense)
-		return analyze<dense_t, NP::Global::State_space<dense_t>>(in, dag_in, aborts_in);
+		return analyze<dense_t, NP::Global::State_space<dense_t>>(in, dag_in, selfsuspending_in, aborts_in);
 	else if (want_multiprocessor && !want_dense)
-		return analyze<dtime_t, NP::Global::State_space<dtime_t>>(in, dag_in, aborts_in);
+		return analyze<dtime_t, NP::Global::State_space<dtime_t>>(in, dag_in, selfsuspending_in, aborts_in);
 	else if (want_dense && want_prm_iip)
-		return analyze<dense_t, NP::UniprocIIP::State_space<dense_t, NP::UniprocIIP::Precatious_RM_IIP<dense_t>>>(in, dag_in, aborts_in);
+		return analyze<dense_t, NP::UniprocIIP::State_space<dense_t, NP::UniprocIIP::Precatious_RM_IIP<dense_t>>>(in, dag_in, selfsuspending_in, aborts_in);
 	else if (want_dense && want_cw_iip)
-		return analyze<dense_t, NP::UniprocIIP::State_space<dense_t, NP::UniprocIIP::Critical_window_IIP<dense_t>>>(in, dag_in, aborts_in);
+		return analyze<dense_t, NP::UniprocIIP::State_space<dense_t, NP::UniprocIIP::Critical_window_IIP<dense_t>>>(in, dag_in, selfsuspending_in, aborts_in);
 	else if (want_dense && !want_prm_iip)
-		return analyze<dense_t, NP::Uniproc::State_space<dense_t>>(in, dag_in, aborts_in);
+		return analyze<dense_t, NP::Uniproc::State_space<dense_t>>(in, dag_in, selfsuspending_in, aborts_in);
 	else if (!want_dense && want_prm_iip)
-		return analyze<dtime_t, NP::UniprocIIP::State_space<dtime_t, NP::UniprocIIP::Precatious_RM_IIP<dtime_t>>>(in, dag_in, aborts_in);
+		return analyze<dtime_t, NP::UniprocIIP::State_space<dtime_t, NP::UniprocIIP::Precatious_RM_IIP<dtime_t>>>(in, dag_in, selfsuspending_in, aborts_in);
 	else if (!want_dense && want_cw_iip)
-		return analyze<dtime_t, NP::UniprocIIP::State_space<dtime_t, NP::UniprocIIP::Critical_window_IIP<dtime_t>>>(in, dag_in, aborts_in);
+		return analyze<dtime_t, NP::UniprocIIP::State_space<dtime_t, NP::UniprocIIP::Critical_window_IIP<dtime_t>>>(in, dag_in, selfsuspending_in, aborts_in);
 	else
-		return analyze<dtime_t, NP::Uniproc::State_space<dtime_t>>(in, dag_in, aborts_in);
+		return analyze<dtime_t, NP::Uniproc::State_space<dtime_t>>(in, dag_in, selfsuspending_in, aborts_in);
 }
 
 static void process_file(const std::string& fname)
@@ -159,12 +172,17 @@ static void process_file(const std::string& fname)
 		Analysis_result result;
 
 		auto empty_dag_stream = std::istringstream("\n");
+		auto empty_selfsuspending_stream = std::istringstream("\n");
 		auto empty_aborts_stream = std::istringstream("\n");
 		auto dag_stream = std::ifstream();
+		auto selfsuspending_stream = std::ifstream();
 		auto aborts_stream = std::ifstream();
 
 		if (want_precedence)
 			dag_stream.open(precedence_file);
+
+		if (want_selfsuspending)
+			selfsuspending_stream.open(selfsuspending_file);
 
 		if (want_aborts)
 			aborts_stream.open(aborts_file);
@@ -173,15 +191,21 @@ static void process_file(const std::string& fname)
 			static_cast<std::istream&>(dag_stream) :
 			static_cast<std::istream&>(empty_dag_stream);
 
+		std::istream &selfsuspending_in = want_selfsuspending ?
+			static_cast<std::istream&>(selfsuspending_stream) :
+			static_cast<std::istream&>(empty_selfsuspending_stream);
+
 		std::istream &aborts_in = want_aborts ?
 			static_cast<std::istream&>(aborts_stream) :
 			static_cast<std::istream&>(empty_aborts_stream);
 
 		if (fname == "-")
-			result = process_stream(std::cin, dag_in, aborts_in);
+		{
+			result = process_stream(std::cin, dag_in, selfsuspending_in, aborts_in);
+		}
 		else {
 			auto in = std::ifstream(fname, std::ios::in);
-			result = process_stream(in, dag_in, aborts_in);
+			result = process_stream(in, dag_in, selfsuspending_in, aborts_in);
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
 			if (want_dot_graph) {
 				DM("Dot graph being made");
@@ -234,6 +258,8 @@ static void process_file(const std::string& fname)
 		std::cerr << fname;
 		if (want_precedence)
 			std::cerr << " + " << precedence_file;
+		if (want_selfsuspending)
+			std::cerr << " + " << selfsuspending_file;
 		std::cerr <<  ": parse error" << std::endl;
 		exit(1);
 	} catch (NP::InvalidJobReference& ex) {
@@ -301,6 +327,14 @@ int main(int argc, char** argv)
 	      .help("name of the file that contains the job set's precedence DAG")
 	      .set_default("");
 
+	parser.add_option("--selfsuspending").dest("selfsuspending_file")
+	      .help("name of the file that contains the job set's selfsuspending DAG")
+	      .set_default("");
+
+	parser.add_option("--sstype").dest("sstype")
+		  .choices({"general","pathwise"}).set_default("general")
+		  .help("pathwise vs general implementation of self-suspending tasks");
+
 	parser.add_option("-a", "--abort-actions").dest("abort_file")
 	      .help("name of the file that contains the job set's abort actions")
 	      .set_default("");
@@ -364,6 +398,16 @@ int main(int argc, char** argv)
 		          << std::endl;
 	}
 	precedence_file = (const std::string&) options.get("precedence_file");
+
+	want_selfsuspending = options.is_set_by_user("selfsuspending_file");
+	if (want_selfsuspending && parser.args().size() > 1) {
+		std::cerr << "[!!] Warning: multiple job sets "
+		          << "with a single selfsuspending DAG specified."
+		          << std::endl;
+	}
+	selfsuspending_file = (const std::string&) options.get("selfsuspending_file");
+	const std::string& sstype = options.get("sstype");
+	want_pathwise = sstype == "pathwise";
 
 	want_aborts = options.is_set_by_user("abort_file");
 	if (want_aborts && parser.args().size() > 1) {

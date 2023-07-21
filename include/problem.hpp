@@ -4,6 +4,7 @@
 #include "jobs.hpp"
 #include "precedence.hpp"
 #include "aborts.hpp"
+#include "selfsuspending.hpp"
 
 namespace NP {
 
@@ -13,6 +14,7 @@ namespace NP {
 
 		typedef typename Job<Time>::Job_set Workload;
 		typedef typename std::vector<Abort_action<Time>> Abort_actions;
+		typedef typename std::vector<Suspending_Task<Time>> Suspending_Tasks;
 
 		// ** Description of the workload:
 		// (1) a set of jobs
@@ -21,6 +23,8 @@ namespace NP {
 		Precedence_constraints dag;
 		// (3) abort actions for (some of) the jobs
 		Abort_actions aborts;
+		// (4) for self-suspending tasks
+		Suspending_Tasks sts;
 
 		// ** Platform model:
 		// on how many (identical) processors are the jobs being
@@ -38,7 +42,18 @@ namespace NP {
 			validate_prec_refs<Time>(dag, jobs);
 		}
 
-		// Full constructor with abort actions
+		// For self-suspending tasks
+		Scheduling_problem(Workload jobs, Suspending_Tasks sts,
+		                   unsigned int num_processors = 1)
+		: num_processors(num_processors)
+		, jobs(jobs)
+		, sts(sts)
+		{
+			assert(num_processors > 0);
+			validate_susp_refs<Time>(sts, jobs);
+		}
+
+		// Constructor with abort actions and precedence constraints
 		Scheduling_problem(Workload jobs, Precedence_constraints dag,
 		                   Abort_actions aborts,
 		                   unsigned int num_processors)
@@ -50,6 +65,23 @@ namespace NP {
 			assert(num_processors > 0);
 			validate_prec_refs<Time>(dag, jobs);
 			validate_abort_refs<Time>(aborts, jobs);
+		}
+
+		// Full Constructor 
+		Scheduling_problem(Workload jobs, Precedence_constraints dag,
+						   Suspending_Tasks sts,
+		                   Abort_actions aborts,
+		                   unsigned int num_processors)
+		: num_processors(num_processors)
+		, jobs(jobs)
+		, dag(dag)
+		, sts(sts)
+		, aborts(aborts)
+		{
+			assert(num_processors > 0);
+			validate_prec_refs<Time>(dag, jobs);
+			validate_abort_refs<Time>(aborts, jobs);
+			validate_susp_refs<Time>(sts, jobs);
 		}
 
 		// Convenience constructor: no DAG, no abort actions
@@ -86,12 +118,16 @@ namespace NP {
 		// of the main workload index be?
 		std::size_t num_buckets;
 
+		// If using self-suspending tasks, then which implementation to take
+		unsigned int use_self_suspensions;
+
 		Analysis_options()
 		: timeout(0)
 		, max_depth(0)
 		, early_exit(true)
 		, num_buckets(1000)
 		, be_naive(false)
+		, use_self_suspensions(0)
 		{
 		}
 	};

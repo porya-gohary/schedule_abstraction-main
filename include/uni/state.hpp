@@ -101,7 +101,6 @@ namespace NP {
 			hash_value_t lookup_key;
 			Interval<Time> finish_time;
 
-
 			// no accidental copies
 			Schedule_node(const Schedule_node& origin)  = delete;
 
