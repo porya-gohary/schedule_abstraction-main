@@ -8,6 +8,10 @@
 
 using namespace NP;
 
+#define NOSUSP 0
+#define GENERAL_SUSP 1
+#define PATHWISE_SUSP 2
+
 
 const std::string uniproc_sn_gen_jobs_file =
 "   Task ID,     Job ID,          Arrival min,          Arrival max,             Cost min,             Cost max,             Deadline,             Priority\n"
@@ -43,4 +47,9 @@ TEST_CASE("[susp] Uniproc Supernode General") {
 		CHECK(nspace.get_finish_times(j) == space.get_finish_times(j));
 		CHECK(nspace.get_finish_times(j).from() != 0);
 	}
+
+	CHECK(space.get_finish_times(prob.jobs[0]).min() == 4);
+	CHECK(space.get_finish_times(prob.jobs[0]).max() == 6);
+	CHECK(space.get_finish_times(prob.jobs[1]).min() == 7);
+	CHECK(space.get_finish_times(prob.jobs[1]).max() == 12);
 }

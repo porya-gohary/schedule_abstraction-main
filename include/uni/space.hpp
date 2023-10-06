@@ -249,8 +249,11 @@ namespace NP {
 			std::vector<const Abort_action<Time>*> abort_actions;
 
 			// In order to store the componenets of the self-suspending tasks, we create a vector of a vector of references
-			typedef std::vector<const Suspending_Task<Time>*> from_suspending_tasks;
-			std::vector<from_suspending_tasks> to_suspending_tasks;
+			// to_suspending_tasks: for each successor, a list of predeccessors are present 
+			// from/_suspending_tasks: for each predecessor, a list of successors are present
+			typedef std::vector<const Suspending_Task<Time>*> suspending_tasks_list;
+			std::vector<suspending_tasks_list> to_suspending_tasks;
+			std::vector<suspending_tasks_list> from_suspending_tasks;
 
 			Nodes nodes;
 			States states;
@@ -313,6 +316,10 @@ namespace NP {
 				for (const Suspending_Task<Time>& st : susps) {
 					const Job<Time>& to = lookup<Time>(jobs, st.get_toID());
 					to_suspending_tasks[index_of(to)].push_back(&st);
+				}
+				for (const Suspending_Task<Time>& st : susps) {
+					const Job<Time>& from = lookup<Time>(jobs, st.get_fromID());
+					from_suspending_tasks[index_of(from)].push_back(&st);
 				}
 				for (const Abort_action<Time>& a : aborts) {
 					const Job<Time>& j = lookup<Time>(jobs, a.get_id());
@@ -575,7 +582,7 @@ namespace NP {
 			// returns true if all predecessors of j have completed in state s for self-suspending tasks
 			bool susp_ready(const Node &n, const Job<Time> &j)
 			{
-				const from_suspending_tasks fsusps = to_suspending_tasks[index_of(j)];
+				const suspending_tasks_list fsusps = to_suspending_tasks[index_of(j)];
 				
 				for(auto e : fsusps)
 				{
@@ -622,6 +629,27 @@ namespace NP {
 				return true;
 			}
 
+			void remove_jobs_with_no_successors(State& s, const Node& n)
+			{
+				for(auto job_info : s.get_pathwise_jobs())
+				{
+					Job<Time> job_check = job_info.first;
+					bool successor_pending = false;
+					for(auto to_jobs : from_suspending_tasks[index_of(job_check)])
+					{
+						if(incomplete(n, lookup<Time>(jobs, to_jobs->get_toID())))
+						{
+							successor_pending = true;
+							break;
+						}
+					}
+					if(!successor_pending)
+					{
+						s.del_pred(job_check);
+					}
+				}
+			}
+
 			void make_initial_node()
 			{
 				// construct initial node
@@ -639,15 +667,15 @@ namespace NP {
 
 				State &st = (n_ref->get_key()==0) ?
 					new_state() :
-					new_state(n_ref->finish_range());
+					new_state(n_ref->finish_range(), *n_ref);
 
 				n_ref->add_state(&st);
 
 				auto njobs = n_ref->get_scheduled_jobs().size();
 				assert (
 					(!njobs && num_nodes == 0) // initial state
-					|| (njobs == current_job_count + 1) // normal State
-					|| (njobs == current_job_count + 2 && aborted) // deadline miss
+				    || (njobs == current_job_count + 1) // normal State
+				    || (njobs == current_job_count + 2 && aborted) // deadline miss
 				);
 				auto idx = njobs % num_todo_queues;
 				todo[idx].push_back(n_ref);
@@ -669,11 +697,20 @@ namespace NP {
 			}
 
 			template <typename... Args>
-			State& new_state(Interval<Time> ftimes)
+			State& new_state(Interval<Time> ftimes, const Node& n)
 			{
 				states.emplace_back(ftimes);
+				
 				State_ref s_ref = --states.end();
 				num_states++;
+
+				remove_jobs_with_no_successors(*s_ref,n);
+				if(want_self_suspensions == PATHWISE_SUSP)
+				{
+					(s_ref)->add_pred(n.get_sched_job(), ftimes);
+					(s_ref)->add_pred_list((n.get_from_state())->get_pathwise_jobs());
+				}
+
 				return *s_ref;
 			}
 
@@ -762,13 +799,15 @@ namespace NP {
 
 			Time get_seft(const Node &n, const State &s, const Job<Time>& j)
 			{
-				const from_suspending_tasks fsusps = to_suspending_tasks[index_of(j)];
+				const suspending_tasks_list fsusps = to_suspending_tasks[index_of(j)];
 				Time seft = 0;
 				assert(susp_ready(n, j));
 
 				for(auto e : fsusps)
 				{
 					Interval<Time> rbounds = get_finish_times(lookup<Time>(jobs, e->get_fromID()));
+					if(want_self_suspensions == PATHWISE_SUSP)
+						rbounds = s.get_pathwisejob_ft(lookup<Time>(jobs, e->get_fromID()));
 
 					if(seft <= (rbounds.from() + e->get_minsus()))
 					{
@@ -780,12 +819,14 @@ namespace NP {
 
 			Time get_slft(const Node &n, const State &s, const Job<Time>& j)
 			{
-				const from_suspending_tasks fsusps = to_suspending_tasks[index_of(j)];
+				const suspending_tasks_list fsusps = to_suspending_tasks[index_of(j)];
 				Time slft = 0;
 
 				for(auto e : fsusps)
 				{
 					Interval<Time> rbounds = get_finish_times(lookup<Time>(jobs, e->get_fromID()));
+					if(want_self_suspensions == PATHWISE_SUSP)
+						rbounds = s.get_pathwisejob_ft(lookup<Time>(jobs, e->get_fromID()));
 
 					if(slft <= (rbounds.until() + e->get_maxsus()))
 					{
@@ -889,7 +930,7 @@ namespace NP {
 				Time lst = std::min(t_wc, t_high-Time_model::constants<Time>::epsilon());
 								
 				const Node& next =
-					new_node(n, j, index_of(j),
+					new_node(n, s, j, index_of(j),
 							  next_finish_times(n, s, j, lst),
 							  earliest_possible_job_release(n, j));
 				DM("      -----> N" << (nodes.end() - nodes.begin())
@@ -967,28 +1008,28 @@ namespace NP {
 			// state to a node and managing the edges for the nodes based on the newly created state
 
 			// In schedule_merge_edge, the function handles the addition of a new state where,
-			// not only is the state being merged into another node, but it also has a common edge with another job
+			// not only is the state being merged/added into another node, but it also has a common edge with another job
 			void schedule_merge_edge(const Node& n, const Node_ref match, const State& s, const Job<Time> &j, const Time lst)
 			{
 				Interval<Time> finish_range = next_finish_times(n, s, j, lst);//requires lst
-				if(!match->merge_states(finish_range))
+				if(!match->merge_states(finish_range, s, j))
 				{
 					DM("State not merged but added to the node");
-					State &st = new_state(finish_range);
+					State &st = new_state(finish_range, n);
 					match->add_state(&st);
 				}
 				update_finish_times(j, finish_range);
 			}
 
-			// In schedule_merge_node, the function handles the addition of a new state that is to be merged into another 
+			// In schedule_merge_node, the function handles the addition of a new state that is to be merged/added into another 
 			// node but has its own unique edge.
 			void schedule_merge_node(const Node& n, const Node_ref match, const State& s, const Job<Time> &j, const Time lst)
 			{
 				Interval<Time> finish_range = next_finish_times(n, s, j, lst);//requires lst
-				if(!match->merge_states(finish_range))
+				if(!match->merge_states(finish_range, s, j))
 				{
 					DM("State not merged but added to the node");
-					State &st = new_state(finish_range);
+					State &st = new_state(finish_range, n);
 					match->add_state(&st);
 				}
 				process_new_edge(n, *match, j, finish_range);
@@ -1000,7 +1041,7 @@ namespace NP {
 				Interval<Time> finish_range = next_finish_times(n, s, j, lst);//requires lst
 				DM("Creating a new node"<<std::endl);
 				const Node& next =
-					new_node(n, j, index_of(j),
+					 new_node(n, s, j, index_of(j),
 							  finish_range,
 							  earliest_possible_job_release(n, j));
 				DM("      -----> N" << (nodes.end() - nodes.begin()) << " " <<(todo[todo_idx].front() - nodes.begin() + 1)

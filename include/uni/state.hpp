@@ -33,6 +33,9 @@ namespace NP {
 			// no accidental copies
 			Schedule_state(const Schedule_state& origin)  = delete;
 
+			typedef typename std::unordered_map<Job<Time>, Interval<Time>> JobFinishTimes;
+			JobFinishTimes job_finish_times;
+
 			public:
 
 			// initial state
@@ -43,7 +46,7 @@ namespace NP {
 
 			// transition: new state by scheduling a job in an existing state
 			Schedule_state(Interval<Time> ftimes)
-			: finish_time{ftimes}
+			:finish_time{ftimes}
 			{
 			}
 
@@ -83,8 +86,47 @@ namespace NP {
 				finish_time.equate(newst);
 			}
 
+			void add_pred(const Job<Time> pred_job, const Interval<Time> ft)
+			{
+				job_finish_times[pred_job] = ft;
+			}
+
+			void add_pred_list(JobFinishTimes jft_list)
+			{
+				for(auto e: jft_list)
+				{
+					add_pred(e.first, e.second);
+				}
+			}
+
+			void del_pred(const Job<Time> pred_job)
+			{
+				job_finish_times.erase(pred_job);
+			}
+
+			void widen_pathwise_job(const Job<Time> pred_job, const Interval<Time> ft)
+			{
+				auto widen_job = job_finish_times.find(pred_job);
+				(widen_job->second).widen(ft);
+			}
+
+			const Interval<Time>& get_pathwisejob_ft(const Job<Time>& pathwise_job) const
+			{
+				return (job_finish_times.find(pathwise_job))->second;
+			}
+
+			const Job<Time>& get_pathwisejob_job(const Job<Time>& pathwise_job) const
+			{
+				return (job_finish_times.find(pathwise_job))->first;
+			}
+
+			const JobFinishTimes& get_pathwise_jobs() const
+			{
+				return job_finish_times;
+			}
+
 			friend std::ostream& operator<< (std::ostream& stream,
-			                                 const Schedule_state<Time>& s)
+											 const Schedule_state<Time>& s)
 			{
 				stream << "State(" << s.finish_range() << ")";
 				return stream;
@@ -115,7 +157,7 @@ namespace NP {
 			};
 
 			typedef typename std::set<State*, eft_compare> State_ref_queue;
-			State_ref_queue states;  
+			State_ref_queue states;
 
 			public:
 
@@ -130,6 +172,7 @@ namespace NP {
 			// transition: new node by scheduling a job in an existing state
 			Schedule_node(
 				const Schedule_node& from,
+				const State& from_state,
 				const Job<Time>& j,
 				std::size_t idx,
 				Interval<Time> ftimes,
@@ -178,7 +221,7 @@ namespace NP {
 			}
 
 			friend std::ostream& operator<< (std::ostream& stream,
-			                                 const Schedule_node<Time>& n)
+											 const Schedule_node<Time>& n)
 			{
 				stream << "Node(" << n.states.size() << ")";
 				return stream;
@@ -207,23 +250,70 @@ namespace NP {
 				return &states;
 			}
 
-			bool merge_states(const Interval<Time> &new_st)
+			bool merge_states(const Interval<Time> &new_st, const Schedule_state<Time> &from, const Job<Time>& sched_job)
 			{
-				typedef typename std::set<State*, eft_compare>::iterator State_ref;
-				State_ref s_ref = states.begin();
-				while(s_ref!=states.end())
-				{
-					if(new_st.intersects((*s_ref)->finish_range()))
-					{
-						State* merged_state = *s_ref;
-						merged_state->update_finish_range(new_st);
-						s_ref = states.erase(s_ref);
-						states.insert(merged_state);
-						return true;
-					}
-					else
-						s_ref++;
-				}
+				// typedef typename std::set<State *, eft_compare>::iterator State_ref;
+				// State_ref s_ref = states.begin();
+
+				// while (s_ref != states.end())
+				// {
+				// 	if (new_st.intersects((*s_ref)->finish_range()))
+				// 	{
+				// 		bool state_mergable = true;
+
+				// 		for (const auto &job_finish_time_pair : (*s_ref)->get_pathwise_jobs())
+				// 		{
+				// 			const Job<Time> &pred_job = job_finish_time_pair.first;
+				// 			const Interval<Time> &job_finish_time = job_finish_time_pair.second;
+
+				// 			if (((from.get_pathwisejob_job(pred_job)).get_id() == pred_job.get_id() &&
+				// 				 job_finish_time.intersects(from.get_pathwisejob_ft(pred_job))) ||
+				// 				(pred_job.get_id() == sched_job.get_id() && job_finish_time.intersects(new_st)))
+				// 			{
+				// 				continue;
+				// 			}
+				// 			else
+				// 			{
+				// 				state_mergable = false;
+				// 				break;
+				// 			}
+				// 		}
+
+				// 		if (state_mergable)
+				// 		{
+				// 			State *merged_state = *s_ref;
+				// 			merged_state->update_finish_range(new_st);
+							
+				// 			for (const auto &job_finish_time_pair : (merged_state)->get_pathwise_jobs())
+				// 			{
+				// 				const Job<Time> &pred_job = job_finish_time_pair.first;
+				// 				const Interval<Time> &job_finish_time = job_finish_time_pair.second;
+
+				// 				if ((from.get_pathwisejob_job(pred_job)).get_id() == pred_job.get_id())
+				// 				{
+				// 					(merged_state)->widen_pathwise_job(pred_job, job_finish_time);
+				// 				}
+				// 				else if (pred_job.get_id() == sched_job.get_id())
+				// 				{
+				// 					(merged_state)->widen_pathwise_job(pred_job,new_st);
+				// 				}
+				// 			}
+
+				// 			s_ref = states.erase(s_ref);
+				// 			states.insert(merged_state);
+				// 			return true;
+				// 		}
+				// 		else
+				// 		{
+				// 			s_ref++;
+				// 		}
+				// 	}
+				// 	else
+				// 	{
+				// 		s_ref++;
+				// 	}
+				// }
+
 				return false;
 			}
 
