@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.8)
 
 project(NP_schedulabiliy_test)
 
-option(USE_TBB_MALLOC "Use the Intel TBB scalable memory allocator" ON)
+option(USE_TBB_MALLOC "Use the Intel TBB scalable memory allocator" OFF)
 option(USE_JE_MALLOC "Use the Facebook jemalloc scalable memory allocator" OFF)
 
 option(DEBUG "Enable debugging" OFF)
@@ -22,8 +22,8 @@ if (COLLECT_SCHEDULE_GRAPHS)
     add_compile_definitions(CONFIG_COLLECT_SCHEDULE_GRAPH)
 endif()
 
-find_path(TBB_INCLUDE_DIR NAMES tbb/task_scheduler_init.h)
-find_library(TBB_LIB NAMES tbb)
+#find_path(TBB_INCLUDE_DIR NAMES tbb/task_scheduler_init.h)
+#find_library(TBB_LIB NAMES tbb)
 
 if(USE_JE_MALLOC)
   find_library(ALLOC_LIB NAMES jemalloc)
@@ -33,7 +33,7 @@ endif()
 
 set(CORE_LIBS ${TBB_LIB} ${ALLOC_LIB})
 
-include_directories(${TBB_INCLUDE_DIR})
+#include_directories(${TBB_INCLUDE_DIR})
 
 file(GLOB TEST_SOURCES "src/tests/*.cpp")
 add_executable(runtests ${TEST_SOURCES} ${SOURCES})
