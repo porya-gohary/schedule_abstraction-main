@@ -443,7 +443,7 @@ namespace NP {
 			Time calc_t_wc(const Node& n, Time A_max)
 			{
 				Time t_wc = Time_model::constants<Time>::infinity();
-				for(Time i = 0; i<num_fifo_queues; i++)
+				for(int i = 0; i<num_fifo_queues; i++)
 				{
 					if(unscheduled(n,i))
 					{
@@ -485,15 +485,16 @@ namespace NP {
 			// find trmax, find the first incomplete job in the list of jobs sorted by latest arrival
 			Time get_tstart_Pi(const Node& n, Time priority, Time A_max) 
 			{
-				Time tstart_Pi = Time_model::constants<Time>::infinity();
+				Time tstart_Pi = 0;
 				Time guardband;
+				Time tp_prime = std::max(A_max, get_trmax(n, priority));
 
 				const Job<Time>* jp;
 				foreach_possibly_fifo_top_job(n, jp, priority)
 				{
 					const Job<Time>& j = *jp;
 					guardband = get_guard_band(j, priority);
-					tstart_Pi = std::min(tstart_Pi, tasQueues[priority].next_open(std::max(A_max,j.latest_arrival()),guardband));
+					tstart_Pi = std::max(tstart_Pi, tasQueues[priority].next_open(tp_prime,guardband));
 			    }
 
 			    return tstart_Pi;
