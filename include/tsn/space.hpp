@@ -768,10 +768,11 @@ namespace NP {
 
 				for(Time i=0; i<j.get_priority(); i+=1)
 				{	
+					Time trmax = get_trmax(n, i);
+
 					if(tasQueues[i].is_variable())
 					{
 						const Job<Time>* jp;
-						const Job<Time>* largest_job;
 						int largest_cmax = 0;
 						foreach_possibly_fifo_top_job(n, jp, i)
 						{
@@ -782,30 +783,32 @@ namespace NP {
 							}
 							if(largest_cmax < hpj.maximal_cost())
 							{
-								largest_job = jp;
 								largest_cmax = hpj.maximal_cost();
 							}
 						}
-						Time gband = get_guard_band(*largest_job,i);
-						DM("B"<<largest_job->latest_arrival()<<","<< t_wc<<","<< gband);
-						HP =tasQueues[i].get_gates_open(largest_job->latest_arrival(), t_wc, gband);
-						
-						ST = overlap_delete(ST, HP);
-						DM("ST-HP"<<hpj.get_id()<<":");
-						for(auto st:HP)
-							DM(st<<",");
-						DM(std::endl);
+						if (largest_cmax > 0)
+						{
+							Time gband = largest_cmax; // get_guard_band(*largest_job, i);
+							DM("B" << t_wc << "," << gband);
+							HP = tasQueues[i].get_gates_open(trmax, t_wc, gband);
 
-						if(ST.size() == 0)
-							return FT;
+							ST = overlap_delete(ST, HP);
+							//DM("ST-HP"<<hpj.get_id()<<":");
+							for (auto st : HP)
+								DM(st << ",");
+							DM(std::endl);
+
+							if (ST.size() == 0)
+								return FT;
+						}
 					}
 					else
 					{
-						if(get_trmax(n, i) > t_wc)
+						if(trmax > t_wc)
 						{
 							continue;
 						}
-						HP = tasQueues[i].get_gates_open(get_trmax(n, i), t_wc, tasQueues[i].get_guardband());
+						HP = tasQueues[i].get_gates_open(trmax, t_wc, tasQueues[i].get_guardband());
 						ST = overlap_delete(ST, HP);
 						if(ST.size() == 0)
 							return FT;
