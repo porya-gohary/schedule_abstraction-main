@@ -473,8 +473,8 @@ namespace NP {
 #define foreach_possibly_fifo_top_job(pftj_macro_local_n, pftj_macro_local_j, pftj_macro_local_priority) \
 	for (auto pftj_macro_local_it = jobs_by_earliest_arrival_priority[pftj_macro_local_priority]	\
 									.lower_bound((pftj_macro_local_n).earliest_job_release());	\
-			pftj_macro_local_it->first <= get_trmax(pftj_macro_local_n, pftj_macro_local_priority)	\
-				&& pftj_macro_local_it != jobs_by_earliest_arrival_priority[pftj_macro_local_priority].end() \
+			pftj_macro_local_it != jobs_by_earliest_arrival_priority[pftj_macro_local_priority].end() \
+				&& pftj_macro_local_it->first <= get_trmax(pftj_macro_local_n, pftj_macro_local_priority)	\
 				&& (pftj_macro_local_j = pftj_macro_local_it->second);	\
 			pftj_macro_local_it++) \
 		if(incomplete(pftj_macro_local_n, *pftj_macro_local_j))
