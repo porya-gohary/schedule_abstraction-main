@@ -78,6 +78,16 @@ namespace NP {
 			return check;
 		}
 
+		Time next_close(Time check) const
+		{
+			for (Interval<Time> gc : tas_close_queue)
+			{
+				if (check <= gc.from())
+					return gc.from();
+			}
+			return Time_model::constants<Time>::infinity();
+		}
+
 		Intervals get_gates_open(Time start, Time end, Time gband) const
 		{
 			Intervals GO;

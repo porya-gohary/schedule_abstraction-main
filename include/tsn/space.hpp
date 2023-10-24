@@ -777,7 +777,7 @@ namespace NP {
 						foreach_possibly_fifo_top_job(n, jp, i)
 						{
 							const Job<Time>& hpj = *jp;
-							if(hpj.latest_arrival() > t_wc)
+							if(hpj.latest_arrival() >= t_wc)
 							{
 								continue;
 							}
@@ -804,7 +804,7 @@ namespace NP {
 					}
 					else
 					{
-						if(trmax > t_wc)
+						if(trmax >= t_wc)
 						{
 							continue;
 						}
@@ -816,16 +816,21 @@ namespace NP {
 
 				}
 
-				DM("ST-HP:");
-				for(auto st:ST)
-					DM(st<<",");
-				DM(std::endl);
-				if(ST.size() == 0)
-					return FT;
-
-				for(auto st: ST)
+				if (tasQueues[j.get_priority()].is_variable())
 				{
-					FT.emplace_back(Interval<Time>{st.from() + j.least_cost(), st.upto() + j.maximal_cost()});
+					for (auto st : ST)
+					{
+						FT.emplace_back(Interval<Time>{st.from() + j.least_cost(), std::min(st.upto() + j.maximal_cost(), tasQueues[j.get_priority()].next_close(st.upto()))});
+
+					}
+				}
+				else
+				{
+					for (auto st : ST)
+					{
+						FT.emplace_back(Interval<Time>{st.from() + j.least_cost(), st.upto() + j.maximal_cost()});
+
+					}
 				}
 
 				return FT;
