@@ -401,6 +401,13 @@ namespace NP {
 				return tasQueues[priority].get_guardband();
 			}
 
+			Time get_min_guard_band(const Job<Time>& j, Time priority)
+			{
+				if (tasQueues[priority].is_variable())
+					return j.least_cost();
+				return tasQueues[priority].get_guardband();
+			}
+
 			// find trmax, find the first incomplete job in the list of jobs sorted by latest arrival
 			Time get_trmax(const Node& n, Time priority) {
 				const Scheduled& already_scheduled = n.get_scheduled_jobs();
@@ -734,7 +741,7 @@ namespace NP {
 				// FT= contains the interval of possible finish times
 
 				Intervals CP, HP, ST, FT;
-				Time guardband = get_guard_band(j, j.get_priority());
+				Time guardband = get_min_guard_band(j, j.get_priority());
 				DM("Guardband:"<<guardband<<std::endl);
 
 				ST.emplace_back(Interval<Time>{est, t_wc});
@@ -764,6 +771,8 @@ namespace NP {
 					if(tasQueues[i].is_variable())
 					{
 						const Job<Time>* jp;
+						const Job<Time>* largest_job;
+						int largest_cmax = 0;
 						foreach_possibly_fifo_top_job(n, jp, i)
 						{
 							const Job<Time>& hpj = *jp;
@@ -771,19 +780,24 @@ namespace NP {
 							{
 								continue;
 							}
-							Time gband = get_guard_band(hpj,i);
-							DM("B"<<hpj.latest_arrival()<<","<< t_wc<<","<< gband);
-							HP =tasQueues[i].get_gates_open(hpj.latest_arrival(), t_wc, gband);
-							
-							ST = overlap_delete(ST, HP);
-							DM("ST-HP"<<hpj.get_id()<<":");
-							for(auto st:HP)
-								DM(st<<",");
-							DM(std::endl);
-
-							if(ST.size() == 0)
-								return FT;
+							if(largest_cmax < hpj.maximal_cost())
+							{
+								largest_job = jp;
+								largest_cmax = hpj.maximal_cost();
+							}
 						}
+						Time gband = get_guard_band(*largest_job,i);
+						DM("B"<<largest_job->latest_arrival()<<","<< t_wc<<","<< gband);
+						HP =tasQueues[i].get_gates_open(largest_job->latest_arrival(), t_wc, gband);
+						
+						ST = overlap_delete(ST, HP);
+						DM("ST-HP"<<hpj.get_id()<<":");
+						for(auto st:HP)
+							DM(st<<",");
+						DM(std::endl);
+
+						if(ST.size() == 0)
+							return FT;
 					}
 					else
 					{
@@ -791,7 +805,7 @@ namespace NP {
 						{
 							continue;
 						}
-						HP =tasQueues[i].get_gates_open(get_trmax(n, i), t_wc, tasQueues[i].get_guardband());
+						HP = tasQueues[i].get_gates_open(get_trmax(n, i), t_wc, tasQueues[i].get_guardband());
 						ST = overlap_delete(ST, HP);
 						if(ST.size() == 0)
 							return FT;
