@@ -3,7 +3,9 @@
 #include <fstream>
 #include <algorithm>
 
+#ifndef _WIN32
 #include <sys/resource.h>
+#endif // !_WIN32
 
 #include "OptionParser.h"
 
@@ -134,7 +136,7 @@ static Analysis_result analyze(
 		space.number_of_states(),
 		space.number_of_edges(),
 		space.max_exploration_front_width(),
-		problem.jobs.size(),
+		(unsigned long)(problem.jobs.size()),
 		space.get_cpu_time(),
 		graph.str(),
 		rta.str()
@@ -231,12 +233,14 @@ static void process_file(const std::string& fname)
 				}
 			}
 		}
-
+#ifdef _WIN32
+		long mem_used = 0;
+#else
 		struct rusage u;
 		long mem_used = 0;
 		if (getrusage(RUSAGE_SELF, &u) == 0)
 			mem_used = u.ru_maxrss;
-
+#endif
 		std::cout << fname;
 
 		if (max_depth && max_depth < result.number_of_jobs)

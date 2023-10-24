@@ -6,6 +6,7 @@
 #include <memory>
 #include <vector>
 #include <limits>
+#include <ciso646>
 
 #include "time.hpp"
 
