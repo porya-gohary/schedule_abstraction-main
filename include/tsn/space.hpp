@@ -205,8 +205,8 @@ namespace NP {
 			typedef std::deque<Interval<Time>> Intervals;
 
 			// Iterators are defined for the to iterate over the elemnts in the Nodes and States deque 
-			typedef typename std::deque<Node>::iterator Node_ref;
-			typedef typename std::deque<State>::iterator State_ref;
+			typedef typename Node* Node_ref;
+			typedef typename State* State_ref;
 
 			// The Nodes_map typedef allows for storing a key-pair of hash_value_t and Node_ref. The hash_value_t is the
 			// typedef defined in jobs.hpp that allows for creating a unique key for each node. A variable called the
@@ -549,7 +549,7 @@ namespace NP {
 			{
 				DM("\nCreated Node: ");
 				nodes.emplace_back(std::forward<Args>(args)...);
-				Node_ref n_ref = --nodes.end();
+				Node_ref n_ref = &(*(--nodes.end()));
 
 				Interval<Time> fr_ipg = Interval<Time>{n_ref->finish_range().from() + c_ipg, n_ref->finish_range().upto() +c_ipg};
 				
@@ -580,7 +580,7 @@ namespace NP {
 			{
 				DM("Created state [0,0]");
 				states.emplace_back();
-				State_ref s_ref = --states.end();
+				State_ref s_ref = &(*(--states.end()));
 				num_states++;
 				return *s_ref;
 			}
@@ -590,7 +590,7 @@ namespace NP {
 			{
 				DM("Created state ["<<ftimes.from()<<","<<ftimes.until()<<"]\n");
 				states.emplace_back(ftimes);
-				State_ref s_ref = --states.end();
+				State_ref s_ref = &(*(--states.end()));
 				num_states++;
 				return *s_ref;
 			}
@@ -661,7 +661,7 @@ namespace NP {
 				assert(deleted);
 
 				// delete from master sequence to free up memory
-				assert(nodes.begin() == n);
+				assert(&(*(nodes.begin())) == n);
 				nodes.pop_front();
 #endif
 			}
@@ -903,10 +903,10 @@ namespace NP {
 					new_node(n, j, index_of(j),
 					          finish_ranges[0],
 					          earliest_possible_job_release(n, j));
-				DM("      -----> N" << (nodes.end() - nodes.begin()) << " " <<(todo[todo_idx].front() - nodes.begin() + 1)
-				   << std::endl);
+				/*DM("      -----> N" << (nodes.end() - nodes.begin()) << " " << (todo[todo_idx].front() - nodes.begin() + 1)
+				   << std::endl);*/
 
-				Node_ref n_ref = --nodes.end();
+				Node_ref n_ref = &(*(--nodes.end()));
 
 
 				for(auto fr: finish_ranges)
@@ -940,9 +940,9 @@ namespace NP {
 
 					DM("\n==================================================="
 					   << std::endl);
-					DM("Looking at: N"
+					/*DM("Looking at: N"
 					   << (todo[todo_idx].front() - nodes.begin() + 1) 
-					   << " " << n << std::endl);
+					   << " " << n << std::endl);*/
 
 					// Obtain all the states in Node n
 					const auto *n_states = n.get_states();
