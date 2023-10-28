@@ -124,7 +124,7 @@ namespace NP {
 				}
 				first += 1;
 				GO.emplace_back(Interval<Time>{next_gate_open, gc.from() - Time_model::constants<Time>::epsilon()});
-				next_gate_open = gc.upto()+1;
+				next_gate_open = gc.upto() + Time_model::constants<Time>::epsilon();
 			}
 
 			if(next_gate_open < end_period*period)
@@ -141,12 +141,24 @@ namespace NP {
 			
 			for(Time current_period = start_period; current_period <= end_period; current_period += 1)
 			{
+				Time cp = current_period * period;
 				for(Interval<Time> gc: tas_close_queue)
 				{
-					if(gc.from() == gc.upto())
+					if (gc.from() == gc.upto())
 						continue;
-					mGC.emplace_back(Interval<Time>{current_period*period + gc.from() - gband, 
-													(current_period*period + gc.upto()) - Time_model::constants<Time>::epsilon()});
+
+					Time ub = cp + gc.upto() - Time_model::constants<Time>::epsilon();
+					if (ub < start)
+						continue;
+
+					Time lb = cp + gc.from() - gband;
+					if (lb > end)
+						break;
+
+					mGC.emplace_back(Interval<Time>{lb, ub});
+
+					if (ub > end)
+						break;
 				}
 			}
 
