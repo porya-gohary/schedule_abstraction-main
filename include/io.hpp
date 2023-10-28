@@ -43,10 +43,8 @@ namespace NP {
 
 	inline bool more_fields_in_line(std::istream& in)
 	{
-		if(in.peek() == (int) '\n')
-		{
+		if(in.peek() == (int) '\n' || in.peek() == (int) '\r')
 			return false;
-		}
 		else
 			return true;
 	}
@@ -174,7 +172,6 @@ namespace NP {
 
 		in.exceptions(std::istream::failbit | std::istream::badbit);
 
-		DM("start\n");
 		in >> prio;
 		next_field(in);
 		in >> period;
@@ -187,18 +184,19 @@ namespace NP {
 		next_field(in);
 		in >> gb;
 		next_field(in);
-		DM("end\n");
 
 		if(tas == true)
 		{
+			int interval_num = 0;
 			while(more_fields_in_line(in)) {
-				DM("gates");
+
+				// next_field(in);
 				in >> gate_close;
 				next_field(in);
 				in >> gate_open;
-				if( in.peek() != '\n')
+				if( in.peek() != '\n' && in.peek() != '\r')
 					next_field(in);
-				
+
 				gate_close = curr_time + gate_close;
 				curr_time = gate_close;
 
@@ -206,7 +204,6 @@ namespace NP {
 				curr_time = gate_open;
 
 				tas_queue.push_back(Interval<Time>{gate_close,gate_open});
-				DM("\n"<<gate_close<<","<<gate_open<<"\n");
 			}
 		}
 
@@ -219,17 +216,16 @@ namespace NP {
 	{
 		// first row contains the header of each column, so skip it
 		next_line(in);
-		DM("\nIn parse tas files\n");
 
 		typename Time_Aware_Shaper<Time>::TAS_set TAS_queues;
 
+		int i = 0;
 		while (more_data(in)) {
 			TAS_queues.push_back(parse_tas<Time>(in));
 			// munge any trailing whitespace or extra columns
 			next_line(in);
 		}
 
-		DM("\nparsed gates\n");
 		return TAS_queues;
 	}
 
