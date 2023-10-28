@@ -73,7 +73,7 @@ namespace NP {
 				if(check < gc.from())
 					return check;
 				else if(check >= gc.from() && check <= gc.upto())
-					return gc.upto() + 1;
+					return gc.upto() + Time_model::constants<Time>::epsilon();
 			}
 			return check;
 		}
@@ -123,7 +123,7 @@ namespace NP {
 					continue;
 				}
 				first += 1;
-				GO.emplace_back(Interval<Time>{next_gate_open, gc.from()-1});
+				GO.emplace_back(Interval<Time>{next_gate_open, gc.from() - Time_model::constants<Time>::epsilon()});
 				next_gate_open = gc.upto()+1;
 			}
 
@@ -146,7 +146,7 @@ namespace NP {
 					if(gc.from() == gc.upto())
 						continue;
 					mGC.emplace_back(Interval<Time>{current_period*period + gc.from() - gband, 
-													(current_period*period + gc.upto()) - 1});
+													(current_period*period + gc.upto()) - Time_model::constants<Time>::epsilon()});
 				}
 			}
 
