@@ -44,6 +44,7 @@ namespace NP {
 				, scheduled_jobs{ from.scheduled_jobs, j }
 				, lookup_key{ from.lookup_key ^ key }
 			{
+				int n_cores = from.core_avail.size();
 				auto est = start_times.min();
 				auto lst = start_times.max();
 				auto eft = finish_times.min();
@@ -81,6 +82,9 @@ namespace NP {
 
 				// update the cores availability intervals
 				std::vector<Time> ca, pa;
+
+				ca.reserve(n_cores);
+				pa.reserve(n_cores);
 
 				pa.push_back(eft);
 				ca.push_back(lft);
