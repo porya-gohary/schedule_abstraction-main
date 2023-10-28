@@ -397,14 +397,14 @@ namespace NP {
 			Time get_guard_band(const Job<Time>& j, Time priority)
 			{
 				if (tasQueues[priority].is_variable())
-					return j.maximal_cost();
+					return std::max((Time)0, j.maximal_cost() - Time_model::constants<Time>::epsilon());
 				return tasQueues[priority].get_guardband();
 			}
 
 			Time get_min_guard_band(const Job<Time>& j, Time priority)
 			{
 				if (tasQueues[priority].is_variable())
-					return j.least_cost();
+					return std::max((Time) 0, j.least_cost() - Time_model::constants<Time>::epsilon());
 				return tasQueues[priority].get_guardband();
 			}
 
