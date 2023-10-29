@@ -82,6 +82,8 @@ namespace NP {
 		{
 			for (Interval<Time> gc : tas_close_queue)
 			{
+				if (gc.from() == gc.until())
+					continue;
 				if (check <= gc.from())
 					return gc.from();
 			}
@@ -91,6 +93,9 @@ namespace NP {
 		Intervals get_gates_open(Time start, Time end, Time gband) const
 		{
 			Intervals GO;
+			if (start > end)
+				return GO;
+
 			Intervals GC = get_gates_close(start, end, gband);
 			DM("GC:");
 			for(auto st:GC)
@@ -135,7 +140,11 @@ namespace NP {
 
 		Intervals get_gates_close(Time start, Time end, Time gband) const
 		{
-			Intervals mGC, rGC, GC;
+			Intervals mGC;
+			if (start > end)
+				return mGC;
+
+			Intervals rGC, GC;
 			Time start_period = floor(start/period);
 			Time end_period = ceil(end/period) + 1;
 			

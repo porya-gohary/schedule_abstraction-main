@@ -8,6 +8,7 @@
 #include "index_set.hpp"
 #include "jobs.hpp"
 #include "cache.hpp"
+#include "space.hpp"
 
 namespace NP {
 
@@ -100,6 +101,8 @@ namespace NP {
 			Job_set scheduled_jobs;
 			hash_value_t lookup_key;
 			Interval<Time> finish_time;
+			std::vector<Time> trmax;
+			const Job<Time>& job_0;
 
 
 			// no accidental copies
@@ -118,28 +121,63 @@ namespace NP {
 			typedef typename std::set<State*, eft_compare> State_ref_queue;
 			State_ref_queue states;  
 
+			// find trmax, find the first incomplete job in the list of jobs sorted by latest arrival
+			void calculate_trmax(const std::deque<std::multimap<Time, const Job<Time>*>>& jobs_by_latest_arrival_priority) {
+				trmax.reserve(jobs_by_latest_arrival_priority.size());
+				for (int i = 0; i < jobs_by_latest_arrival_priority.size(); i++) {
+					auto it = jobs_by_latest_arrival_priority[i].begin();
+					for (; it != jobs_by_latest_arrival_priority[i].end(); ++it) {
+						const Job<Time>& j = *(it->second);
+
+						// not relevant if already scheduled
+						if (scheduled_jobs.contains(index_of(j)))
+							continue;
+
+						trmax.push_back(j.latest_arrival());
+						break;
+					}
+					if(it == jobs_by_latest_arrival_priority[i].end())
+						trmax.push_back(Time_model::constants<Time>::infinity());
+				}
+			}
+
+			std::size_t index_of(const Job<Time>& j)
+			{
+				return (std::size_t)(&j - &job_0);
+			}
+
 			public:
 
 			// initial node
-			Schedule_node()
-			: lookup_key{0}
+			Schedule_node(const Job<Time>& j0, const std::deque<std::multimap<Time, const Job<Time>*>>& jobs_by_latest_arrival_priority)
+			: job_0{ j0 }
+			, lookup_key{0}
 			, finish_time{0,0}
 			, earliest_pending_release{0}
 			{
+				calculate_trmax(jobs_by_latest_arrival_priority);
 			}
 
 			// transition: new node by scheduling a job in an existing state
 			Schedule_node(
 				const Schedule_node& from,
 				const Job<Time>& j,
-				std::size_t idx,
 				Interval<Time> ftimes,
-				const Time next_earliest_release)
-			: scheduled_jobs{from.scheduled_jobs, idx}
+				const Time next_earliest_release,
+				const std::deque<std::multimap<Time, const Job<Time>*>>& jobs_by_latest_arrival_priority)
+			: job_0{from.job_0}
+			, scheduled_jobs{from.scheduled_jobs, (std::size_t)(& j - &from.job_0)}
 			, lookup_key{from.next_key(j)}
 			, finish_time{ftimes}
 			, earliest_pending_release{next_earliest_release}
 			{
+				calculate_trmax(jobs_by_latest_arrival_priority);
+			}
+
+			Time get_trmax(int priority) const
+			{
+				assert(priority < trmax.size());
+				return trmax[priority];
 			}
 
 			Time earliest_job_release() const

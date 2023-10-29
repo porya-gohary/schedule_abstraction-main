@@ -213,7 +213,7 @@ namespace NP {
 			// nodes_by_key is created using Nodes_map. When a new node is made it is added to the map.
 			// The use of Nodes_map can be found in new_node(), done_with_current_state() ad schedule().
 			typedef std::unordered_multimap<hash_value_t, Node_ref> Nodes_map;
-
+			
 			typedef const Job<Time>* Job_ref;
 
 			// By_time_map stores all the jobs along with a partiular time. there are three variables of type By_time_map.
@@ -386,7 +386,8 @@ namespace NP {
 			// incomplete() checks to see that a job j jas not been scheduled yet.
 			bool incomplete(const Scheduled &scheduled, const Job<Time>& j) const
 			{
-				return !scheduled.contains(index_of(j));
+				std::size_t idx = index_of(j);
+				return !scheduled.contains(idx);
 			}
 
 			bool incomplete(const Node& n, const Job<Time>& j) const
@@ -410,19 +411,7 @@ namespace NP {
 
 			// find trmax, find the first incomplete job in the list of jobs sorted by latest arrival
 			Time get_trmax(const Node& n, Time priority) {
-				const Scheduled& already_scheduled = n.get_scheduled_jobs();
-
-			    for (auto it = jobs_by_latest_arrival_priority[priority].begin(); it != jobs_by_latest_arrival_priority[priority].end(); it++) {
-			        const Job<Time>& j = *(it->second);
-
-			        // not relevant if already scheduled
-			        if (!incomplete(already_scheduled, j))
-			            continue;
-
-			        return j.latest_arrival();
-			    }
-
-			    return Time_model::constants<Time>::infinity();
+				return n.get_trmax(priority);
 			}
 
 			// find if a job of a prioirty exists, in the list of jobs sorted by latest arrival
@@ -538,7 +527,7 @@ namespace NP {
 			void make_initial_node()
 			{
 				// construct initial node
-				new_node();
+				new_node(jobs[0], jobs_by_latest_arrival_priority);
 			}
 
 			// create a new node by adding an elemen to nodes, creating a new state and adding this new state to the node,
@@ -788,7 +777,7 @@ namespace NP {
 						}
 						if (largest_cmax > 0)
 						{
-							Time gband = largest_cmax; // get_guard_band(*largest_job, i);
+							Time gband = largest_cmax - Time_model::constants<Time>::epsilon(); 
 							DM("B" << t_wc << "," << gband);
 							HP = tasQueues[i].get_gates_open(trmax, t_wc, gband);
 
@@ -900,9 +889,10 @@ namespace NP {
 				DM(std::endl);
 				DM("FR0:"<<finish_ranges[0]);
 				const Node& next =
-					new_node(n, j, index_of(j),
+					new_node(n, j, 
 					          finish_ranges[0],
-					          earliest_possible_job_release(n, j));
+					          earliest_possible_job_release(n, j),
+							  (std::deque<std::multimap<Time, const Job<Time>*>>) jobs_by_latest_arrival_priority);
 				/*DM("      -----> N" << (nodes.end() - nodes.begin()) << " " << (todo[todo_idx].front() - nodes.begin() + 1)
 				   << std::endl);*/
 
