@@ -172,7 +172,7 @@ namespace NP {
 			typedef Job_set Scheduled;
 
 			typedef std::deque<State> States;
-			typedef typename State* State_ref;
+			typedef State* State_ref;
 			typedef std::unordered_multimap<hash_value_t, State_ref> States_map;
 
 			typedef const Job<Time>* Job_ref;

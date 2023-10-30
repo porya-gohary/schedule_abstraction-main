@@ -181,7 +181,7 @@ namespace NP {
 #endif
 			private:
 
-			typedef typename State* State_ref;
+			typedef State* State_ref;
 			typedef typename std::forward_list<State_ref> State_refs;
 
 #ifdef CONFIG_PARALLEL
