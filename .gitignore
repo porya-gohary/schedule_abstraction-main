@@ -8,3 +8,7 @@ nptest
 comparison/
 .cproject
 .project
+.vscode/
+.vs/
+out/
+CMakeSettings.json

@@ -1,6 +1,8 @@
 #ifndef SELFSUSPENDING_HPP
 #define SELFSUSPENDING_HPP
 
+#include <vector>
+
 #include "jobs.hpp"
 
 namespace NP {
@@ -46,13 +48,34 @@ namespace NP {
 
 	};
 
+	class InvalidSelfSuspendingParameter : public std::exception
+	{
+		public:
+
+		InvalidSelfSuspendingParameter(const JobID& bad_id)
+		: ref(bad_id)
+		{}
+
+		const JobID ref;
+
+		virtual const char* what() const noexcept override
+		{
+			return "invalid self-suspending reference";
+		}
+
+	};
+
 	template<class Time>
 	void validate_susp_refs(std::vector<Suspending_Task<Time>>& susps,
-	                        const typename Job<Time>::Job_set jobs)
+							const typename Job<Time>::Job_set jobs)
 	{
 		for (auto st : susps) {
 			lookup<Time>(jobs, st.get_fromID());
 			lookup<Time>(jobs, st.get_toID());
+
+			if (st.get_maxsus() < st.get_minsus()) {
+				throw InvalidSelfSuspendingParameter(st.get_fromID());
+			}
 		}
 	}
 

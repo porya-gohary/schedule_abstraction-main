@@ -3,7 +3,9 @@
 #include <fstream>
 #include <algorithm>
 
+#ifndef _WIN32
 #include <sys/resource.h>
+#endif
 
 #include "OptionParser.h"
 
@@ -100,8 +102,10 @@ static Analysis_result analyze(
 	opts.be_naive = want_naive;
 	opts.use_self_suspensions = want_selfsuspending ? (want_pathwise ? PATHWISE_SUSP : GENERAL_SUSP) : NOSUSP;
 
+
 	// Actually call the analysis engine
 	auto space = Space::explore(problem, opts);
+
 
 	// Extract the analysis results
 	auto graph = std::ostringstream();
@@ -199,6 +203,7 @@ static void process_file(const std::string& fname)
 			static_cast<std::istream&>(aborts_stream) :
 			static_cast<std::istream&>(empty_aborts_stream);
 
+
 		if (fname == "-")
 		{
 			result = process_stream(std::cin, dag_in, selfsuspending_in, aborts_in);
@@ -231,10 +236,14 @@ static void process_file(const std::string& fname)
 			}
 		}
 
+#ifdef _WIN32 // rusage does not work under Windows
+		long mem_used = 0;
+#else
 		struct rusage u;
 		long mem_used = 0;
 		if (getrusage(RUSAGE_SELF, &u) == 0)
 			mem_used = u.ru_maxrss;
+#endif
 
 		std::cout << fname;
 
@@ -264,17 +273,23 @@ static void process_file(const std::string& fname)
 		exit(1);
 	} catch (NP::InvalidJobReference& ex) {
 		std::cerr << precedence_file << ": bad job reference: job "
-		          << ex.ref.job << " of task " << ex.ref.task
-			      << " is not part of the job set given in "
-			      << fname
-			      << std::endl;
+				  << ex.ref.job << " of task " << ex.ref.task
+				  << " is not part of the job set given in "
+				  << fname
+				  << std::endl;
 		exit(3);
 	} catch (NP::InvalidAbortParameter& ex) {
 		std::cerr << aborts_file << ": invalid abort parameter: job "
-		          << ex.ref.job << " of task " << ex.ref.task
-			      << " has an impossible abort time (abort before release)"
-			      << std::endl;
+				  << ex.ref.job << " of task " << ex.ref.task
+				  << " has an impossible abort time (abort before release)"
+				  << std::endl;
 		exit(4);
+	} catch (NP::InvalidSelfSuspendingParameter& ex) {
+		std::cerr << selfsuspending_file << ": invalid self-suspending parameter: job "
+				  << ex.ref.job << " of task " << ex.ref.task
+				  << " has an invalid self-suspending time"
+				  << std::endl;
+		exit(5);
 	} catch (std::exception& ex) {
 		std::cerr << fname << ": '" << ex.what() << "'" << std::endl;
 		exit(1);
@@ -283,7 +298,7 @@ static void process_file(const std::string& fname)
 
 static void print_header(){
 	std::cout << "# file name"
-	          << ", schedulable?"
+	          << ", schedulable?(1Y/0N)"
 	          << ", #jobs"
 	          << ", #states"
 	          << ", #edges"

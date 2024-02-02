@@ -33,7 +33,7 @@ namespace NP {
 			// no accidental copies
 			Schedule_state(const Schedule_state& origin)  = delete;
 
-			typedef typename std::unordered_map<Job<Time>, Interval<Time>> JobFinishTimes;
+			typedef typename std::unordered_map<JobID, Interval<Time>> JobFinishTimes;
 			JobFinishTimes job_finish_times;
 
 			public:
@@ -86,9 +86,9 @@ namespace NP {
 				finish_time.equate(newst);
 			}
 
-			void add_pred(const Job<Time> pred_job, const Interval<Time> ft)
+			void add_pred(const JobID pred_job, Interval<Time> ft)
 			{
-				job_finish_times[pred_job] = ft;
+				job_finish_times.emplace(pred_job, ft);
 			}
 
 			void add_pred_list(JobFinishTimes jft_list)
@@ -99,25 +99,36 @@ namespace NP {
 				}
 			}
 
-			void del_pred(const Job<Time> pred_job)
+			void del_pred(const JobID pred_job)
 			{
 				job_finish_times.erase(pred_job);
 			}
 
-			void widen_pathwise_job(const Job<Time> pred_job, const Interval<Time> ft)
+			void widen_pathwise_job(const JobID pred_job, const Interval<Time> ft)
 			{
-				auto widen_job = job_finish_times.find(pred_job);
-				(widen_job->second).widen(ft);
+				auto it = job_finish_times.find(pred_job);
+				if (it != job_finish_times.end()) {
+					(it->second).widen(ft);
+				}
 			}
 
-			const Interval<Time>& get_pathwisejob_ft(const Job<Time>& pathwise_job) const
+			bool pathwisejob_exists(const JobID pred_job) const
 			{
-				return (job_finish_times.find(pathwise_job))->second;
+				auto it = job_finish_times.find(pred_job);
+				if (it != job_finish_times.end()) {
+					return true;
+				}
+				return false;
 			}
 
-			const Job<Time>& get_pathwisejob_job(const Job<Time>& pathwise_job) const
+			const Interval<Time>& get_pathwisejob_ft(const JobID& pathwise_job) const
 			{
-				return (job_finish_times.find(pathwise_job))->first;
+				return job_finish_times.find(pathwise_job)->second;
+			}
+
+			const JobID& get_pathwisejob_job(const JobID& pathwise_job) const
+			{
+				return job_finish_times.find(pathwise_job)->first;
 			}
 
 			const JobFinishTimes& get_pathwise_jobs() const
@@ -252,68 +263,48 @@ namespace NP {
 
 			bool merge_states(const Interval<Time> &new_st, const Schedule_state<Time> &from, const Job<Time>& sched_job)
 			{
-				// typedef typename std::set<State *, eft_compare>::iterator State_ref;
-				// State_ref s_ref = states.begin();
+				for (auto& state : states)
+				{
+					if (new_st.intersects(state->finish_range()))
+					{
+						bool allJobsIntersect = true;
+						for (const auto& job : from.get_pathwise_jobs())
+						{
+							if (state->pathwisejob_exists(job.first))
+							{
+								if (!job.second.intersects(state->get_pathwisejob_ft(job.first)))
+								{
+									allJobsIntersect = false;
+									break;
+								}
+							}
+						}
+						if (state->pathwisejob_exists(sched_job.get_id()))
+						{
+							if (!new_st.intersects(state->get_pathwisejob_ft(sched_job.get_id())))
+							{
+								allJobsIntersect = false;
+							}
+						}
 
-				// while (s_ref != states.end())
-				// {
-				// 	if (new_st.intersects((*s_ref)->finish_range()))
-				// 	{
-				// 		bool state_mergable = true;
+						if (allJobsIntersect)
+						{
+							//Widen finish time intervals for all pathwise jobs
+							for (auto& job : from.get_pathwise_jobs())
+							{
+								state->widen_pathwise_job(job.first, job.second);
+							}
 
-				// 		for (const auto &job_finish_time_pair : (*s_ref)->get_pathwise_jobs())
-				// 		{
-				// 			const Job<Time> &pred_job = job_finish_time_pair.first;
-				// 			const Interval<Time> &job_finish_time = job_finish_time_pair.second;
+							//Find sched_job and widen its finish time interval
+							state->widen_pathwise_job(sched_job.get_id(), new_st);
 
-				// 			if (((from.get_pathwisejob_job(pred_job)).get_id() == pred_job.get_id() &&
-				// 				 job_finish_time.intersects(from.get_pathwisejob_ft(pred_job))) ||
-				// 				(pred_job.get_id() == sched_job.get_id() && job_finish_time.intersects(new_st)))
-				// 			{
-				// 				continue;
-				// 			}
-				// 			else
-				// 			{
-				// 				state_mergable = false;
-				// 				break;
-				// 			}
-				// 		}
+							//Widen the main finish range
+							state->update_finish_range(new_st);
 
-				// 		if (state_mergable)
-				// 		{
-				// 			State *merged_state = *s_ref;
-				// 			merged_state->update_finish_range(new_st);
-							
-				// 			for (const auto &job_finish_time_pair : (merged_state)->get_pathwise_jobs())
-				// 			{
-				// 				const Job<Time> &pred_job = job_finish_time_pair.first;
-				// 				const Interval<Time> &job_finish_time = job_finish_time_pair.second;
-
-				// 				if ((from.get_pathwisejob_job(pred_job)).get_id() == pred_job.get_id())
-				// 				{
-				// 					(merged_state)->widen_pathwise_job(pred_job, job_finish_time);
-				// 				}
-				// 				else if (pred_job.get_id() == sched_job.get_id())
-				// 				{
-				// 					(merged_state)->widen_pathwise_job(pred_job,new_st);
-				// 				}
-				// 			}
-
-				// 			s_ref = states.erase(s_ref);
-				// 			states.insert(merged_state);
-				// 			return true;
-				// 		}
-				// 		else
-				// 		{
-				// 			s_ref++;
-				// 		}
-				// 	}
-				// 	else
-				// 	{
-				// 		s_ref++;
-				// 	}
-				// }
-
+							return true;
+						}
+					}
+				}
 				return false;
 			}
 
