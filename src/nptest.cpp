@@ -49,6 +49,8 @@ static std::string aborts_file;
 static bool want_multiprocessor = false;
 static unsigned int num_processors = 1;
 
+static bool use_supernodes = true;
+
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
 static bool want_dot_graph;
 #endif
@@ -101,6 +103,7 @@ static Analysis_result analyze(
 	opts.num_buckets = problem.jobs.size();
 	opts.be_naive = want_naive;
 	opts.use_self_suspensions = want_selfsuspending ? (want_pathwise ? PATHWISE_SUSP : GENERAL_SUSP) : NOSUSP;
+	opts.use_supernodes = use_supernodes;
 
 
 	// Actually call the analysis engine
@@ -371,6 +374,9 @@ int main(int argc, char** argv)
 	      .action("store_const").set_const("1")
 	      .help("store the state graph in Graphviz dot format (default: off)");
 
+	parser.add_option("--sn", "--use-supernodes").dest("sn").set_default("1")
+	      .help("use supernodes while buildidng the graph (default: on)");
+
 	parser.add_option("-r", "--save-response-times").dest("rta").set_default("0")
 	      .action("store_const").set_const("1")
 	      .help("store the best- and worst-case response times (default: off)");
@@ -442,6 +448,8 @@ int main(int argc, char** argv)
 	want_rta_file = options.get("rta");
 
 	continue_after_dl_miss = options.get("go_on_after_dl");
+
+	use_supernodes = options.get("sn");
 
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
 	want_dot_graph = options.get("dot");

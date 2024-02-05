@@ -53,7 +53,7 @@ namespace NP {
 
 				auto s = State_space(prob.jobs, prob.dag, prob.sts, prob.aborts,
 									 opts.timeout, opts.max_depth,
-									 opts.num_buckets, opts.early_exit, opts.use_self_suspensions);
+									 opts.num_buckets, opts.early_exit, opts.use_self_suspensions, opts.use_supernodes);
 				s.cpu_time.start();
 				if (opts.be_naive)
 					s.explore_naively();
@@ -275,6 +275,7 @@ namespace NP {
 			bool early_exit;
 			bool observed_deadline_miss;
 			unsigned int want_self_suspensions;
+			bool use_supernodes;
 
 			// Constructor of the State_space class
 			State_space(const Workload& jobs,
@@ -285,7 +286,8 @@ namespace NP {
 						unsigned int max_depth = 0,
 						std::size_t num_buckets = 1000,
 						bool early_exit = true,
-						unsigned int use_self_suspensions = 0)
+						unsigned int use_self_suspensions = 0,
+						bool use_supernodes = false)
 			: jobs(jobs)
 			, aborted(false)
 			, timed_out(false)
@@ -304,6 +306,7 @@ namespace NP {
 			, want_self_suspensions(use_self_suspensions)
 			, observed_deadline_miss(false)
 			, abort_actions(jobs.size(), NULL)
+			, use_supernodes(use_supernodes)
 			{
 				for (const Job<Time>& j : jobs) {
 					jobs_by_latest_arrival.insert({j.latest_arrival(), &j});
@@ -649,22 +652,35 @@ namespace NP {
 
 			void remove_jobs_with_no_successors(State& s, const Node& n)
 			{
+				std::vector<JobID> jobsToRemove;
+
 				for(auto job_info : s.get_pathwise_jobs())
 				{
+					DM("Checking job for removing with no predecessors " << job_info.first << std::endl);
 					JobID job_check = job_info.first;
 					bool successor_pending = false;
-					for(auto to_jobs : from_suspending_tasks[index_of(lookup<Time>(jobs, job_check))])
-					{
-						if(incomplete(n, lookup<Time>(jobs, to_jobs->get_toID())))
-						{
-							successor_pending = true;
-							break;
+					
+					// Check if the code block exists before running the loop
+					if (from_suspending_tasks[index_of(lookup<Time>(jobs, job_check))].size() > 0) {
+						for (auto to_jobs : from_suspending_tasks[index_of(lookup<Time>(jobs, job_check))]) {
+							if(incomplete(n, lookup<Time>(jobs, to_jobs->get_toID())))
+							{
+								successor_pending = true;
+								break;
+							}
 						}
 					}
+					
 					if(!successor_pending)
 					{
-						s.del_pred(job_check);
+						DM("Removing job with no successors " << job_check << std::endl);
+						jobsToRemove.push_back(job_check);
 					}
+				}
+
+				// Remove the jobs with no successors
+				for (auto job : jobsToRemove) {
+					s.del_pred(job);
 				}
 			}
 
@@ -709,6 +725,7 @@ namespace NP {
 				State &st = new_state(n_ref->finish_range(), *n_ref, from, sched_job);
 
 				n_ref->add_state(&st);
+				DM("State added to node "<< std::endl);
 
 				auto njobs = n_ref->get_scheduled_jobs().size();
 				assert (
@@ -745,9 +762,11 @@ namespace NP {
 
 				if(want_self_suspensions == PATHWISE_SUSP)
 				{
+					DM("Adding pred list to state "<< std::endl);
 					s_ref->add_pred_list(from.get_pathwise_jobs());
 					s_ref->add_pred(sched_job.get_id(), ftimes);
 					remove_jobs_with_no_successors(*s_ref,n);
+					DM("Pred list added to state "<< std::endl);
 				}
 
 				return *s_ref;
@@ -1051,9 +1070,14 @@ namespace NP {
 				Interval<Time> finish_range = next_finish_times(n, s, j, lst);//requires lst
 				if(!match->merge_states(finish_range, s, j))
 				{
-					DM("State not merged but added to the node"<<std::endl);
-					State &st = new_state(finish_range, n, s, j);
-					match->add_state(&st);
+					if(use_supernodes)
+					{
+						DM("State not merged but added to the node"<<std::endl);
+						State &st = new_state(finish_range, n, s, j);
+						match->add_state(&st);
+					}
+					else
+						schedule_new(n, s, j, lst);
 				}
 				update_finish_times(j, finish_range);
 			}
@@ -1065,9 +1089,14 @@ namespace NP {
 				Interval<Time> finish_range = next_finish_times(n, s, j, lst);//requires lst
 				if(!match->merge_states(finish_range, s, j))
 				{
-					DM("State not merged but added to the node");
-					State &st = new_state(finish_range, n, s, j);
-					match->add_state(&st);
+					if(use_supernodes)
+					{
+						DM("State not merged but added to the node");
+						State &st = new_state(finish_range, n, s, j);
+						match->add_state(&st);
+					}
+					else
+						schedule_new(n, s, j, lst);
 				}
 				process_new_edge(n, *match, j, finish_range);
 			}

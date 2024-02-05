@@ -121,6 +121,9 @@ namespace NP {
 		// If using self-suspending tasks, then which implementation to take
 		unsigned int use_self_suspensions;
 
+		// If using supernodes
+		bool use_supernodes;
+
 		Analysis_options()
 		: timeout(0)
 		, max_depth(0)
@@ -128,6 +131,7 @@ namespace NP {
 		, num_buckets(1000)
 		, be_naive(false)
 		, use_self_suspensions(0)
+		, use_supernodes(true)
 		{
 		}
 	};
