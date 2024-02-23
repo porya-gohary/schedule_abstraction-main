@@ -167,7 +167,7 @@ namespace NP {
 				}
 			};
 
-			typedef typename std::set<State*, eft_compare> State_ref_queue;
+			typedef typename std::multiset<State*, eft_compare> State_ref_queue;
 			State_ref_queue states;
 
 			public:

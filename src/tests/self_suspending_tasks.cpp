@@ -12,6 +12,11 @@ using namespace NP;
 #define GENERAL_SUSP 1
 #define PATHWISE_SUSP 2
 
+inline Interval<dense_t> D(dense_t a, dense_t b)
+{
+	return Interval<dense_t>{a, b};
+}
+
 const std::string uniproc_sn_susp_jobs_file =
 "Task ID, Job ID, Arrival min, Arrival max, Cost min, Cost max, Deadline, Priority\n"
 "1      , 1      , 0          , 0          , 1        , 2        , 10      , 1      \n"
@@ -65,4 +70,122 @@ TEST_CASE("[susp] Uniproc Supernode Self-Suspensions") {
 		CHECK(pw_nspace.get_finish_times(j) == pw_space.get_finish_times(j));
 		CHECK(pw_nspace.get_finish_times(j).upto() <= gen_space.get_finish_times(j).upto());
 	}
+}
+
+
+const std::string uniproc_sn_susp_jobs_anomaly_file =
+"Task ID, Job ID, Arrival min, Arrival max, Cost min, Cost max, Deadline, Priority\n"
+"1      , 1      , 0          , 2          , 39       , 39       , 200     , 1      \n"
+"1      , 2      , 0          , 2          , 21       , 21       , 200     , 1      \n"
+"1      , 3      , 200        , 202        , 39       , 39       , 400     , 1      \n"
+"1      , 4      , 200        , 202        , 21       , 21       , 400     , 1      \n"
+"1      , 5      , 400        , 402        , 39       , 39       , 600     , 1      \n"
+"1      , 6      , 400        , 402        , 21       , 21       , 600     , 1      \n"
+"1      , 7      , 600        , 602        , 39       , 39       , 800     , 1      \n"
+"1      , 8      , 600        , 602        , 21       , 21       , 800     , 1      \n"
+"1      , 9      , 800        , 802        , 39       , 39       , 1000    , 1      \n"
+"1      , 10     , 800        , 802        , 21       , 21       , 1000    , 1      \n"
+"2      , 1      , 0          , 10         , 49       , 49       , 1000    , 2      \n"
+"2      , 2      , 0          , 10         , 144      , 144      , 1000    , 2      ";
+
+const std::string uniproc_sn_susp_dag_anomaly_file =
+"Predecessor TID, Predecessor JID, Successor TID, Successor JID, Sus_Min, Sus_Max\n"
+"1               , 1              , 1            , 2            , 0      , 0      \n"
+"1               , 2              , 1            , 3            , 0      , 0      \n"
+"1               , 3              , 1            , 4            , 0      , 0      \n"
+"1               , 4              , 1            , 5            , 0      , 0      \n"
+"1               , 5              , 1            , 6            , 0      , 0      \n"
+"1               , 6              , 1            , 7            , 0      , 0      \n"
+"1               , 7              , 1            , 8            , 0      , 0      \n"
+"1               , 8              , 1            , 9            , 0      , 0      \n"
+"1               , 9              , 1            , 10           , 0      , 0      \n"
+"2               , 1              , 2            , 2            , 0      , 0      ";
+
+TEST_CASE("[susp] Uniproc Supernode Self-Suspensions Multiset Anomaly") {
+	// This test tests if multiple states that have the same earliest finish time are being
+	// correctly handled by the state space exploration algorithm. If a state is being replaced
+	// instead of being added to the node, then we should see that this taskset is schedulable 
+	// with the pathwise implementation, but we see that this is indeed not the case
+
+	auto susp_dag_in = std::istringstream(uniproc_sn_susp_dag_anomaly_file);
+	auto in = std::istringstream(uniproc_sn_susp_jobs_anomaly_file);
+	auto dag_in  = std::istringstream("\n");
+	auto aborts_in = std::istringstream("\n");
+
+	Scheduling_problem<dtime_t> prob{
+		parse_file<dtime_t>(in),
+		parse_suspending_file<dtime_t>(susp_dag_in)};
+
+	Analysis_options opts;
+
+	opts.use_self_suspensions = GENERAL_SUSP;
+
+	opts.be_naive = true;
+	auto gen_nspace = Uniproc::State_space<dtime_t>::explore(prob, opts);
+	CHECK(!(gen_nspace.is_schedulable()));
+
+	opts.be_naive = false;
+	auto gen_space = Uniproc::State_space<dtime_t>::explore(prob, opts);
+	CHECK(!(gen_space.is_schedulable()));
+
+	opts.use_self_suspensions = PATHWISE_SUSP;
+
+	opts.be_naive = true;
+	auto pw_nspace = Uniproc::State_space<dtime_t>::explore(prob, opts);
+	CHECK(!(pw_nspace.is_schedulable()));
+
+	opts.be_naive = false;
+	auto pw_space = Uniproc::State_space<dtime_t>::explore(prob, opts);
+	CHECK(!(pw_space.is_schedulable()));
+
+}
+
+const std::string uniproc_sn_susp_jobs_g_pw_diff_file =
+"Task ID, Job ID, Arrival min, Arrival max, Cost min, Cost max, Deadline, Priority\n"
+"1      , 1      , 0          , 10         , 3        , 6        , 100     , 1      \n"
+"1      , 2      , 0          , 10         , 1        , 2        , 100     , 1      \n"
+"1      , 3      , 100        , 110        , 3        , 6        , 200     , 1      \n"
+"1      , 4      , 100        , 110        , 1        , 2        , 200     , 1      \n"
+"2      , 1      , 0          , 10         , 8        , 16       , 100     , 2      \n"
+"2      , 2      , 0          , 10         , 10       , 20       , 100     , 2      \n"
+"2      , 3      , 100        , 110        , 8        , 16       , 200     , 2      \n"
+"2      , 4      , 100        , 110        , 10       , 20       , 200     , 2      \n"
+"3      , 1      , 0          , 20         , 7        , 14       , 200     , 3      \n"
+"3      , 2      , 0          , 20         , 7        , 14       , 200     , 3      \n"
+"4      , 1      , 0          , 20         , 4        , 9        , 200     , 4      \n"
+"4      , 2      , 0          , 20         , 2        , 4        , 200     , 4      \n"
+"5      , 1      , 0          , 20         , 7        , 14       , 200     , 5      \n"
+"5      , 2      , 0          , 20         , 15       , 30       , 200     , 5      ";
+
+const std::string uniproc_sn_susp_g_pw_diff_file =
+"Predecessor TID, Predecessor JID, Successor TID, Successor JID, Sus_Min, Sus_Max\n"
+"1               , 1              , 1            , 2            , 0      , 0      \n"
+"1               , 2              , 1            , 3            , 0      , 0      \n"
+"1               , 3              , 1            , 4            , 0      , 0      \n"
+"2               , 1              , 2            , 2            , 0      , 0      \n"
+"2               , 2              , 2            , 3            , 0      , 0      \n"
+"2               , 3              , 2            , 4            , 0      , 0      \n"
+"3               , 1              , 3            , 2            , 0      , 0      \n"
+"4               , 1              , 4            , 2            , 0      , 0      \n"
+"5               , 1              , 5            , 2            , 0      , 0      ";
+
+TEST_CASE("[susp] General Pathwise Uniprocessor Difference") {
+	auto susp_dag_in = std::istringstream(uniproc_sn_susp_g_pw_diff_file);
+	auto in = std::istringstream(uniproc_sn_susp_jobs_g_pw_diff_file);
+	auto dag_in  = std::istringstream("\n");
+	auto aborts_in = std::istringstream("\n");
+
+	Scheduling_problem<dtime_t> prob{
+		parse_file<dtime_t>(in),
+		parse_suspending_file<dtime_t>(susp_dag_in)};
+
+	Analysis_options opts;
+
+	opts.use_self_suspensions = GENERAL_SUSP;
+	auto gen_nspace = Uniproc::State_space<dtime_t>::explore(prob, opts);
+	CHECK(!(gen_nspace.is_schedulable()));
+
+	opts.use_self_suspensions = PATHWISE_SUSP;
+	auto pw_nspace = Uniproc::State_space<dtime_t>::explore(prob, opts);
+	CHECK(pw_nspace.is_schedulable());
 }
