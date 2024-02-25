@@ -5,6 +5,7 @@
 
 #include "io.hpp"
 #include "uni/space.hpp"
+#include "global/space.hpp"
 
 using namespace NP;
 
@@ -188,4 +189,27 @@ TEST_CASE("[susp] General Pathwise Uniprocessor Difference") {
 	opts.use_self_suspensions = PATHWISE_SUSP;
 	auto pw_nspace = Uniproc::State_space<dtime_t>::explore(prob, opts);
 	CHECK(pw_nspace.is_schedulable());
+}
+
+TEST_CASE("[susp] Uniproc Global Schedulability Check") {
+	auto susp_dag_in = std::istringstream(uniproc_sn_susp_g_pw_diff_file);
+	auto in = std::istringstream(uniproc_sn_susp_jobs_g_pw_diff_file);
+	auto dag_in  = std::istringstream("\n");
+	auto aborts_in = std::istringstream("\n");
+
+	Scheduling_problem<dtime_t> prob{
+		parse_file<dtime_t>(in),
+		parse_suspending_file<dtime_t>(susp_dag_in)};
+
+	Analysis_options opts;
+
+	opts.use_self_suspensions = PATHWISE_SUSP;
+	auto uspace = Uniproc::State_space<dtime_t>::explore(prob, opts);
+	CHECK(uspace.is_schedulable());
+
+	prob.num_processors = 1;
+	opts.be_naive = false;
+
+	auto gspace = NP::Global::State_space<dtime_t>::explore(prob, opts);
+	CHECK(gspace.is_schedulable());
 }

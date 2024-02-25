@@ -25,6 +25,10 @@
 
 #include "global/state.hpp"
 
+#define NOSUSP 0
+#define GENERAL_SUSP 1
+#define PATHWISE_SUSP 2
+
 namespace NP {
 
 	namespace Global {
@@ -35,6 +39,7 @@ namespace NP {
 
 			typedef Scheduling_problem<Time> Problem;
 			typedef typename Scheduling_problem<Time>::Workload Workload;
+			typedef typename Scheduling_problem<Time>::Suspending_Tasks Suspending_Tasks;
 			typedef Schedule_state<Time> State;
 
 			static State_space explore(
@@ -44,8 +49,8 @@ namespace NP {
 				// doesn't yet support exploration after deadline miss
 				assert(opts.early_exit);
 
-				auto s = State_space(prob.jobs, prob.dag, prob.num_processors, opts.timeout,
-				                     opts.max_depth, opts.num_buckets);
+				auto s = State_space(prob.jobs, prob.dag, prob.sts, prob.num_processors, opts.timeout,
+									 opts.max_depth, opts.num_buckets, opts.use_self_suspensions);
 				s.be_naive = opts.be_naive;
 				s.cpu_time.start();
 				s.explore();
@@ -139,7 +144,7 @@ namespace NP {
 				const Interval<Time> finish_range;
 
 				Edge(const Job<Time>* s, const State* src, const State* tgt,
-				     const Interval<Time>& fr)
+					 const Interval<Time>& fr)
 				: scheduled(s)
 				, source(src)
 				, target(tgt)
@@ -239,6 +244,13 @@ namespace NP {
 			const By_time_map& jobs_by_deadline;
 			const std::vector<Job_precedence_set>& predecessors;
 
+			// In order to store the components of self-suspending tasks, we create a vector of a vector of references
+			// to_suspending_tasks: for each successor, a list of predecessors are present
+			// from_suspending_tasks: for each predecessor, a list of successors are present
+			typedef std::vector<const Suspending_Task<Time>*> suspending_task_list;
+			std::vector<suspending_task_list> to_suspending_tasks;
+			std::vector<suspending_task_list> from_suspending_tasks;
+
 			States_storage states_storage;
 
 			States_map states_by_key;
@@ -252,17 +264,20 @@ namespace NP {
 #endif
 			Processor_clock cpu_time;
 			const double timeout;
+			unsigned int wants_self_suspensions;
 
 			const unsigned int num_cpus;
 
 			State_space(const Workload& jobs,
-			            const Precedence_constraints &dag_edges,
-			            unsigned int num_cpus,
-			            double max_cpu_time = 0,
-			            unsigned int max_depth = 0,
-			            std::size_t num_buckets = 1000)
+						const Precedence_constraints &dag_edges,
+						const Suspending_Tasks &susps,
+						unsigned int num_cpus,
+						double max_cpu_time = 0,
+						unsigned int max_depth = 0,
+						std::size_t num_buckets = 1000,
+						unsigned int use_self_suspensions = NOSUSP)
 			: _jobs_by_win(Interval<Time>{0, max_deadline(jobs)},
-			               max_deadline(jobs) / num_buckets)
+						   max_deadline(jobs) / num_buckets)
 			, jobs(jobs)
 			, aborted(false)
 			, timed_out(false)
@@ -280,6 +295,9 @@ namespace NP {
 			, jobs_by_win(_jobs_by_win)
 			, _predecessors(jobs.size())
 			, predecessors(_predecessors)
+			, to_suspending_tasks(jobs.size())
+			, from_suspending_tasks(jobs.size())
+			, wants_self_suspensions(use_self_suspensions)
 			{
 				for (const Job<Time>& j : jobs) {
 					_jobs_by_latest_arrival.insert({j.latest_arrival(), &j});
@@ -292,6 +310,16 @@ namespace NP {
 					const Job<Time>& from = lookup<Time>(jobs, e.first);
 					const Job<Time>& to   = lookup<Time>(jobs, e.second);
 					_predecessors[index_of(to)].push_back(index_of(from));
+				}
+
+				for (const Suspending_Task<Time>& st : susps) {
+					const Job<Time>& to = lookup<Time>(jobs, st.get_toID());
+					to_suspending_tasks[index_of(to)].push_back(&st);
+				}
+
+				for (const Suspending_Task<Time>& st : susps) {
+					const Job<Time>& from = lookup<Time>(jobs, st.get_fromID());
+					from_suspending_tasks[index_of(from)].push_back(&st);
 				}
 			}
 
@@ -315,7 +343,7 @@ namespace NP {
 			}
 
 			void update_finish_times(Response_times& r, const JobID& id,
-			                         Interval<Time> range)
+									 Interval<Time> range)
 			{
 				auto rbounds = r.find(id);
 				if (rbounds == r.end()) {
@@ -350,6 +378,10 @@ namespace NP {
 			{
 				return (std::size_t) (&j - &(jobs[0]));
 			}
+			const Job<Time>& reverse_index_of(std::size_t index) const
+			{
+				return jobs[index];
+			}
 
 			const Job_precedence_set& predecessors_of(const Job<Time>& j) const
 			{
@@ -364,7 +396,7 @@ namespace NP {
 				// check if we skipped any jobs that are now guaranteed
 				// to miss their deadline
 				for (auto it = jobs_by_deadline.lower_bound(check_from);
-				     it != jobs_by_deadline.end(); it++) {
+					 it != jobs_by_deadline.end(); it++) {
 					const Job<Time>& j = *(it->second);
 					if (j.get_deadline() < earliest) {
 						if (unfinished(new_s, j)) {
@@ -377,7 +409,7 @@ namespace NP {
 							auto frange = new_s.core_availability() + j.get_cost();
 							const State& next =
 								new_state(new_s, index_of(j), predecessors_of(j),
-								          frange, frange, j.get_key());
+										  frange, frange, j.get_key());
 							// update response times
 							update_finish_times(j, frange);
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
@@ -389,6 +421,33 @@ namespace NP {
 					} else
 						// deadlines now after the next earliest finish time
 						break;
+				}
+			}
+
+			void remove_jobs_with_no_successors(State& s)
+			{
+				std::vector<Job<Time>> jobsToRemove;
+				// remove jobs with no successors
+				for (auto job_info : s.get_pathwise_jobs()) {
+					Job<Time> job_check = reverse_index_of(job_info.first);
+					JobID job_check_id = job_check.get_id();
+					bool successor_pending = false;
+					if (from_suspending_tasks[index_of(lookup<Time>(jobs, job_check_id))].size() > 0) {
+						for (auto to_jobs : from_suspending_tasks[index_of(lookup<Time>(jobs, job_check_id))]) {
+							if(s.job_incomplete(index_of(lookup<Time>(jobs, to_jobs->get_toID())))) {
+								successor_pending = true;
+								break;
+							}
+						}
+					}
+
+					if (!successor_pending) {
+						jobsToRemove.push_back(job_check);
+					}
+				}
+
+				for (auto job : jobsToRemove) {
+					s.del_pred(index_of(job));
 				}
 			}
 
@@ -414,12 +473,14 @@ namespace NP {
 				states().emplace_back(std::forward<Args>(args)...);
 				State_ref s = --states().end();
 
+				remove_jobs_with_no_successors(*s);
+
 				// make sure we didn't screw up...
 				auto njobs = s->number_of_scheduled_jobs();
 				assert (
 					(!njobs && num_states == 0) // initial state
-				    || (njobs == current_job_count + 1) // normal State
-				    || (njobs == current_job_count + 2 && aborted) // deadline miss
+					|| (njobs == current_job_count + 1) // normal State
+					|| (njobs == current_job_count + 2 && aborted) // deadline miss
 				);
 
 				return s;
@@ -541,7 +602,78 @@ namespace NP {
 
 			bool ready(const State& s, const Job<Time>& j) const
 			{
-				return unfinished(s, j) && s.job_ready(predecessors_of(j));
+				return unfinished(s, j) && s.job_ready(predecessors_of(j)) && susp_ready(s,j);
+			}
+
+			bool susp_ready(const State& s, const Job<Time>& j) const
+			{
+				const suspending_task_list fsusps = to_suspending_tasks[index_of(j)];
+
+				for (auto e : fsusps)
+				{
+					if (s.job_incomplete(index_of(lookup<Time>(jobs, e->get_fromID()))))
+					{
+						return false;
+					}
+				}
+				return true;
+			}
+
+			Time get_seft(const State& s, const Job<Time>& j) const
+			{
+				const suspending_task_list fsusps = to_suspending_tasks[index_of(j)];
+				Time seft = 0;
+				assert(susp_ready(s,j));
+
+				for(auto e: fsusps)
+				{
+					Interval<Time> rbounds = get_finish_times(lookup<Time>(jobs, e->get_fromID()));
+					CDM(e->get_fromID() << " rbounds: " << rbounds << std::endl);
+					if(wants_self_suspensions == PATHWISE_SUSP)
+						rbounds = s.get_pathwisejob_ft(index_of(lookup<Time>(jobs, e->get_toID())));
+
+					if(seft <= (rbounds.from() + e->get_minsus()))
+					{
+						seft = rbounds.from() + e->get_minsus();
+					}
+				}
+				return seft;
+			}
+
+			Time get_slft(const State& s, const Job<Time>& j) const
+			{
+				const suspending_task_list fsusps = to_suspending_tasks[index_of(j)];
+				Time slft = 0;
+				assert(susp_ready(s,j));
+
+				for(auto e: fsusps)
+				{
+					Interval<Time> rbounds = get_finish_times(lookup<Time>(jobs, e->get_fromID()));
+					if(wants_self_suspensions == PATHWISE_SUSP)
+						rbounds = s.get_pathwisejob_ft(index_of(lookup<Time>(jobs, e->get_toID())));
+
+					if(slft >= (rbounds.until() - e->get_maxsus()))
+					{
+						slft = rbounds.until() - e->get_maxsus();
+					}
+				}
+				return slft;
+			}
+
+			bool susp_ready_at(const State& s, const Job<Time>& j, const Time at) const
+			{
+				const suspending_task_list fsusps = to_suspending_tasks[index_of(j)];
+
+				for(auto e: fsusps)
+				{
+					if(s.job_incomplete(index_of(lookup<Time>(jobs, e->get_fromID()))))
+						return false;
+					else{
+						if(get_slft(s,j) > at)
+							return false;
+					}
+				}
+				return true;
 			}
 
 			bool all_jobs_scheduled(const State& s) const
@@ -559,6 +691,14 @@ namespace NP {
 						ft = get_finish_times(jobs[pred]);
 					r.lower_bound(ft.min());
 					r.extend_to(ft.max());
+				}
+				if(r.from() < get_seft(s,j))
+				{
+					r.lower_bound(get_seft(s,j));
+				}
+				if(r.until() < get_slft(s,j))
+				{
+					r.extend_to(get_slft(s,j));
 				}
 				return r;
 			}
@@ -579,6 +719,10 @@ namespace NP {
 					r.lower_bound(ft.min());
 					r.extend_to(ft.max());
 				}
+				if(r.from() < get_seft(s,j))
+					r.lower_bound(get_seft(s,j));
+				if(r.until() < get_slft(s,j))
+					r.extend_to(get_slft(s,j));
 				return r;
 			}
 
@@ -613,7 +757,7 @@ namespace NP {
 				// check everything that overlaps with t_earliest
 				for (const Job<Time>& j : jobs_by_win.lookup(t_earliest))
 					if (ready(s, j)
-					    && j.higher_priority_than(reference_job)) {
+						&& j.higher_priority_than(reference_job)) {
 						when = std::min(when,
 							latest_ready_time(s, ready_min, j, reference_job));
 					}
@@ -625,8 +769,8 @@ namespace NP {
 
 				// Ok, let's look also in the future.
 				for (auto it = jobs_by_latest_arrival
-				               .lower_bound(t_earliest);
-				     it != jobs_by_latest_arrival.end(); it++) {
+							   .lower_bound(t_earliest);
+					 it != jobs_by_latest_arrival.end(); it++) {
 					const Job<Time>& j = *(it->second);
 
 					// check if we can stop looking
@@ -635,7 +779,7 @@ namespace NP {
 
 					// j is not relevant if it is already scheduled or blocked
 					if (ready(s, j)
-					    && j.higher_priority_than(reference_job)) {
+						&& j.higher_priority_than(reference_job)) {
 						// does it beat what we've already seen?
 						when = std::min(when,
 							latest_ready_time(s, ready_min, j, reference_job));
@@ -653,8 +797,10 @@ namespace NP {
 
 				// check everything that overlaps with t_earliest
 				for (const Job<Time>& j : jobs_by_win.lookup(t_earliest))
-					if (ready(s, j))
+					if (ready(s, j)){
 						when = std::min(when, latest_ready_time(s, j));
+					}
+
 
 				// No point looking in the future when we've already
 				// found one in the present.
@@ -663,8 +809,8 @@ namespace NP {
 
 				// Ok, let's look also in the future.
 				for (auto it = jobs_by_latest_arrival
-				               .lower_bound(t_earliest);
-				     it != jobs_by_latest_arrival.end(); it++) {
+							   .lower_bound(t_earliest);
+					 it != jobs_by_latest_arrival.end(); it++) {
 					const Job<Time>& j = *(it->second);
 
 					// check if we can stop looking
@@ -723,9 +869,9 @@ namespace NP {
 				// expand the graph, merging if possible
 				const State& next = be_naive ?
 					new_state(s, index_of(j), predecessors_of(j),
-					          st, ftimes, j.get_key()) :
+							  st, ftimes, j.get_key()) :
 					new_or_merged_state(s, index_of(j), predecessors_of(j),
-					                    st, ftimes, j.get_key());
+										st, ftimes, j.get_key());
 
 				// make sure we didn't skip any jobs
 				check_for_deadline_misses(s, next);
@@ -750,6 +896,7 @@ namespace NP {
 				auto t_min  = s.core_availability().min();
 				// latest time some unfinished job is certainly ready
 				auto t_job  = next_job_ready(s, t_min);
+				CDM("t_min: " << t_min << std::endl);
 				// latest time some core is certainly available
 				auto t_core = s.core_availability().max();
 				// latest time by which a work-conserving scheduler
@@ -910,7 +1057,7 @@ namespace NP {
 
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
 			friend std::ostream& operator<< (std::ostream& out,
-			                                 const State_space<Time>& space)
+											 const State_space<Time>& space)
 			{
 					std::map<const Schedule_state<Time>*, unsigned int> state_id;
 					unsigned int i = 0;
@@ -931,23 +1078,23 @@ namespace NP {
 					}
 					for (const auto& e : space.get_edges()) {
 						out << "\tS" << state_id[e.source]
-						    << " -> "
-						    << "S" << state_id[e.target]
-						    << "[label=\""
-						    << "T" << e.scheduled->get_task_id()
-						    << " J" << e.scheduled->get_job_id()
-						    << "\\nDL=" << e.scheduled->get_deadline()
-						    << "\\nES=" << e.earliest_start_time()
- 						    << "\\nLS=" << e.latest_start_time()
-						    << "\\nEF=" << e.earliest_finish_time()
-						    << "\\nLF=" << e.latest_finish_time()
-						    << "\"";
+							<< " -> "
+							<< "S" << state_id[e.target]
+							<< "[label=\""
+							<< "T" << e.scheduled->get_task_id()
+							<< " J" << e.scheduled->get_job_id()
+							<< "\\nDL=" << e.scheduled->get_deadline()
+							<< "\\nES=" << e.earliest_start_time()
+ 							<< "\\nLS=" << e.latest_start_time()
+							<< "\\nEF=" << e.earliest_finish_time()
+							<< "\\nLF=" << e.latest_finish_time()
+							<< "\"";
 						if (e.deadline_miss_possible()) {
 							out << ",color=Red,fontcolor=Red";
 						}
 						out << ",fontsize=8" << "]"
-						    << ";"
-						    << std::endl;
+							<< ";"
+							<< std::endl;
 						if (e.deadline_miss_possible()) {
 							out << "S" << state_id[e.target]
 								<< "[color=Red];"
@@ -966,12 +1113,12 @@ namespace NP {
 namespace std
 {
 	template<class Time> struct hash<NP::Global::Schedule_state<Time>>
-    {
+	{
 		std::size_t operator()(NP::Global::Schedule_state<Time> const& s) const
-        {
-            return s.get_key();
-        }
-    };
+		{
+			return s.get_key();
+		}
+	};
 }
 
 

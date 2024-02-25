@@ -19,6 +19,11 @@ namespace NP {
 
 		template<class Time> class Schedule_state
 		{
+			private:
+
+			typedef typename std::unordered_map<Job_index, Interval<Time>> JobFinishTimes;
+			JobFinishTimes job_finish_times;
+
 			public:
 
 			// initial state -- nothing yet has finished, nothing is running
@@ -43,6 +48,7 @@ namespace NP {
 			: num_jobs_scheduled(from.num_jobs_scheduled + 1)
 			, scheduled_jobs{from.scheduled_jobs, j}
 			, lookup_key{from.lookup_key ^ key}
+			, job_finish_times{from.job_finish_times}
 			{
 				auto est = start_times.min();
 				auto lst = start_times.max();
@@ -101,6 +107,12 @@ namespace NP {
 					core_avail.emplace_back(pa[i], ca[i]);
 				}
 
+				job_finish_times.emplace(j, finish_times);
+				CDM("JobFiunishTimes");
+				for (const auto& job : job_finish_times) {
+					CDM("Job: " << job.first << ", Finish Times: " << job.second << std::endl);
+				}
+
 				assert(core_avail.size() > 0);
 				DM("*** new state: constructed " << *this << std::endl);
 			}
@@ -126,6 +138,15 @@ namespace NP {
 				for (int i = 0; i < core_avail.size(); i++)
 					if (!core_avail[i].intersects(other.core_avail[i]))
 						return false;
+				//check if JobFinishTimes overlap
+				for (const auto& rj : job_finish_times) {
+					auto it = other.job_finish_times.find(rj.first);
+					if (it != other.job_finish_times.end()) {
+						if (!rj.second.intersects(it->second))
+							return false;
+					}
+				}
+
 				return true;
 			}
 
@@ -157,6 +178,14 @@ namespace NP {
 				}
 				// move new certain jobs into the state
 				certain_jobs.swap(new_cj);
+
+				// merge job_finish_times
+				for (const auto& rj : other.job_finish_times) {
+					auto it = job_finish_times.find(rj.first);
+					if (it != job_finish_times.end()) {
+						it->second.widen(rj.second);
+					}
+				}
 
 				DM("+++ merged " << other << " into " << *this << std::endl);
 
@@ -199,6 +228,7 @@ namespace NP {
 
 			const bool job_ready(const Job_precedence_set& predecessors) const
 			{
+				CDM("Checking if job is ready: " <<std::endl);
 				for (auto j : predecessors)
 					if (!scheduled_jobs.contains(j))
 						return false;
@@ -237,6 +267,48 @@ namespace NP {
 				}
 				out << "}";
 			}
+
+			// Functions for pathwise self-suspending exploration
+
+			void del_pred(const Job_index pred_job)
+			{
+				job_finish_times.erase(pred_job);
+			}
+
+			void widen_pathwise_job(const JobID pred_job, const Interval<Time> ft)
+			{
+				auto it = job_finish_times.find(pred_job);
+				if (it != job_finish_times.end()) {
+					(it->second).widen(ft);
+				}
+			}
+
+			bool pathwisejob_exists(const JobID pred_job) const
+			{
+				auto it = job_finish_times.find(pred_job);
+				if (it != job_finish_times.end()) {
+					return true;
+				}
+				return false;
+			}
+
+			const Interval<Time>& get_pathwisejob_ft(const Job_index pathwise_job) const
+			{
+				CDM("get_pathwisejob_ft: " << pathwise_job << std::endl);
+				return job_finish_times.find(pathwise_job)->second;
+			}
+
+			const JobID& get_pathwisejob_job(const JobID& pathwise_job) const
+			{
+				return job_finish_times.find(pathwise_job)->first;
+			}
+
+			const JobFinishTimes& get_pathwise_jobs() const
+			{
+				return job_finish_times;
+			}
+
+			// End of functions for pathwise self-suspending exploration
 
 			private:
 
