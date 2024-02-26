@@ -191,11 +191,9 @@ TEST_CASE("[susp] General Pathwise Uniprocessor Difference") {
 	CHECK(pw_nspace.is_schedulable());
 }
 
-TEST_CASE("[susp] Uniproc Global Schedulability Check") {
-	auto susp_dag_in = std::istringstream(uniproc_sn_susp_g_pw_diff_file);
-	auto in = std::istringstream(uniproc_sn_susp_jobs_g_pw_diff_file);
-	auto dag_in  = std::istringstream("\n");
-	auto aborts_in = std::istringstream("\n");
+TEST_CASE("[susp] Uniproc Global Schedulability Check (sn_susp)") {
+	auto susp_dag_in = std::istringstream(uniproc_sn_susp_dag_file);
+	auto in = std::istringstream(uniproc_sn_susp_jobs_file);
 
 	Scheduling_problem<dtime_t> prob{
 		parse_file<dtime_t>(in),
@@ -212,4 +210,57 @@ TEST_CASE("[susp] Uniproc Global Schedulability Check") {
 
 	auto gspace = NP::Global::State_space<dtime_t>::explore(prob, opts);
 	CHECK(gspace.is_schedulable());
+
+	for (const Job<dtime_t>& j : prob.jobs) {
+		CDM("Job " << j << " " << uspace.get_finish_times(j) << " " << gspace.get_finish_times(j) << "\n");
+		CHECK(uspace.get_finish_times(j) == gspace.get_finish_times(j));
+	}
 }
+
+TEST_CASE("[susp] Uniproc Global Schedulability Check (g_pw_diff)") {
+	auto susp_dag_in = std::istringstream(uniproc_sn_susp_g_pw_diff_file);
+	auto in = std::istringstream(uniproc_sn_susp_jobs_g_pw_diff_file);
+
+	Scheduling_problem<dtime_t> prob{
+		parse_file<dtime_t>(in),
+		parse_suspending_file<dtime_t>(susp_dag_in)};
+
+	Analysis_options opts;
+
+	opts.use_self_suspensions = PATHWISE_SUSP;
+	auto uspace = Uniproc::State_space<dtime_t>::explore(prob, opts);
+	CHECK(uspace.is_schedulable());
+
+	prob.num_processors = 1;
+	opts.be_naive = false;
+
+	auto gspace = NP::Global::State_space<dtime_t>::explore(prob, opts);
+	CHECK(gspace.is_schedulable());
+
+	for (const Job<dtime_t>& j : prob.jobs) {
+		CDM("Job " << j << " " << uspace.get_finish_times(j) << " " << gspace.get_finish_times(j) << "\n");
+		CHECK(uspace.get_finish_times(j) == gspace.get_finish_times(j));
+	}
+}
+
+TEST_CASE("[susp] Uniproc Global Schedulability Check (anomaly)") {
+	auto susp_dag_in = std::istringstream(uniproc_sn_susp_dag_anomaly_file);
+	auto in = std::istringstream(uniproc_sn_susp_jobs_anomaly_file);
+
+	Scheduling_problem<dtime_t> prob{
+		parse_file<dtime_t>(in),
+		parse_suspending_file<dtime_t>(susp_dag_in)};
+
+	Analysis_options opts;
+
+	opts.use_self_suspensions = PATHWISE_SUSP;
+	auto uspace = Uniproc::State_space<dtime_t>::explore(prob, opts);
+	CHECK(!(uspace.is_schedulable()));
+
+	prob.num_processors = 1;
+	opts.be_naive = false;
+
+	auto gspace = NP::Global::State_space<dtime_t>::explore(prob, opts);
+	CHECK(!(gspace.is_schedulable()));
+}
+

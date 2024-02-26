@@ -623,20 +623,20 @@ namespace NP {
 			{
 				const suspending_task_list fsusps = to_suspending_tasks[index_of(j)];
 				Time seft = 0;
-				assert(susp_ready(s,j));
+				assert(susp_ready(s, j));
 
-				for(auto e: fsusps)
+				for (auto e : fsusps)
 				{
 					Interval<Time> rbounds = get_finish_times(lookup<Time>(jobs, e->get_fromID()));
-					CDM(e->get_fromID() << " rbounds: " << rbounds << std::endl);
-					if(wants_self_suspensions == PATHWISE_SUSP)
-						rbounds = s.get_pathwisejob_ft(index_of(lookup<Time>(jobs, e->get_toID())));
+					if (wants_self_suspensions == PATHWISE_SUSP)
+						rbounds = s.get_pathwisejob_ft(index_of(lookup<Time>(jobs, e->get_fromID())));
 
-					if(seft <= (rbounds.from() + e->get_minsus()))
+					if (seft <= (rbounds.from() + e->get_minsus()))
 					{
 						seft = rbounds.from() + e->get_minsus();
 					}
 				}
+
 				return seft;
 			}
 
@@ -650,13 +650,14 @@ namespace NP {
 				{
 					Interval<Time> rbounds = get_finish_times(lookup<Time>(jobs, e->get_fromID()));
 					if(wants_self_suspensions == PATHWISE_SUSP)
-						rbounds = s.get_pathwisejob_ft(index_of(lookup<Time>(jobs, e->get_toID())));
+						rbounds = s.get_pathwisejob_ft(index_of(lookup<Time>(jobs, e->get_fromID())));
 
-					if(slft >= (rbounds.until() - e->get_maxsus()))
+					if(slft <= (rbounds.until() + e->get_maxsus()))
 					{
-						slft = rbounds.until() - e->get_maxsus();
+						slft = rbounds.until() + e->get_maxsus();
 					}
 				}
+
 				return slft;
 			}
 
@@ -692,13 +693,17 @@ namespace NP {
 					r.lower_bound(ft.min());
 					r.extend_to(ft.max());
 				}
-				if(r.from() < get_seft(s,j))
+				if (r.from() < get_seft(s, j))
 				{
-					r.lower_bound(get_seft(s,j));
+					Time oldFrom = r.from();
+					r.lower_bound(get_seft(s, j));
+					Time newFrom = r.from();
 				}
-				if(r.until() < get_slft(s,j))
+				if (r.until() < get_slft(s, j))
 				{
-					r.extend_to(get_slft(s,j));
+					Time oldUntil = r.until();
+					r.extend_to(get_slft(s, j));
+					Time newUntil = r.until();
 				}
 				return r;
 			}
@@ -896,7 +901,6 @@ namespace NP {
 				auto t_min  = s.core_availability().min();
 				// latest time some unfinished job is certainly ready
 				auto t_job  = next_job_ready(s, t_min);
-				CDM("t_min: " << t_min << std::endl);
 				// latest time some core is certainly available
 				auto t_core = s.core_availability().max();
 				// latest time by which a work-conserving scheduler

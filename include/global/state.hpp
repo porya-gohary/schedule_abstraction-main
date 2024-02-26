@@ -108,10 +108,6 @@ namespace NP {
 				}
 
 				job_finish_times.emplace(j, finish_times);
-				CDM("JobFiunishTimes");
-				for (const auto& job : job_finish_times) {
-					CDM("Job: " << job.first << ", Finish Times: " << job.second << std::endl);
-				}
 
 				assert(core_avail.size() > 0);
 				DM("*** new state: constructed " << *this << std::endl);
@@ -228,7 +224,6 @@ namespace NP {
 
 			const bool job_ready(const Job_precedence_set& predecessors) const
 			{
-				CDM("Checking if job is ready: " <<std::endl);
 				for (auto j : predecessors)
 					if (!scheduled_jobs.contains(j))
 						return false;
@@ -294,7 +289,6 @@ namespace NP {
 
 			const Interval<Time>& get_pathwisejob_ft(const Job_index pathwise_job) const
 			{
-				CDM("get_pathwisejob_ft: " << pathwise_job << std::endl);
 				return job_finish_times.find(pathwise_job)->second;
 			}
 
