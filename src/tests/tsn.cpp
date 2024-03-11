@@ -76,12 +76,14 @@ const std::string TAS_varGB_dm_shaper_file =
 TEST_CASE("[TSN] Constant Guardband for TAS with no branching and IPG=0") {
 	auto jobs_in = std::istringstream(TAS_nobranch_packets_file);
 	auto dag_in  = std::istringstream("\n");
+	auto suspension_in = std::istringstream("\n");
 	auto aborts_in = std::istringstream("\n");
 	auto shaper_in = std::istringstream(TAS_constGB0_shaper_file);
 
 	Scheduling_problem<dtime_t> prob{
 		parse_file<dtime_t>(jobs_in),
 		parse_dag_file(dag_in),
+		parse_suspending_file<dtime_t>(suspension_in),
 		parse_abort_file<dtime_t>(aborts_in),
 		parse_tas_file<dtime_t>(shaper_in),
 		1
@@ -109,12 +111,14 @@ TEST_CASE("[TSN] Constant Guardband for TAS with no branching and IPG=0") {
 TEST_CASE("[TSN] Constant Guardband for TAS with no branching and IPG=1") {
 	auto jobs_in = std::istringstream(TAS_nobranch_packets_file);
 	auto dag_in  = std::istringstream("\n");
+	auto suspension_in = std::istringstream("\n");
 	auto aborts_in = std::istringstream("\n");
 	auto shaper_in = std::istringstream(TAS_constGB0_shaper_file);
 
 	Scheduling_problem<dtime_t> prob{
 		parse_file<dtime_t>(jobs_in),
 		parse_dag_file(dag_in),
+		parse_suspending_file<dtime_t>(suspension_in),
 		parse_abort_file<dtime_t>(aborts_in),
 		parse_tas_file<dtime_t>(shaper_in),
 		1
@@ -143,12 +147,14 @@ TEST_CASE("[TSN] Constant Guardband for TAS with no branching and IPG=1") {
 TEST_CASE("[TSN] Constant Guardband for TAS with branching and IPG=0") {
 	auto jobs_in = std::istringstream(TAS_branch_packets_file);
 	auto dag_in  = std::istringstream("\n");
+	auto suspension_in = std::istringstream("\n");
 	auto aborts_in = std::istringstream("\n");
 	auto shaper_in = std::istringstream(TAS_constGB0_shaper_file);
 
 	Scheduling_problem<dtime_t> prob{
 		parse_file<dtime_t>(jobs_in),
 		parse_dag_file(dag_in),
+		parse_suspending_file<dtime_t>(suspension_in),
 		parse_abort_file<dtime_t>(aborts_in),
 		parse_tas_file<dtime_t>(shaper_in),
 		1
@@ -180,12 +186,14 @@ TEST_CASE("[TSN] Constant Guardband for TAS with branching and IPG=0") {
 TEST_CASE("[TSN] Variable Guardband for TAS with no deadline miss and IPG=0") {
 	auto jobs_in = std::istringstream(TAS_nobranch_packets_file);
 	auto dag_in  = std::istringstream("\n");
+	auto suspension_in = std::istringstream("\n");
 	auto aborts_in = std::istringstream("\n");
 	auto shaper_in = std::istringstream(TAS_varGB_ndm_shaper_file);
 
 	Scheduling_problem<dtime_t> prob{
 		parse_file<dtime_t>(jobs_in),
 		parse_dag_file(dag_in),
+		parse_suspending_file<dtime_t>(suspension_in),
 		parse_abort_file<dtime_t>(aborts_in),
 		parse_tas_file<dtime_t>(shaper_in),
 		1
@@ -213,12 +221,14 @@ TEST_CASE("[TSN] Variable Guardband for TAS with no deadline miss and IPG=0") {
 TEST_CASE("[TSN] Variable Guardband for TAS with deadline miss and IPG=0") {
 	auto jobs_in = std::istringstream(TAS_nobranch_packets_file);
 	auto dag_in  = std::istringstream("\n");
+	auto suspension_in = std::istringstream("\n");
 	auto aborts_in = std::istringstream("\n");
 	auto shaper_in = std::istringstream(TAS_varGB_dm_shaper_file);
 
 	Scheduling_problem<dtime_t> prob{
 		parse_file<dtime_t>(jobs_in),
 		parse_dag_file(dag_in),
+		parse_suspending_file<dtime_t>(suspension_in),
 		parse_abort_file<dtime_t>(aborts_in),
 		parse_tas_file<dtime_t>(shaper_in),
 		1
@@ -260,12 +270,14 @@ const std::string TAS_hp_shaper_file =
 TEST_CASE("[TSN] Higher Prioirty Open Gate deletion from Eligible Transmission Interval") {
 	auto jobs_in = std::istringstream(TAS_hp_packets_file);
 	auto dag_in  = std::istringstream("\n");
+	auto suspension_in = std::istringstream("\n");
 	auto aborts_in = std::istringstream("\n");
 	auto shaper_in = std::istringstream(TAS_hp_shaper_file);
 
 	Scheduling_problem<dtime_t> prob{
 		parse_file<dtime_t>(jobs_in),
 		parse_dag_file(dag_in),
+		parse_suspending_file<dtime_t>(suspension_in),
 		parse_abort_file<dtime_t>(aborts_in),
 		parse_tas_file<dtime_t>(shaper_in),
 		1
@@ -307,12 +319,14 @@ const std::string od_check_shaper_file =
 TEST_CASE("[TSN] Check for Overlap Delete") {
 	auto jobs_in = std::istringstream(od_check_packets_file);
 	auto dag_in  = std::istringstream("\n");
+	auto suspension_in = std::istringstream("\n");
 	auto aborts_in = std::istringstream("\n");
 	auto shaper_in = std::istringstream(od_check_shaper_file);
 
 	Scheduling_problem<dtime_t> prob{
 		parse_file<dtime_t>(jobs_in),
 		parse_dag_file(dag_in),
+		parse_suspending_file<dtime_t>(suspension_in),
 		parse_abort_file<dtime_t>(aborts_in),
 		parse_tas_file<dtime_t>(shaper_in),
 		1

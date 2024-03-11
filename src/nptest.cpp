@@ -180,9 +180,9 @@ static Analysis_result process_stream(
 	else if (!want_dense && want_cw_iip)
 		return analyze<dtime_t, NP::UniprocIIP::State_space<dtime_t, NP::UniprocIIP::Critical_window_IIP<dtime_t>>>(in, dag_in, selfsuspending_in, aborts_in, shaper_in);
 	else if (want_tsn && !want_dense)
-		return analyze<dtime_t, NP::TSN::State_space<dtime_t>>(in, dag_in, aborts_in, shaper_in);
+	        return analyze<dtime_t, NP::TSN::State_space<dtime_t>>(in, dag_in, selfsuspending_in, aborts_in, shaper_in);
 	else if (want_tsn && want_dense)
-		return analyze<dense_t, NP::TSN::State_space<dense_t>>(in, dag_in, aborts_in, shaper_in);
+	        return analyze<dense_t, NP::TSN::State_space<dense_t>>(in, dag_in, selfsuspending_in, aborts_in, shaper_in);
 	else
 		return analyze<dtime_t, NP::Uniproc::State_space<dtime_t>>(in, dag_in, selfsuspending_in, aborts_in, shaper_in);
 }
