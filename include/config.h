@@ -2,7 +2,7 @@
 #define CONFIG_H
 
 // DM : debug message -- disable for now
-// #define DM(x) std::cerr << x
+//#define DM(x) std::cerr << x
 #define DM(x)
 
 // CDM: custom debug message -- this is used only when certain DM messages

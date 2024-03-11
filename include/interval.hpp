@@ -5,6 +5,10 @@
 #include <ostream>
 #include <memory>
 #include <vector>
+#include <limits>
+#include <ciso646>
+
+#include "time.hpp"
 
 template<class T> class Interval {
 	T a, b;
@@ -73,9 +77,29 @@ template<class T> class Interval {
 		return from() <= point && point <= until();
 	}
 
+	bool disjoint_before(const Interval<T>& other) const
+	{
+		return other.until() < from();
+	}
+
+	bool disjoint_after(const Interval<T>& other) const
+	{
+		return until() < other.from();
+	}
+
+	bool overlap(const Interval<T>& other) const
+	{
+		return (not (disjoint_before(other)) || (disjoint_after(other)));
+	}
+
 	bool disjoint(const Interval<T>& other) const
 	{
-		return (other.until()+1) < from() || (until()+1) < other.from();
+		//consecutive intervals are not considered to be disjoint
+		// eg. [2,3] and [4,5] is not considered disjoint, this can be merged to form [2,5]
+		bool disjoint;
+		disjoint = (other.until() + Time_model::constants<T>::epsilon()) < from() ||
+                               (until() + Time_model::constants<T>::epsilon()) < other.from();
+		return disjoint;
 	}
 
 	bool intersects(const Interval<T>& other) const
