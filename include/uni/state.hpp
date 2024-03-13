@@ -33,6 +33,10 @@ namespace NP {
 			// no accidental copies
 			Schedule_state(const Schedule_state& origin)  = delete;
 
+
+			// #NS# job_finish_times holds the finish times of all the jobs that still have unscheduled successor
+			// It does not need to remember this all the time, there can be a flag that says i don't need anything to be remembered
+			// and in those cases these are not assigned any value.
 			typedef typename std::unordered_map<JobID, Interval<Time>> JobFinishTimes;
 			JobFinishTimes job_finish_times;
 
@@ -86,6 +90,7 @@ namespace NP {
 				finish_time.equate(newst);
 			}
 
+			// #NS# all the following functions are purely to handle the job_finish_times
 			void add_pred(const JobID pred_job, Interval<Time> ft)
 			{
 				job_finish_times.emplace(pred_job, ft);
@@ -263,6 +268,9 @@ namespace NP {
 
 			bool merge_states(const Interval<Time> &new_st, const Schedule_state<Time> &from, const Job<Time>& sched_job)
 			{
+				// #NS# I am sorry for this merge function, but I am not sure how to make it better. This merge funciton is messy
+				// because I am trying to merge if possible, before even creating a new state so that I don't have to create a new state
+				// and then throw it away if it can be merged cause i do not know how to handle memory management in that case.
 				for (auto& state : states)
 				{
 					if (new_st.intersects(state->finish_range()))

@@ -249,6 +249,10 @@ namespace NP {
 
 			std::vector<const Abort_action<Time>*> abort_actions;
 
+
+			// #NS# The following variables are used for self-suspending tasks, and this is a very very messy way to store things 
+			// #NS# but it works for now.
+			
 			// In order to store the componenets of the self-suspending tasks, we create a vector of a vector of references
 			// to_suspending_tasks: for each successor, a list of predeccessors are present 
 			// from/_suspending_tasks: for each predecessor, a list of successors are present
@@ -584,6 +588,8 @@ namespace NP {
 				return n.get_scheduled_jobs().includes(preds);
 			}
 
+			// #NS# The following funcitons namely, susp_ready and susp_ready_at are used for self-suspending jobs
+			// Again there are loops here that can be done better
 			// returns true if all predecessors of j have completed in state s for self-suspending tasks
 			bool susp_ready(const Node &n, const Job<Time> &j)
 			{
@@ -591,7 +597,7 @@ namespace NP {
 				
 				for(auto e : fsusps)
 				{
-					if(!n.get_scheduled_jobs().contains(index_of(lookup<Time>(jobs, e->get_fromID()))))
+					if(!n.get_scheduled_jobs().contains(index_of(lookup<Time>(jobs, e->get_fromID())))) //#NS# Does all this need to be in contains() There should be a better way
 						return false;
 				}
 				return true;
@@ -603,7 +609,7 @@ namespace NP {
 
 				for (auto e : fsusps)
 				{
-					if (!n.get_scheduled_jobs().contains(index_of(lookup<Time>(jobs, e->get_fromID()))))
+					if (!n.get_scheduled_jobs().contains(index_of(lookup<Time>(jobs, e->get_fromID())))) //#NS# Does all this need to be in contains() There should be a better way
 						return false;
 					else{
 						if (get_slft(n,s,j) > at)
@@ -855,6 +861,8 @@ namespace NP {
 			// Rules for finding the next state //
 			//////////////////////////////////////
 
+			// #NS# The following funcitons, namely get_seft and get_slft are used for self-suspending jobs
+			// Here I do not think anything other than pathwise is needed anymore
 			Time get_seft(const Node &n, const State &s, const Job<Time>& j)
 			{
 				const suspending_tasks_list fsusps = to_suspending_tasks[index_of(j)];
@@ -864,7 +872,7 @@ namespace NP {
 				for(auto e : fsusps)
 				{
 					Interval<Time> rbounds = get_finish_times(lookup<Time>(jobs, e->get_fromID()));
-					if(want_self_suspensions == PATHWISE_SUSP)
+					if(want_self_suspensions == PATHWISE_SUSP) // #NS# The rbounds assignment inside this if should always happen
 						rbounds = s.get_pathwisejob_ft(e->get_fromID());
 
 					if(seft <= (rbounds.from() + e->get_minsus()))
@@ -883,7 +891,7 @@ namespace NP {
 				for(auto e : fsusps)
 				{
 					Interval<Time> rbounds = get_finish_times(lookup<Time>(jobs, e->get_fromID()));
-					if(want_self_suspensions == PATHWISE_SUSP)
+					if(want_self_suspensions == PATHWISE_SUSP) // #NS# The rbounds assignment inside this if should always happen
 						rbounds = s.get_pathwisejob_ft(e->get_fromID());
 
 					if(slft <= (rbounds.until() + e->get_maxsus()))
@@ -925,6 +933,8 @@ namespace NP {
 
 			Interval<Time> next_finish_times(const Node &n, const State &s, const Job<Time> &j, Time lst)
 			{
+				// #NS# This function I messed with again, it takes in lst as a parameter which I don't think it should
+				// maybe a better way to write this funciton?
 				auto i = index_of(j);
 
 				if (abort_actions[i]) {
@@ -1119,6 +1129,7 @@ namespace NP {
 
 			void explore()
 			{
+				// #NS# The main workflow of building the graph starts from here
 				make_initial_node();
 
 				while (not_done() && !aborted) 
@@ -1134,6 +1145,7 @@ namespace NP {
 					// Obtain all the states in Node n
 					const auto *n_states = n.get_states();
 
+					// #NS# All statemenst below are to be calculated once per node and they are done that way 
 					// the earliest of all the efts of each state in node n
 					auto eft_min = (n.get_first_state())->earliest_finish_time();
 					// The earliest job release in node n
@@ -1152,6 +1164,10 @@ namespace NP {
 					// can be expanded, we incremet this variable
 					int num_states_expanded = 0;
 
+					// #NS# the loop below is very messy, essentially I want to check for all the jobs that have not been scheduled next
+					// are they the next potential job to be scheduled, for each state in the node. If they are, then a new state is created
+					// and is either merged, added to the node or a new node is created. 
+					// I did it this way because so that I can use the atleast_one_node variable below, merge might be easier this way?
 					const Job<Time>* jp;
 					foreach_possbly_pending_job_until(n, jp, next_range.upto())
 					{
@@ -1176,16 +1192,26 @@ namespace NP {
 								// latest start time which uses t_wc and t_high that was calculated before 
 								// looping through all the states.
 
-								// t_high is computed once per job, and is common to all the states explored
+								// #NS# t_high can be calculated once per job, per node. We do not need to calculate it for every state
+								// as it is the same for all states in the node.We do need to calculate it for every job though
 								Time t_high = next_certain_higher_priority_job_release(n,*s, j);
 
+								// #NS# Here, s->latest_finish_time() does need to be calculated once per state, but 
+								// next_certain_job_release is a bit problematic, as it can be calulated once per node, if tehre are no self-suspending
+								// tasks. If there are self-suspending tasks, then it has to be calculated once per state. More comments
+								// on this can be found in the next_certain_job_release function
 								Time t_wc = std::max(s->latest_finish_time(), next_certain_job_release(n, *s));
+
+								// #NS# lst is calculated once per state, becasue t_wc is calculated once per state
 								Time lst = std::min(t_wc, t_high-Time_model::constants<Time>::epsilon());
 
 								if(atleast_one_node == false)
 								{
 									// Find the key of the next state from state s connected by an edge with job j
 									// Find all states that have the same key
+									// #NS# I wrote three different schedule functions to handle the three different cases
+									// but this can be made better I guess cause they all do very similar things
+									// The three similar functions are schedule_merge_node, schedule_merge_edge and schedule_new
 									auto k = n.next_key(j);
 									auto r = nodes_by_key.equal_range(k);
 
