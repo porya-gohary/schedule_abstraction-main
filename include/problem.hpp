@@ -54,7 +54,7 @@ namespace NP {
 		, sts(sts)
 		{
 			assert(num_processors > 0);
-			validate_susp_refs<Time>(sts, jobs);
+			validate_susp_refs<Time>(this->sts, jobs);
 		}
 
 		// Constructor with abort actions and precedence constraints
@@ -87,7 +87,7 @@ namespace NP {
 			assert(num_processors > 0);
 			validate_prec_refs<Time>(dag, jobs);
 			validate_abort_refs<Time>(aborts, jobs);
-			validate_susp_refs<Time>(sts, jobs);
+			validate_susp_refs<Time>(this->sts, jobs);
 			validate_tas_refs<Time>(tasQueues, jobs);
 		}
 

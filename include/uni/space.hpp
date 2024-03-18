@@ -85,11 +85,21 @@ namespace NP {
 			// and returns the finish time interval if j is found else returns the interval[0,infinity]
 			Interval<Time> get_finish_times(const Job<Time>& j) const
 			{
-				auto rbounds = rta.find(j.get_id());
-				if (rbounds == rta.end()) {
+				auto rt_item = rta[j.get_job_index()];
+				if (!rt_item.valid) {
 					return Interval<Time>{0, Time_model::constants<Time>::infinity()};
 				} else {
-					return rbounds->second;
+					return rt_item.rt;
+				}
+			}
+		  
+			Interval<Time> get_finish_times(Job_index j) const
+			{
+				auto rt_item = rta[j];
+				if (!rt_item.valid) {
+					return Interval<Time>{0, Time_model::constants<Time>::infinity()};
+				} else {
+					return rt_item.rt;
 				}
 			}
 
@@ -135,9 +145,10 @@ namespace NP {
 			// There is no information stored in an edge that is necessary for building the graph or furthering the analysis.
 			// It is only required when a DOT file is to be generated so that the graphical version of the
 			// abstraction graph can be represented with edges.
+		  // RV:  replaced State with Node
 			struct Edge {
 				const Job<Time>* scheduled;
-				const Node* source;
+				const Node* source;  
 				const Node* target;
 				const Interval<Time> finish_range;
 
@@ -182,6 +193,7 @@ namespace NP {
 				return edges;
 			}
 
+		  // RV: replaced State with Node
 			const std::deque<Node>& get_nodes() const
 			{
 				return nodes;
@@ -192,6 +204,7 @@ namespace NP {
 
 			typedef Job_set Scheduled;
 
+		  // RV: added Node
 			typedef std::deque<Node> Nodes;
 
 			// All the states created through the making of the schedule abstrcation graph are stored in States.
@@ -206,11 +219,12 @@ namespace NP {
 			// typedef defined in jobs.hpp that allows for creating a unique key for each node. A variable called the
 			// nodes_by_key is created using Nodes_map. When a new node is made it is added to the map.
 			// The use of Nodes_map can be found in new_node(), done_with_current_state() ad schedule().
+		  // RV: unordered_multimap might not be optimal. Some sorted list of tree structure might be useful.
 			typedef std::unordered_multimap<hash_value_t, Node_ref> Nodes_map;
 
 			typedef const Job<Time>* Job_ref;
 
-			// By_time_map stores ll the jobs along with a partiular time. there are three variables of type By_time_map.
+			// By_time_map stores all the jobs along with a particular time. there are three variables of type By_time_map.
 			// The three variables jobs_by_latest_arrival, jobs_by_earliest_arrival and jobs_by_deadline each store the job
 			// along with the latest arrival time, earliest arrival time and the deadline respectively.
 			typedef std::multimap<Time, Job_ref> By_time_map;
@@ -223,7 +237,21 @@ namespace NP {
 			typedef std::deque<Node_ref> Todo_queue;
 
 			// Response_times stores and updates the finish time intervals of the jobs as the graph is being built
-			typedef std::unordered_map<JobID, Interval<Time> > Response_times;
+			// RV: Response_times was there before supernodes. How does this work in global?
+			//     global/space.hpp uses JobID here. Not sure whether Job_index would work better.
+			//     The rta structure will contain the response times of all jobs.
+			//     Instead of using a map with JobID and search, a vector can be used with Job_index as index.
+			struct Response_time_item  {
+				bool valid;  // RV: is rt valid for the given Job_index?
+				Interval<Time> rt;
+
+				Response_time_item()
+					: valid(false)
+					, rt(0,0)
+				{
+				}
+			};
+			typedef std::vector<Response_time_item> Response_times;
 
 			typedef std::vector<std::size_t> Job_precedence_set;
 
@@ -241,13 +269,21 @@ namespace NP {
 
 			const Workload& jobs;
 
-			std::vector<Job_precedence_set> job_precedence_sets;
+			// RV: in global, these maps have a const version, to prevent accidental changes.
+			//     Added here as well.
+			std::vector<Job_precedence_set> _job_precedence_sets;
 
-			By_time_map jobs_by_latest_arrival;
-			By_time_map jobs_by_earliest_arrival;
-			By_time_map jobs_by_deadline;
-
+			By_time_map _jobs_by_latest_arrival;
+			By_time_map _jobs_by_earliest_arrival;
+			By_time_map _jobs_by_deadline;
+			// RV: global/space.hpp also has jobs_by_win .
+			//     global_space.hpp doesn't have abort_actions. 
 			std::vector<const Abort_action<Time>*> abort_actions;
+
+			const By_time_map& jobs_by_latest_arrival;
+			const By_time_map& jobs_by_earliest_arrival;
+			const By_time_map& jobs_by_deadline;
+			const std::vector<Job_precedence_set>& job_precedence_sets;
 
 
 			// #NS# The following variables are used for self-suspending tasks, and this is a very very messy way to store things 
@@ -256,9 +292,17 @@ namespace NP {
 			// In order to store the componenets of the self-suspending tasks, we create a vector of a vector of references
 			// to_suspending_tasks: for each successor, a list of predeccessors are present 
 			// from/_suspending_tasks: for each predecessor, a list of successors are present
-			typedef std::vector<const Suspending_Task<Time>*> suspending_tasks_list;
-			std::vector<suspending_tasks_list> to_suspending_tasks;
-			std::vector<suspending_tasks_list> from_suspending_tasks;
+			// RV: the suspending_tasks_list might include Job_index, next to JobID.
+			//     the to_suspending_tasks and from_suspending_tasks might have the const protection.
+			typedef std::vector<const Suspending_Task<Time>*> suspending_tasks_to_list;
+			typedef std::vector<Job_index> suspending_tasks_from_list;
+
+			std::vector<suspending_tasks_to_list> _to_suspending_tasks;
+			std::vector<suspending_tasks_from_list> _from_suspending_tasks;
+
+			const std::vector<suspending_tasks_to_list>& to_suspending_tasks;
+			const std::vector<suspending_tasks_from_list>& from_suspending_tasks;
+
 
 			Nodes nodes;
 			States states;
@@ -303,9 +347,16 @@ namespace NP {
 			, width(0)
 			, todo_idx(0)
 			, current_job_count(0)
-			, job_precedence_sets(jobs.size())
-			, to_suspending_tasks(jobs.size())
-			, from_suspending_tasks(jobs.size())
+			, rta(jobs.size())
+			, jobs_by_latest_arrival(_jobs_by_latest_arrival)
+			, jobs_by_earliest_arrival(_jobs_by_earliest_arrival)
+			, jobs_by_deadline(_jobs_by_deadline)
+			, _job_precedence_sets(jobs.size())
+			, _to_suspending_tasks(jobs.size())
+			, _from_suspending_tasks(jobs.size())
+			, job_precedence_sets(_job_precedence_sets)
+			, to_suspending_tasks(_to_suspending_tasks)
+			, from_suspending_tasks(_from_suspending_tasks)
 			, early_exit(early_exit)
 			, want_self_suspensions(use_self_suspensions)
 			, observed_deadline_miss(false)
@@ -313,26 +364,22 @@ namespace NP {
 			, use_supernodes(use_supernodes)
 			{
 				for (const Job<Time>& j : jobs) {
-					jobs_by_latest_arrival.insert({j.latest_arrival(), &j});
-					jobs_by_earliest_arrival.insert({j.earliest_arrival(), &j});
-					jobs_by_deadline.insert({j.get_deadline(), &j});
+					_jobs_by_latest_arrival.insert({j.latest_arrival(), &j});
+					_jobs_by_earliest_arrival.insert({j.earliest_arrival(), &j});
+					_jobs_by_deadline.insert({j.get_deadline(), &j});
 				}
 				for (auto e : dag_edges) {
 					const Job<Time>& from = lookup<Time>(jobs, e.first);
 					const Job<Time>& to   = lookup<Time>(jobs, e.second);
-					job_precedence_sets[index_of(to)].push_back(index_of(from));
+					_job_precedence_sets[to.get_job_index()].push_back(from.get_job_index());
 				}
 				for (const Suspending_Task<Time>& st : susps) {
-					const Job<Time>& to = lookup<Time>(jobs, st.get_toID());
-					to_suspending_tasks[index_of(to)].push_back(&st);
-				}
-				for (const Suspending_Task<Time>& st : susps) {
-					const Job<Time>& from = lookup<Time>(jobs, st.get_fromID());
-					from_suspending_tasks[index_of(from)].push_back(&st);
+					_to_suspending_tasks[st.get_toIndex()].push_back(&st);
+					_from_suspending_tasks[st.get_fromIndex()].push_back(st.get_toIndex());
 				}
 				for (const Abort_action<Time>& a : aborts) {
 					const Job<Time>& j = lookup<Time>(jobs, a.get_id());
-					abort_actions[index_of(j)] = &a;
+					abort_actions[j.get_job_index()] = &a;
 				}
 			}
 
@@ -353,33 +400,42 @@ namespace NP {
 			// to rta along with its finish time interval
 			void update_finish_times(const Job<Time>& j, Interval<Time> range)
 			{
-				auto rbounds = rta.find(j.get_id());
-				if (rbounds == rta.end()) {
-					rta.emplace(j.get_id(), range);
+				Job_index jidx = j.get_job_index();
+				Response_time_item* rt_item = &(rta[jidx]);
+				if (!rt_item->valid) {
+					rt_item->valid=true;
+					rt_item->rt = range;
 					if (j.exceeds_deadline(range.upto()))
 						observed_deadline_miss = true;
 				} else {
-					rbounds->second.widen(range);
-					if (j.exceeds_deadline(rbounds->second.upto()))
+					rt_item->rt.widen(range);
+					if (j.exceeds_deadline(rt_item->rt.upto()))
 						observed_deadline_miss = true;
 				}
 				DM("      New finish time range for " << j
-				   << ": " << rta.find(j.get_id())->second << std::endl);
+				   << ": " << rt_item->rt << std::endl);
 
 				if (early_exit && observed_deadline_miss)
 					aborted = true;
 			}
 
-			// The address of j is subtracted from the first elemet of jobs to find the distance between the two ie., index
+			// Old: the address of j is subtracted from the first element of jobs to find the distance between the two ie., index
+			// New: job has an attribute for job_index, which is the position within the workload file.
 			std::size_t index_of(const Job<Time>& j) const
 			{
-				return (std::size_t) (&j - &(jobs[0]));
+				// return (std::size_t) (&j - &(jobs[0]));
+				return j.get_job_index();
 			}
 
 			// incomplete() checks to see that a job j jas not been scheduled yet.
 			bool incomplete(const Scheduled &scheduled, const Job<Time>& j) const
 			{
-				return !scheduled.contains(index_of(j));
+				return !scheduled.contains(j.get_job_index());
+			}
+
+			bool incomplete(const Scheduled &scheduled, Job_index j) const
+			{
+				return !scheduled.contains(j);
 			}
 
 			bool incomplete(const Node& n, const Job<Time>& j) const
@@ -387,11 +443,17 @@ namespace NP {
 				return incomplete(n.get_scheduled_jobs(), j);
 			}
 
+			bool incomplete(const Node& n, Job_index j) const
+			{
+				return incomplete(n.get_scheduled_jobs(), jobs[j]);
+			}
+
 			// find next time by which a job is certainly released
 			// The next certainly released job is found for a particular node, irrespective of prioirty. It is 
 			// first checked to see if it in incomplete and then if IIP exists, it checks for IIp eligibility 
 			// and also prioirty eligibility in case of IIP. The value returned is either the latest arrival 
 			// of a job found and if no job is found infinity is returned.
+			// RV:  IIP is no longer supported.
 			Time next_certain_job_release(const Node& n, const State &s)
 			{
 				const Scheduled &already_scheduled = n.get_scheduled_jobs();
@@ -426,6 +488,8 @@ namespace NP {
 			// prioirty job instead of checking for iip eligibility. It also looks for a higher prioirty certain next 
 			// release which means that it is not looking for the earliest certain release in the entire node, but the 
 			// earliest higher prioirty certain job release based on job reference_job
+			// RV: if it is similar to next_certain_job_release, except for some IIP condition, would the function
+			//     be relevant if IIP is no longer supported (or is located in the include/uni_iip directory).
 			Time next_certain_higher_priority_job_release(
 				const Node& n,
 				const State& s,
@@ -583,7 +647,7 @@ namespace NP {
 			bool ready(const Node &n, const Job<Time> &j)
 			{
 				const Job_precedence_set &preds =
-					job_precedence_sets[index_of(j)];
+					job_precedence_sets[j.get_job_index()];
 				// check that all predecessors have completed
 				return n.get_scheduled_jobs().includes(preds);
 			}
@@ -593,11 +657,11 @@ namespace NP {
 			// returns true if all predecessors of j have completed in state s for self-suspending tasks
 			bool susp_ready(const Node &n, const Job<Time> &j)
 			{
-				const suspending_tasks_list fsusps = to_suspending_tasks[index_of(j)];
+				const suspending_tasks_to_list fsusps = to_suspending_tasks[j.get_job_index()];
 				
 				for(auto e : fsusps)
 				{
-					if(!n.get_scheduled_jobs().contains(index_of(lookup<Time>(jobs, e->get_fromID())))) //#NS# Does all this need to be in contains() There should be a better way
+					if(!n.get_scheduled_jobs().contains(e->get_fromIndex())) //#NS# Does all this need to be in contains() There should be a better way
 						return false;
 				}
 				return true;
@@ -605,13 +669,17 @@ namespace NP {
 
 			bool susp_ready_at(const Node &n, const State &s, const Job<Time> &j, Time at)
 			{
-				const suspending_tasks_list fsusps = to_suspending_tasks[index_of(j)];
+				const suspending_tasks_to_list fsusps = to_suspending_tasks[j.get_job_index()];
 
 				for (auto e : fsusps)
 				{
-					if (!n.get_scheduled_jobs().contains(index_of(lookup<Time>(jobs, e->get_fromID())))) //#NS# Does all this need to be in contains() There should be a better way
+					// RV: this test doesn't use the at time.
+					if (!n.get_scheduled_jobs().contains(e->get_fromIndex())) //#NS# Does all this need to be in contains() There should be a better way
 						return false;
-					else{
+					else {
+					  // RV: This test doesn't refer to variable e.
+					  //     depends on execution times and length of fsusps whether moving the test
+					  //     before the loop makes sense.
 						if (get_slft(n,s,j) > at)
 							return false;
 					}
@@ -656,20 +724,23 @@ namespace NP {
 				return true;
 			}
 
+		  // RV: if all states have the same list of completed jobs,
+		  //     The jobsToRemove vector can be applied to all states of a node and stored in a node.
+		  //     remove_jobs_with_no_successors is called from new_state().
 			void remove_jobs_with_no_successors(State& s, const Node& n)
 			{
-				std::vector<JobID> jobsToRemove;
+				std::vector<Job_index> jobsToRemove;
 
 				for(auto job_info : s.get_pathwise_jobs())
 				{
 					DM("Checking job for removing with no predecessors " << job_info.first << std::endl);
-					JobID job_check = job_info.first;
+					Job_index job_check = job_info.first;
 					bool successor_pending = false;
 					
 					// Check if the code block exists before running the loop
-					if (from_suspending_tasks[index_of(lookup<Time>(jobs, job_check))].size() > 0) {
-						for (auto to_jobs : from_suspending_tasks[index_of(lookup<Time>(jobs, job_check))]) {
-							if(incomplete(n, lookup<Time>(jobs, to_jobs->get_toID())))
+					if (from_suspending_tasks[job_check].size() > 0) {
+						for (auto to_jobs : from_suspending_tasks[job_check]) {
+							if(incomplete(n, to_jobs))
 							{
 								successor_pending = true;
 								break;
@@ -770,7 +841,7 @@ namespace NP {
 				{
 					DM("Adding pred list to state "<< std::endl);
 					s_ref->add_pred_list(from.get_pathwise_jobs());
-					s_ref->add_pred(sched_job.get_id(), ftimes);
+					s_ref->add_pred(sched_job.get_job_index(), ftimes);
 					remove_jobs_with_no_successors(*s_ref,n);
 					DM("Pred list added to state "<< std::endl);
 				}
@@ -865,15 +936,15 @@ namespace NP {
 			// Here I do not think anything other than pathwise is needed anymore
 			Time get_seft(const Node &n, const State &s, const Job<Time>& j)
 			{
-				const suspending_tasks_list fsusps = to_suspending_tasks[index_of(j)];
+				const suspending_tasks_to_list fsusps = to_suspending_tasks[j.get_job_index()];
 				Time seft = 0;
 				assert(susp_ready(n, j));
 
 				for(auto e : fsusps)
 				{
-					Interval<Time> rbounds = get_finish_times(lookup<Time>(jobs, e->get_fromID()));
+					Interval<Time> rbounds = get_finish_times(jobs[e->get_fromIndex()]);
 					if(want_self_suspensions == PATHWISE_SUSP) // #NS# The rbounds assignment inside this if should always happen
-						rbounds = s.get_pathwisejob_ft(e->get_fromID());
+						rbounds = s.get_pathwisejob_ft(e->get_fromIndex());
 
 					if(seft <= (rbounds.from() + e->get_minsus()))
 					{
@@ -885,14 +956,14 @@ namespace NP {
 
 			Time get_slft(const Node &n, const State &s, const Job<Time>& j)
 			{
-				const suspending_tasks_list fsusps = to_suspending_tasks[index_of(j)];
+				const suspending_tasks_to_list fsusps = to_suspending_tasks[j.get_job_index()];
 				Time slft = 0;
 
 				for(auto e : fsusps)
 				{
-					Interval<Time> rbounds = get_finish_times(lookup<Time>(jobs, e->get_fromID()));
+					Interval<Time> rbounds = get_finish_times(e->get_fromIndex());
 					if(want_self_suspensions == PATHWISE_SUSP) // #NS# The rbounds assignment inside this if should always happen
-						rbounds = s.get_pathwisejob_ft(e->get_fromID());
+						rbounds = s.get_pathwisejob_ft(e->get_fromIndex());
 
 					if(slft <= (rbounds.until() + e->get_maxsus()))
 					{
@@ -935,7 +1006,7 @@ namespace NP {
 			{
 				// #NS# This function I messed with again, it takes in lst as a parameter which I don't think it should
 				// maybe a better way to write this funciton?
-				auto i = index_of(j);
+				auto i = j.get_job_index();
 
 				if (abort_actions[i]) {
 					// complicated case -- need to take aborts into account
@@ -998,7 +1069,7 @@ namespace NP {
 				Time lst = std::min(t_wc, t_high-Time_model::constants<Time>::epsilon());
 								
 				const Node& next =
-					new_node(n, s, j, index_of(j),
+					new_node(n, s, j, j.get_job_index(),
 							  next_finish_times(n, s, j, lst),
 							  earliest_possible_job_release(n, j));
 				DM("      -----> N" << (nodes.end() - nodes.begin())
@@ -1006,7 +1077,7 @@ namespace NP {
 				process_new_edge(n, next, j, next.finish_range());
 			}
 
-			// Start by making the intial node. While the graph has not finished building and is not aborted, we check to
+			// Start by making the initial node. While the graph has not finished building and is not aborted, we check to
 			// see how the states within each node is manipulated
 			void explore_naively()
 			{
@@ -1117,7 +1188,7 @@ namespace NP {
 				Interval<Time> finish_range = next_finish_times(n, s, j, lst);//requires lst
 				DM("Creating a new node"<<std::endl);
 				const Node& next =
-					 new_node(n, s, j, index_of(j),
+					new_node(n, s, j, j.get_job_index(),
 							  finish_range,
 							  earliest_possible_job_release(n, j));
 				DM("      -----> N" << (nodes.end() - nodes.begin()) << " " <<(todo[todo_idx].front() - nodes.begin() + 1)
@@ -1216,7 +1287,7 @@ namespace NP {
 									auto r = nodes_by_key.equal_range(k);
 
 									if(r.first != r.second) {
-										Job_set sched_jobs{n.get_scheduled_jobs(), index_of(j)};
+										Job_set sched_jobs{n.get_scheduled_jobs(), j.get_job_index()};
 										for(auto it = r.first; it != r.second; it++)
 										{
 											Node &found = *it->second;

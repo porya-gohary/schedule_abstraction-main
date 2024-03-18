@@ -19,7 +19,7 @@ const std::string four_lines =
 TEST_CASE("[dense time] job parser") {
 	auto in = std::istringstream(one_line);
 
-	NP::Job<dense_t> j = NP::parse_job<dense_t>(in);
+	NP::Job<dense_t> j = NP::parse_job<dense_t>(in,0);
 
 	CHECK(j.get_job_id() == 6);
 	CHECK(j.get_priority() == 1);
@@ -29,7 +29,7 @@ TEST_CASE("[dense time] job parser") {
 TEST_CASE("[dense time] job parser exception") {
 	auto in = std::istringstream(bad_line);
 
-	REQUIRE_THROWS_AS(NP::parse_job<dense_t>(in), std::ios_base::failure);
+	REQUIRE_THROWS_AS(NP::parse_job<dense_t>(in,0), std::ios_base::failure);
 }
 
 TEST_CASE("[dense time] file parser") {
@@ -60,7 +60,7 @@ TEST_CASE("[dense time] file parser") {
 TEST_CASE("[disc time] don't parse dense files") {
 	auto in = std::istringstream(four_lines);
 
-	REQUIRE_THROWS_AS(NP::parse_job<dtime_t>(in), std::ios_base::failure);
+	REQUIRE_THROWS_AS(NP::parse_job<dtime_t>(in,0), std::ios_base::failure);
 }
 
 const std::string precedence_line = "1, 2, 3, 5";

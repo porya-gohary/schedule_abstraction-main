@@ -52,6 +52,8 @@ namespace NP {
 
 	inline void next_field(std::istream& in)
 	{
+	  // RV: The added while will consume any sequence of spaces and separators.
+	  //     Empty fields are not possible.
 		while(in.peek() == ',' || in.peek()==' ')
 		{
 			// eat up any trailing spaces
@@ -161,7 +163,7 @@ namespace NP {
 	}
 
 	//Functions that help parse the main job workload
-	template<class Time> Job<Time> parse_job(std::istream& in)
+	template<class Time> Job<Time> parse_job(std::istream& in, std::size_t idx)
 	{
 		unsigned long tid, jid;
 
@@ -190,7 +192,7 @@ namespace NP {
 		in.exceptions(state_before);
 
 		return Job<Time>{jid, Interval<Time>{arr_min, arr_max},
-						 Interval<Time>{cost_min, cost_max}, dl, prio, tid};
+						Interval<Time>{cost_min, cost_max}, dl, prio, tid, idx};
 	}
 
 	template<class Time>
@@ -200,9 +202,11 @@ namespace NP {
 		next_line(in);
 
 		typename Job<Time>::Job_set jobs;
+		std::size_t idx=0;
 
 		while (more_data(in)) {
-			jobs.push_back(parse_job<Time>(in));
+			jobs.push_back(parse_job<Time>(in, idx));
+			idx++;
 			// munge any trailing whitespace or extra columns
 			next_line(in);
 		}

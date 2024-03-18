@@ -192,6 +192,7 @@ namespace NP {
 #endif
 			private:
 
+		        // typedef State* State_ref;  // RV:  upstream:master
 			typedef typename std::deque<State>::iterator State_ref;
 			typedef typename std::forward_list<State_ref> State_refs;
 
@@ -247,6 +248,8 @@ namespace NP {
 			// In order to store the components of self-suspending tasks, we create a vector of a vector of references
 			// to_suspending_tasks: for each successor, a list of predecessors are present
 			// from_suspending_tasks: for each predecessor, a list of successors are present
+		        // RV: how is this used? Similar to definitions above, is a const reference useful?
+		        //     It might be useful to store the Job_index in the suspending_task_list.
 			typedef std::vector<const Suspending_Task<Time>*> suspending_task_list;
 			std::vector<suspending_task_list> to_suspending_tasks;
 			std::vector<suspending_task_list> from_suspending_tasks;
@@ -312,6 +315,9 @@ namespace NP {
 					_predecessors[index_of(to)].push_back(index_of(from));
 				}
 
+				// RV: initialization of to_suspending_tasks and from_suspending_tasks.
+				//     Is st.get_toID() equal to index_of(to) ?
+				//     Is _predecessors[] related to to_suspending_tasks[] ? 
 				for (const Suspending_Task<Time>& st : susps) {
 					const Job<Time>& to = lookup<Time>(jobs, st.get_toID());
 					to_suspending_tasks[index_of(to)].push_back(&st);
@@ -424,7 +430,11 @@ namespace NP {
 				}
 			}
 
-			void remove_jobs_with_no_successors(State& s)
+		        // RV: nested for loops. Unclear whether job_info.first == index_of(lookup(jobs, job_check_id)) .
+		        //     The code seems to use references to a Job and index_of a Job.
+		        //     Is "b=reverse_index_of(a); c=b.get_id(); d=lookup(jobs,c); e=index_of(d);" equal to "e=a;"?
+		        //     Can this function be called per node?
+		        void remove_jobs_with_no_successors(State& s)
 			{
 				std::vector<Job<Time>> jobsToRemove;
 				// remove jobs with no successors
@@ -432,6 +442,9 @@ namespace NP {
 					Job<Time> job_check = reverse_index_of(job_info.first);
 					JobID job_check_id = job_check.get_id();
 					bool successor_pending = false;
+					//unsigned long jif=job_info.first;
+					//unsigned long iol=index_of(lookup<Time>(jobs, job_check_id));
+					//std::cerr << "JIF: " << jif << ", iol: " << iol << "\n";
 					if (from_suspending_tasks[index_of(lookup<Time>(jobs, job_check_id))].size() > 0) {
 						for (auto to_jobs : from_suspending_tasks[index_of(lookup<Time>(jobs, job_check_id))]) {
 							if(s.job_incomplete(index_of(lookup<Time>(jobs, to_jobs->get_toID())))) {
@@ -471,6 +484,7 @@ namespace NP {
 			State_ref alloc_state(Args&&... args)
 			{
 				states().emplace_back(std::forward<Args>(args)...);
+				// State_ref s = &(*(--states().end()));   // RV:  gn:master
 				State_ref s = --states().end();
 
 				remove_jobs_with_no_successors(*s);
@@ -488,6 +502,7 @@ namespace NP {
 
 			void dealloc_state(State_ref s)
 			{
+			        // assert(&(*(--states().end())) == s);   // RV:  gn:master
 				assert(--states().end() == s);
 				states().pop_back();
 			}
@@ -605,6 +620,8 @@ namespace NP {
 				return unfinished(s, j) && s.job_ready(predecessors_of(j)) && susp_ready(s,j);
 			}
 
+		        // RV: if lookup() is time consuming and jobs is fixed, store the result in e.
+		        //     susp_ready() is used in assert() calls below, so performance might be relevant.
 			bool susp_ready(const State& s, const Job<Time>& j) const
 			{
 				const suspending_task_list fsusps = to_suspending_tasks[index_of(j)];
@@ -619,6 +636,7 @@ namespace NP {
 				return true;
 			}
 
+		  // RV:  index_of(lookup(jobs,e->get_fromID()))
 			Time get_seft(const State& s, const Job<Time>& j) const
 			{
 				const suspending_task_list fsusps = to_suspending_tasks[index_of(j)];
@@ -667,9 +685,12 @@ namespace NP {
 
 				for(auto e: fsusps)
 				{
+				  // RV: this test doesn't use the at time.
 					if(s.job_incomplete(index_of(lookup<Time>(jobs, e->get_fromID()))))
 						return false;
 					else{
+					  // RV: This test doesn't refer to variable e.
+					  //     It can be move outside the for loop if get_slft(s,j) doesn't change.
 						if(get_slft(s,j) > at)
 							return false;
 					}
@@ -693,6 +714,8 @@ namespace NP {
 					r.lower_bound(ft.min());
 					r.extend_to(ft.max());
 				}
+				// RV: oldFrom, newFrom, oldUntil and newUntil are unused.
+				//     are get_seft() and get_slft() results reused?
 				if (r.from() < get_seft(s, j))
 				{
 					Time oldFrom = r.from();
@@ -724,6 +747,7 @@ namespace NP {
 					r.lower_bound(ft.min());
 					r.extend_to(ft.max());
 				}
+				// RV: similar to previous ready_times()
 				if(r.from() < get_seft(s,j))
 					r.lower_bound(get_seft(s,j));
 				if(r.until() < get_slft(s,j))

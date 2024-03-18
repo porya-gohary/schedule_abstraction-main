@@ -21,6 +21,7 @@ namespace NP {
 		{
 			private:
 
+		  // RV: would another data structure improve access to job_finish_times?
 			typedef typename std::unordered_map<Job_index, Interval<Time>> JobFinishTimes;
 			JobFinishTimes job_finish_times;
 
@@ -50,6 +51,7 @@ namespace NP {
 			, lookup_key{from.lookup_key ^ key}
 			, job_finish_times{from.job_finish_times}
 			{
+			  // RV: check what changed in this function.
 				auto est = start_times.min();
 				auto lst = start_times.max();
 				auto eft = finish_times.min();
@@ -265,11 +267,16 @@ namespace NP {
 
 			// Functions for pathwise self-suspending exploration
 
+		        // RV:  note that job_finish_times is an unordered_map<Job_index, Interval<Time>>.
+		        //      similar to certain_jobs, it could use a vector<std::pair<Job_index,Interval<Time>>> .
+		        //      Check the impact on memory and computation time.
+		        //      Used operations:  find(), erase(), end().
 			void del_pred(const Job_index pred_job)
 			{
 				job_finish_times.erase(pred_job);
 			}
 
+		  // RV:  job_finish_times has Job_index, not JobID. Unclear how this works.
 			void widen_pathwise_job(const JobID pred_job, const Interval<Time> ft)
 			{
 				auto it = job_finish_times.find(pred_job);
@@ -278,6 +285,7 @@ namespace NP {
 				}
 			}
 
+		  // RV: Job_index instead of JobID?
 			bool pathwisejob_exists(const JobID pred_job) const
 			{
 				auto it = job_finish_times.find(pred_job);
@@ -292,6 +300,8 @@ namespace NP {
 				return job_finish_times.find(pathwise_job)->second;
 			}
 
+		  // RV: Job_index instead of JobID?
+		  //     This function would return the provided parameter, assuming it is found.
 			const JobID& get_pathwisejob_job(const JobID& pathwise_job) const
 			{
 				return job_finish_times.find(pathwise_job)->first;

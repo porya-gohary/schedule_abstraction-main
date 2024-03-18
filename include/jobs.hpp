@@ -13,6 +13,7 @@
 namespace NP {
 
 	typedef std::size_t hash_value_t;
+	typedef std::size_t Job_index;
 
 	struct JobID {
 		unsigned long job;
@@ -48,6 +49,7 @@ namespace NP {
 		Priority priority;
 		JobID id;
 		hash_value_t key;
+		Job_index index;  // RV: index in the jobs array of the workload.
 
 		void compute_hash() {
 			auto h = std::hash<Time>{};
@@ -66,9 +68,10 @@ namespace NP {
 		Job(unsigned long id,
 			Interval<Time> arr, Interval<Time> cost,
 			Time dl, Priority prio,
-			unsigned long tid = 0)
+			unsigned long tid = 0,
+			Job_index idx = 0)
 		: arrival(arr), cost(cost),
-		  deadline(dl), priority(prio), id(id, tid)
+		  deadline(dl), priority(prio), id(id, tid), index(idx)
 		{
 			compute_hash();
 		}
@@ -143,6 +146,11 @@ namespace NP {
 		bool is(const JobID& search_id) const
 		{
 			return this->id == search_id;
+		}
+
+		Job_index get_job_index() const
+		{
+			return index;
 		}
 
 		bool higher_priority_than(const Job &other) const

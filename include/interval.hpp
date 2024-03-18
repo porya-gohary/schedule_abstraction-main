@@ -87,6 +87,8 @@ template<class T> class Interval {
 		return until() < other.from();
 	}
 
+  // RV:  note that  " a.overlap(b) "  is not equal to " !(a.disjoint(b) "
+  //      mixing calls to overlap() and disjoint() might be confusing.
 	bool overlap(const Interval<T>& other) const
 	{
 		return (not (disjoint_before(other)) || (disjoint_after(other)));

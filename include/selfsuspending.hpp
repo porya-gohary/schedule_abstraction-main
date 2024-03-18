@@ -41,9 +41,33 @@ namespace NP {
 			return sus_times.until();
 		}
 
+		void set_toIndex(Job_index index)
+	  	{
+			toIndex = index;
+		}
+
+		Job_index get_toIndex() const
+		{
+			return toIndex;
+		}
+
+		void set_fromIndex(Job_index index)
+	  	{
+			fromIndex = index;
+		}
+
+		Job_index get_fromIndex() const
+		{
+			return fromIndex;
+		}
+
 	private:
 		JobID from;
 		JobID to;
+		// RV: toIndex and fromIndex are set during validation
+		Job_index toIndex;
+		Job_index fromIndex;
+
 		Interval<Time> sus_times;
 
 	};
@@ -69,12 +93,16 @@ namespace NP {
 	void validate_susp_refs(std::vector<Suspending_Task<Time>>& susps,
 							const typename Job<Time>::Job_set jobs)
 	{
-		for (auto st : susps) {
-			lookup<Time>(jobs, st.get_fromID());
-			lookup<Time>(jobs, st.get_toID());
-
-			if (st.get_maxsus() < st.get_minsus()) {
-				throw InvalidSelfSuspendingParameter(st.get_fromID());
+	
+	  for (int idx=0; idx<susps.size(); idx++) {
+			const Job<Time>& fromJob = lookup<Time>(jobs, susps[idx].get_fromID());
+			const Job<Time>& toJob = lookup<Time>(jobs, susps[idx].get_toID());
+			// RV: after validation, susps should not be changed.
+			//     set toIndex and fromIndex here.
+			susps[idx].set_toIndex((Job_index)(&toJob - &(jobs[0])));
+			susps[idx].set_fromIndex((Job_index)(&fromJob - &(jobs[0])));
+			if (susps[idx].get_maxsus() < susps[idx].get_minsus()) {
+				throw InvalidSelfSuspendingParameter(susps[idx].get_fromID());
 			}
 		}
 	}

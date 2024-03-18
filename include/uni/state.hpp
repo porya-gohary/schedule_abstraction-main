@@ -15,6 +15,9 @@ namespace NP {
 
 	namespace Uniproc {
 
+		// Similar to global/state.hpp, an Job_index is the index into the Job array.
+		// typedef std::size_t Job_index;
+	  
 		typedef Index_set Job_set;
 		template<class Time> class Schedule_state;
 		template<class Time> class Schedule_node;
@@ -37,7 +40,7 @@ namespace NP {
 			// #NS# job_finish_times holds the finish times of all the jobs that still have unscheduled successor
 			// It does not need to remember this all the time, there can be a flag that says i don't need anything to be remembered
 			// and in those cases these are not assigned any value.
-			typedef typename std::unordered_map<JobID, Interval<Time>> JobFinishTimes;
+			typedef typename std::unordered_map<NP::Job_index, Interval<Time>> JobFinishTimes;
 			JobFinishTimes job_finish_times;
 
 			public:
@@ -91,7 +94,7 @@ namespace NP {
 			}
 
 			// #NS# all the following functions are purely to handle the job_finish_times
-			void add_pred(const JobID pred_job, Interval<Time> ft)
+			void add_pred(const Job_index pred_job, Interval<Time> ft)
 			{
 				job_finish_times.emplace(pred_job, ft);
 			}
@@ -104,12 +107,12 @@ namespace NP {
 				}
 			}
 
-			void del_pred(const JobID pred_job)
+			void del_pred(const Job_index pred_job)
 			{
 				job_finish_times.erase(pred_job);
 			}
 
-			void widen_pathwise_job(const JobID pred_job, const Interval<Time> ft)
+			void widen_pathwise_job(const Job_index pred_job, const Interval<Time> ft)
 			{
 				auto it = job_finish_times.find(pred_job);
 				if (it != job_finish_times.end()) {
@@ -117,7 +120,7 @@ namespace NP {
 				}
 			}
 
-			bool pathwisejob_exists(const JobID pred_job) const
+			bool pathwisejob_exists(const Job_index pred_job) const
 			{
 				auto it = job_finish_times.find(pred_job);
 				if (it != job_finish_times.end()) {
@@ -126,12 +129,13 @@ namespace NP {
 				return false;
 			}
 
-			const Interval<Time>& get_pathwisejob_ft(const JobID& pathwise_job) const
+			const Interval<Time>& get_pathwisejob_ft(const Job_index pathwise_job) const
 			{
 				return job_finish_times.find(pathwise_job)->second;
 			}
 
-			const JobID& get_pathwisejob_job(const JobID& pathwise_job) const
+		  // Unused.
+			const Job_index get_pathwisejob_job(const Job_index pathwise_job) const
 			{
 				return job_finish_times.find(pathwise_job)->first;
 			}
@@ -287,9 +291,9 @@ namespace NP {
 								}
 							}
 						}
-						if (state->pathwisejob_exists(sched_job.get_id()))
+						if (state->pathwisejob_exists(sched_job.get_job_index())) // RV: index_of() not in scope.
 						{
-							if (!new_st.intersects(state->get_pathwisejob_ft(sched_job.get_id())))
+						  if (!new_st.intersects(state->get_pathwisejob_ft(sched_job.get_job_index())))
 							{
 								allJobsIntersect = false;
 							}
@@ -304,7 +308,7 @@ namespace NP {
 							}
 
 							//Find sched_job and widen its finish time interval
-							state->widen_pathwise_job(sched_job.get_id(), new_st);
+							state->widen_pathwise_job(sched_job.get_job_index(), new_st); // RV: index_of not in scope
 
 							//Widen the main finish range
 							state->update_finish_range(new_st);
