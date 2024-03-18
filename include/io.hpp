@@ -9,6 +9,7 @@
 #include "jobs.hpp"
 #include "precedence.hpp"
 #include "aborts.hpp"
+#include "yaml-cpp/yaml.h"
 
 namespace NP {
 
@@ -97,6 +98,50 @@ namespace NP {
 		return edges;
 	}
 
+	inline Precedence_constraints parse_yaml_dag_file(std::istream& in)
+	{
+		Precedence_constraints edges;
+		// Clear any flags
+		in.clear();
+		// Move the pointer to the beginning
+		in.seekg(0, std::ios::beg);
+		try {
+			// read the YAML file
+			YAML::Node input_job_set = YAML::Load(in);
+			auto const js = input_job_set["jobset"];
+			// Iterate over each jobset entry
+			for (auto const &j : js) {
+				// Check if a job has a successor
+				if (j["Successors"]) {
+					auto from = JobID(j["Job ID"].as<unsigned long>(), j["Task ID"].as<unsigned long>());
+					// Iterate over each successor
+					for (const auto &succ: j["Successors"]) {
+						// first, we need to check to see if it is written
+						// in the compact form [TaskID, JobID]
+						// or the expanded form
+						// - Task ID: Int
+						// 	 Job ID: Int
+						if (succ.IsSequence()) {
+							auto tid = succ[0].as<unsigned long>();
+							auto jid = succ[1].as<unsigned long>();
+							auto to = JobID(jid, tid);
+							edges.push_back(Precedence_constraint(from, to));
+						} else {
+							auto tid = succ["Task ID"].as<unsigned long>();
+							auto jid = succ["Job ID"].as<unsigned long>();
+							auto to = JobID(jid, tid);
+							edges.push_back(Precedence_constraint(from, to));
+						}
+					}
+				}
+			}
+
+		} catch (const YAML::Exception& e) {
+			std::cerr << "Error reading YAML file: " << e.what() << std::endl;
+		}
+		return edges;
+	}
+
 	template<class Time> Job<Time> parse_job(std::istream& in)
 	{
 		unsigned long tid, jid;
@@ -130,7 +175,7 @@ namespace NP {
 	}
 
 	template<class Time>
-	typename Job<Time>::Job_set parse_file(std::istream& in)
+	typename Job<Time>::Job_set parse_csv_job_file(std::istream& in)
 	{
 		// first row contains a comment, just skip it
 		next_line(in);
@@ -141,6 +186,36 @@ namespace NP {
 			jobs.push_back(parse_job<Time>(in));
 			// munge any trailing whitespace or extra columns
 			next_line(in);
+		}
+
+		return jobs;
+	}
+
+	template<class Time>
+	typename Job<Time>::Job_set parse_yaml_job_file(std::istream& in)
+	{
+		typename Job<Time>::Job_set jobs;
+        unsigned long tid, jid;
+        Time arr_min, arr_max, cost_min, cost_max, dl, prio;
+		try {
+			YAML::Node input_job_set = YAML::Load(in);
+
+			auto const js = input_job_set["jobset"];
+			for (auto const &j: js) {
+				tid = j["Task ID"].as<unsigned long>();
+				jid = j["Job ID"].as<unsigned long>();
+				arr_min = j["Arrival min"].as<Time>();
+				arr_max = j["Arrival max"].as<Time>();
+				cost_min = j["Cost min"].as<Time>();
+				cost_max = j["Cost max"].as<Time>();
+				dl = j["Deadline"].as<Time>();
+				prio = j["Priority"].as<Time>();
+
+				jobs.push_back(Job<Time>{jid, Interval<Time>{arr_min, arr_max},
+										 Interval<Time>{cost_min, cost_max}, dl, prio, tid});
+			}
+		} catch (const YAML::Exception& e) {
+			std::cerr << "Error reading YAML file: " << e.what() << std::endl;
 		}
 
 		return jobs;

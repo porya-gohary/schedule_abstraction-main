@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.8.0)
 
-project(NP_schedulabiliy_test VERSION 2.1.0 LANGUAGES CXX)
+project(NP_schedulabiliy_test VERSION 2.2.0 LANGUAGES CXX)
 
 include_directories(include)
 include_directories(lib/include)
@@ -44,7 +44,18 @@ elseif (USE_TBB_MALLOC)
     message(NOTICE "Using Intel TBB scalable memory allocator")
 endif ()
 
-set(CORE_LIBS ${TBB_LIB} ${ALLOC_LIB})
+# Check if yaml-cpp is installed as a system library
+find_package(yaml-cpp)
+if (NOT yaml-cpp_FOUND)
+    # Include yaml-cpp source directory and add it to the build
+    message(NOTICE "yaml-cpp not found: adding it to the build as a subdirectory")
+    add_subdirectory(lib/yaml-cpp)
+else ()
+    message(NOTICE "yaml-cpp found")
+endif ()
+
+set(YAML_LIB yaml-cpp)
+set(CORE_LIBS ${TBB_LIB} ${ALLOC_LIB} ${YAML_LIB})
 
 file(GLOB TEST_SOURCES "src/tests/*.cpp")
 add_executable(runtests ${TEST_SOURCES} ${SOURCES})
