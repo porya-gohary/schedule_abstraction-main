@@ -44,14 +44,31 @@ elseif (USE_TBB_MALLOC)
     message(NOTICE "Using Intel TBB scalable memory allocator")
 endif ()
 
+###########################################################################
+# this is a fix for possible problems with cmake in windows 11 and visual studio 2022
+# Option to enable/disable finding yaml-cpp
+option(USE_YAML_CPP_PACKAGE "Use yaml-cpp" ON)
+
+# Check if yaml-cpp is installed as a system library and
+# cache the result of find_package
+if (USE_YAML_CPP_PACKAGE)
+    find_package(yaml-cpp)
+    if (NOT yaml-cpp_FOUND)
+        set(USE_YAML_CPP_PACKAGE OFF CACHE BOOL "Use yaml-cpp" FORCE)
+    endif ()
+endif ()
+
+# Cache the result of find_package using CMAKE_CACHE_ARGS
+set(YAML_CPP_PACKAGE_PATH "" CACHE PATH "Path to yaml-cpp")
+###########################################################################
+
 # Check if yaml-cpp is installed as a system library
-find_package(yaml-cpp)
-if (NOT yaml-cpp_FOUND)
+if (yaml-cpp_FOUND OR YAML_CPP_PACKAGE_PATH)
+    message(NOTICE "yaml-cpp found")
+else ()
     # Include yaml-cpp source directory and add it to the build
     message(NOTICE "yaml-cpp not found: adding it to the build as a subdirectory")
-    add_subdirectory(lib/yaml-cpp)
-else ()
-    message(NOTICE "yaml-cpp found")
+    add_subdirectory (${CMAKE_CURRENT_LIST_DIR}/lib/yaml-cpp)
 endif ()
 
 set(YAML_LIB yaml-cpp)
