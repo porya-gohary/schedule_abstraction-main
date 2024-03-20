@@ -14,8 +14,11 @@ namespace NP {
 
 	namespace Global {
 
-		typedef std::size_t Job_index;
+	  // RV: Job_index is defined in jobs.hpp in the NP namespace.
+	  // typedef std::size_t Job_index;
 		typedef std::vector<Job_index> Job_precedence_set;
+
+		template<class Time> class Schedule_node;
 
 		template<class Time> class Schedule_state
 		{

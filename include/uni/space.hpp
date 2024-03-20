@@ -273,14 +273,16 @@ namespace NP {
 			//     Added here as well.
 			std::vector<Job_precedence_set> _job_precedence_sets;
 
-			By_time_map _jobs_by_latest_arrival;
+			By_time_map _jobs_by_latest_arrival_with_susp;
+			By_time_map _jobs_by_latest_arrival_without_susp;		  
 			By_time_map _jobs_by_earliest_arrival;
 			By_time_map _jobs_by_deadline;
 			// RV: global/space.hpp also has jobs_by_win .
 			//     global_space.hpp doesn't have abort_actions. 
 			std::vector<const Abort_action<Time>*> abort_actions;
 
-			const By_time_map& jobs_by_latest_arrival;
+			const By_time_map& jobs_by_latest_arrival_with_susp;
+			const By_time_map& jobs_by_latest_arrival_without_susp;
 			const By_time_map& jobs_by_earliest_arrival;
 			const By_time_map& jobs_by_deadline;
 			const std::vector<Job_precedence_set>& job_precedence_sets;
@@ -348,7 +350,8 @@ namespace NP {
 			, todo_idx(0)
 			, current_job_count(0)
 			, rta(jobs.size())
-			, jobs_by_latest_arrival(_jobs_by_latest_arrival)
+			, jobs_by_latest_arrival_with_susp(_jobs_by_latest_arrival_with_susp)
+			, jobs_by_latest_arrival_without_susp(_jobs_by_latest_arrival_without_susp)
 			, jobs_by_earliest_arrival(_jobs_by_earliest_arrival)
 			, jobs_by_deadline(_jobs_by_deadline)
 			, _job_precedence_sets(jobs.size())
@@ -363,11 +366,6 @@ namespace NP {
 			, abort_actions(jobs.size(), NULL)
 			, use_supernodes(use_supernodes)
 			{
-				for (const Job<Time>& j : jobs) {
-					_jobs_by_latest_arrival.insert({j.latest_arrival(), &j});
-					_jobs_by_earliest_arrival.insert({j.earliest_arrival(), &j});
-					_jobs_by_deadline.insert({j.get_deadline(), &j});
-				}
 				for (auto e : dag_edges) {
 					const Job<Time>& from = lookup<Time>(jobs, e.first);
 					const Job<Time>& to   = lookup<Time>(jobs, e.second);
@@ -377,6 +375,15 @@ namespace NP {
 					_to_suspending_tasks[st.get_toIndex()].push_back(&st);
 					_from_suspending_tasks[st.get_fromIndex()].push_back(st.get_toIndex());
 				}
+				for (const Job<Time>& j : jobs) {
+					if (_to_suspending_tasks[j.get_job_index()].size()>0) {
+						_jobs_by_latest_arrival_with_susp.insert({j.latest_arrival(), &j});
+					} else {
+						_jobs_by_latest_arrival_without_susp.insert({j.latest_arrival(), &j});
+					}
+					_jobs_by_earliest_arrival.insert({j.earliest_arrival(), &j});
+					_jobs_by_deadline.insert({j.get_deadline(), &j});
+				}
 				for (const Abort_action<Time>& a : aborts) {
 					const Job<Time>& j = lookup<Time>(jobs, a.get_id());
 					abort_actions[j.get_job_index()] = &a;
@@ -385,6 +392,7 @@ namespace NP {
 
 			private:
 
+		  // Not used
 			// For all the jobs of Workload, the maximum deadline amongst all the jobs is returned
 			static Time max_deadline(const Workload &jobs)
 			{
@@ -419,7 +427,13 @@ namespace NP {
 					aborted = true;
 			}
 
-			// Old: the address of j is subtracted from the first element of jobs to find the distance between the two ie., index
+			bool state_specific(const Job_index j)
+			{
+				return (to_suspending_tasks[j].size()>0);
+			}
+		  
+
+		  	// Old: the address of j is subtracted from the first element of jobs to find the distance between the two ie., index
 			// New: job has an attribute for job_index, which is the position within the workload file.
 			std::size_t index_of(const Job<Time>& j) const
 			{
@@ -454,15 +468,45 @@ namespace NP {
 			// and also prioirty eligibility in case of IIP. The value returned is either the latest arrival 
 			// of a job found and if no job is found infinity is returned.
 			// RV:  IIP is no longer supported.
-			Time next_certain_job_release(const Node& n, const State &s)
+		  // FIXME:  split in with and without predecessors.
+		  // Without suspension, no dependency on state.
+			Time next_certain_job_release_no_suspension(const Node& n)
 			{
 				const Scheduled &already_scheduled = n.get_scheduled_jobs();
 
 				Time nejr = Time_model::constants<Time>::infinity();
 
-				for (auto it = jobs_by_latest_arrival
+				for (auto it = jobs_by_latest_arrival_without_susp
 							   .lower_bound(n.earliest_job_release());
-					 it != jobs_by_latest_arrival.end(); it++) {
+					 it != jobs_by_latest_arrival_without_susp.end(); it++) {
+					const Job<Time>& j = *(it->second);
+
+					// DM(__FUNCTION__ << " considering:: "  << j << std::endl);
+
+					// not relevant if already scheduled
+					if (!incomplete(already_scheduled, j))
+						continue;
+
+					auto t = j.latest_arrival();
+
+					if(nejr < t)
+						break;
+
+					if(nejr > t)
+						nejr = t;
+				}
+				return nejr;
+			}
+		  // With suspension and dependency on state.
+			Time next_certain_job_release_with_suspension(const Node& n, const State &s)
+			{
+				const Scheduled &already_scheduled = n.get_scheduled_jobs();
+
+				Time nejr = Time_model::constants<Time>::infinity();
+
+				for (auto it = jobs_by_latest_arrival_with_susp
+							   .lower_bound(n.earliest_job_release());
+					 it != jobs_by_latest_arrival_with_susp.end(); it++) {
 					const Job<Time>& j = *(it->second);
 
 					// DM(__FUNCTION__ << " considering:: "  << j << std::endl);
@@ -482,6 +526,13 @@ namespace NP {
 				return nejr;
 			}
 
+		  Time next_certain_job_release(const Node& n, const State &s)
+		  {
+		    Time ncjr_wos = next_certain_job_release_no_suspension(n);
+		    Time ncjr_ws = next_certain_job_release_with_suspension(n,s);
+		    return std::min(ncjr_wos, ncjr_ws);
+		  }
+
 			// find next time by which a job of higher priority
 			// is certainly released on or after a given point in time
 			// This function is very similar to the next_certain_job release, except that it checks if a job is higher
@@ -490,16 +541,48 @@ namespace NP {
 			// earliest higher prioirty certain job release based on job reference_job
 			// RV: if it is similar to next_certain_job_release, except for some IIP condition, would the function
 			//     be relevant if IIP is no longer supported (or is located in the include/uni_iip directory).
-			Time next_certain_higher_priority_job_release(
+		  // FIXME:  split jobs_by_latest_arrival into with and without predecessors.
+			// Without suspension and independent of state.
+			Time next_certain_higher_priority_job_release_no_suspension(
+				const Node& n,
+				const Job<Time>& reference_job)
+			{
+				Time nejr = Time_model::constants<Time>::infinity();
+
+				for (auto it = jobs_by_latest_arrival_without_susp
+							   .lower_bound(n.earliest_job_release()     );
+					 it != jobs_by_latest_arrival_without_susp.end(); it++) {
+					const Job<Time>& j = *(it->second);
+
+					// not relevant if already scheduled
+					if (!incomplete(n, j))
+						continue;
+
+					// irrelevant if not of sufficient priority
+					if (!j.higher_priority_than(reference_job))
+						continue;
+
+					auto t = j.latest_arrival();
+
+					if(nejr < t)
+						break;
+					
+					if(nejr > t)
+						nejr = t;
+				}
+				return nejr;
+			}
+			// With suspension and dependency on state.
+			Time next_certain_higher_priority_job_release_with_suspension(
 				const Node& n,
 				const State& s,
 				const Job<Time>& reference_job)
 			{
 				Time nejr = Time_model::constants<Time>::infinity();
 
-				for (auto it = jobs_by_latest_arrival
+				for (auto it = jobs_by_latest_arrival_with_susp
 							   .lower_bound(n.earliest_job_release()     );
-					 it != jobs_by_latest_arrival.end(); it++) {
+					 it != jobs_by_latest_arrival_with_susp.end(); it++) {
 					const Job<Time>& j = *(it->second);
 
 					// not relevant if already scheduled
@@ -521,6 +604,17 @@ namespace NP {
 				return nejr;
 			}
 
+			Time next_certain_higher_priority_job_release(
+				const Node& n,
+				const State& s,
+				const Job<Time>& reference_job)
+		  {
+		    Time nchpjr_wos = next_certain_higher_priority_job_release_no_suspension(n,reference_job);
+		    Time nchpjr_ws = next_certain_higher_priority_job_release_with_suspension(n,s,reference_job);
+		    return std::min(nchpjr_wos, nchpjr_ws);
+		  }
+
+		  
 // define a couple of iteration helpers
 
 // For all the jobs that arrives after the earliest job release of a node n, check if these jobs are still incomplete 
@@ -1222,6 +1316,7 @@ namespace NP {
 					// The earliest job release in node n
 					auto rel_min = n.earliest_job_release();
 					// The latest of all the lfts of of each state in node n
+					//RV: the states queue is sorted by eft of each state. It doesn't mean that the last state has the max lft. 
 					auto lft_max = (n.get_last_state())->latest_finish_time();
 					// among the incomplete jobs of node n, the time at which the earliest certain release occurs.
 					auto nxt_ready_job = next_certain_job_release(n, *(n.get_last_state()));
@@ -1252,7 +1347,11 @@ namespace NP {
 						Node_ref match;
 
 						// // t_high is computed once per job, and is common to all the states explored
-						// Time t_high = next_certain_higher_priority_job_release(n,*(n.get_first_state()), j);
+						Time t_high_wos;
+						Time t_wc_ncjr_wos;
+						t_high_wos = next_certain_higher_priority_job_release_no_suspension(n, j);
+						t_wc_ncjr_wos = next_certain_job_release_no_suspension(n);
+						// std::cerr << "per job: "<< j.get_job_index() << ", (t_high "<< t_high << ", t_wc_ncjr "<< t_wc_ncjr << ")\n";  
 
 						DM("\n---\nChecking for states to expand to for job "<< j.get_id()<<std::endl);
 						for(State *s: *n_states)
@@ -1265,13 +1364,16 @@ namespace NP {
 
 								// #NS# t_high can be calculated once per job, per node. We do not need to calculate it for every state
 								// as it is the same for all states in the node.We do need to calculate it for every job though
-								Time t_high = next_certain_higher_priority_job_release(n,*s, j);
+							  //RV:  see get_slft() in next_certain_higher_priority_job_release()
+							  Time t_high_ws = next_certain_higher_priority_job_release_with_suspension(n,*s, j);
+							  Time t_high = std::min(t_high_ws,t_high_wos);
+							  Time t_wc_ncjr_ws = next_certain_job_release_with_suspension(n,*s);
 
 								// #NS# Here, s->latest_finish_time() does need to be calculated once per state, but 
 								// next_certain_job_release is a bit problematic, as it can be calulated once per node, if tehre are no self-suspending
 								// tasks. If there are self-suspending tasks, then it has to be calculated once per state. More comments
 								// on this can be found in the next_certain_job_release function
-								Time t_wc = std::max(s->latest_finish_time(), next_certain_job_release(n, *s));
+							  Time t_wc = std::max(s->latest_finish_time(), std::min(t_wc_ncjr_wos,t_wc_ncjr_ws));
 
 								// #NS# lst is calculated once per state, becasue t_wc is calculated once per state
 								Time lst = std::min(t_wc, t_high-Time_model::constants<Time>::epsilon());

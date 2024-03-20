@@ -40,7 +40,10 @@ namespace NP {
 			// #NS# job_finish_times holds the finish times of all the jobs that still have unscheduled successor
 			// It does not need to remember this all the time, there can be a flag that says i don't need anything to be remembered
 			// and in those cases these are not assigned any value.
-			typedef typename std::unordered_map<NP::Job_index, Interval<Time>> JobFinishTimes;
+		  // RV: this data structure is similar to the certain_jobs from global/set.
+		  //     instead of unordered_map, using vector<
+		  // typedef typename std::unordered_map<NP::Job_index, Interval<Time>> JobFinishTimes;
+			typedef typename std::vector<std::pair<Job_index,Interval<Time>>> JobFinishTimes;
 			JobFinishTimes job_finish_times;
 
 			public:
@@ -94,9 +97,30 @@ namespace NP {
 			}
 
 			// #NS# all the following functions are purely to handle the job_finish_times
-			void add_pred(const Job_index pred_job, Interval<Time> ft)
+
+		  // Find the offset in the job_finish_times vector where the index should be located.
+		  int jft_find(const Job_index pred_job) const
+		  {
+		    int start=0;
+		    int end=job_finish_times.size();
+		    while (start<end) {
+		      int mid=(start+end)/2;
+		      if (job_finish_times[mid].first == pred_job)
+			return mid;
+		      else if (job_finish_times[mid].first < pred_job)
+			start = mid+1;  // mid is too small, mid+1 might fit.
+		      else
+			end = mid;
+		    }
+		    return start;
+		  }
+
+		        void add_pred(const Job_index pred_job, Interval<Time> ft)
 			{
-				job_finish_times.emplace(pred_job, ft);
+			  // keep sorted according to Job_index.
+			  int it = jft_find(pred_job);
+			  job_finish_times.insert(job_finish_times.begin()+it, std::make_pair(pred_job, ft));
+			  // job_finish_times.emplace(pred_job, ft);
 			}
 
 			void add_pred_list(JobFinishTimes jft_list)
@@ -109,35 +133,55 @@ namespace NP {
 
 			void del_pred(const Job_index pred_job)
 			{
-				job_finish_times.erase(pred_job);
+			  auto it = jft_find(pred_job);
+			  if (it < job_finish_times.size() && job_finish_times[it].first==pred_job)
+			    job_finish_times.erase(job_finish_times.begin()+it);
 			}
 
 			void widen_pathwise_job(const Job_index pred_job, const Interval<Time> ft)
 			{
-				auto it = job_finish_times.find(pred_job);
-				if (it != job_finish_times.end()) {
-					(it->second).widen(ft);
+			  int it = jft_find(pred_job);
+			  if (it < job_finish_times.size() && job_finish_times[it].first==pred_job) {
+					(job_finish_times[it].second).widen(ft);
 				}
 			}
 
 			bool pathwisejob_exists(const Job_index pred_job) const
 			{
-				auto it = job_finish_times.find(pred_job);
-				if (it != job_finish_times.end()) {
+			  int it = jft_find(pred_job);
+			  if (it < job_finish_times.size() && job_finish_times[it].first==pred_job) {
 					return true;
 				}
 				return false;
 			}
 
-			const Interval<Time>& get_pathwisejob_ft(const Job_index pathwise_job) const
+		  // RV: similar to get_finish_times() in global/state.hpp .
+		  bool pathwisejob_exists(const Job_index pred_job, Interval<Time> &ft) const
 			{
-				return job_finish_times.find(pathwise_job)->second;
+			  int it = jft_find(pred_job);
+			  if (it < job_finish_times.size() && job_finish_times[it].first==pred_job) {
+				  ft = job_finish_times[it].second;
+					return true;
+				}
+				return false;
 			}
 
+		  // RV: only called after a check that pathwise_job exists.
+		  const Interval<Time>& get_pathwisejob_ft(const Job_index pathwise_job) const
+			{
+			  int it = jft_find(pathwise_job);
+			  //if (it < job_finish_times.size() && job_finish_times[it].first == pathwise_job)
+				  return job_finish_times[it].second;
+				  //	else
+				  // return NULL;
+			}
+
+			
+		  
 		  // Unused.
 			const Job_index get_pathwisejob_job(const Job_index pathwise_job) const
 			{
-				return job_finish_times.find(pathwise_job)->first;
+			  return 0; // job_finish_times.find(pathwise_job)->first;
 			}
 
 			const JobFinishTimes& get_pathwise_jobs() const
@@ -145,6 +189,38 @@ namespace NP {
 				return job_finish_times;
 			}
 
+		  // Either check whether the job_finish_times can be merged or merge them without checking.
+		  bool check_or_widen(const JobFinishTimes& from_pwj, bool widen)
+		  {
+			bool allJobsIntersect = true;
+			// The JobFinishTimes vectors are sorted.
+			// Check intersect for matching jobs.
+			auto from_it = from_pwj.begin();
+			auto state_it = job_finish_times.begin();
+			while (from_it != from_pwj.end() &&
+			       state_it != job_finish_times.end()) {
+			  if (from_it->first == state_it->first) {
+			    // Same jobs.
+			    if (widen) {
+			      state_it->second.widen(from_it->second);
+			    } else {
+			      if (!from_it->second.intersects(state_it->second))
+				{
+				  allJobsIntersect = false;
+				  break;
+				}
+			    }
+			    from_it++;
+			    state_it++;
+			  } else if (from_it->first < state_it->first)
+			    from_it++;
+			  else
+			    state_it++;
+			}
+			return allJobsIntersect;
+					  
+		  }
+		  		  
 			friend std::ostream& operator<< (std::ostream& stream,
 											 const Schedule_state<Time>& s)
 			{
@@ -279,42 +355,29 @@ namespace NP {
 				{
 					if (new_st.intersects(state->finish_range()))
 					{
-						bool allJobsIntersect = true;
-						for (const auto& job : from.get_pathwise_jobs())
-						{
-							if (state->pathwisejob_exists(job.first))
-							{
-								if (!job.second.intersects(state->get_pathwisejob_ft(job.first)))
-								{
-									allJobsIntersect = false;
-									break;
-								}
-							}
-						}
-						if (state->pathwisejob_exists(sched_job.get_job_index())) // RV: index_of() not in scope.
-						{
-						  if (!new_st.intersects(state->get_pathwisejob_ft(sched_job.get_job_index())))
-							{
-								allJobsIntersect = false;
-							}
-						}
+					  Interval<Time> ival{0,0};
+					  // RV:  possible way to optimize:
+					  //      while checking for the intersections, collect references to Intervals.
+					  //      if the merge is possible, use the references to widen the intervals.
+					  if (state->pathwisejob_exists(sched_job.get_job_index(),ival))
+					    {
+					      if (!new_st.intersects(ival))
+							  {
+							    continue;
+							  }
+					    }
+					  // First perform the check.
+					  if (state->check_or_widen(from.get_pathwise_jobs(), false)) {
+					    // When all matching jobs intersect, widen them.
+					    state->check_or_widen(from.get_pathwise_jobs(), true);
+					    // Find sched_job and widen its finish time interval
+					    state->widen_pathwise_job(sched_job.get_job_index(), new_st);
 
-						if (allJobsIntersect)
-						{
-							//Widen finish time intervals for all pathwise jobs
-							for (auto& job : from.get_pathwise_jobs())
-							{
-								state->widen_pathwise_job(job.first, job.second);
-							}
-
-							//Find sched_job and widen its finish time interval
-							state->widen_pathwise_job(sched_job.get_job_index(), new_st); // RV: index_of not in scope
-
-							//Widen the main finish range
-							state->update_finish_range(new_st);
-
-							return true;
-						}
+					    //Widen the main finish range
+					    state->update_finish_range(new_st);
+					    
+					    return true;
+					  }
 					}
 				}
 				return false;
