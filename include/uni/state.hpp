@@ -91,6 +91,7 @@ namespace NP {
 				finish_time.widen(update);
 			}
 
+		  // Unused
 			void copy_state(const Interval<Time> &newst)
 			{
 				finish_time.equate(newst);
@@ -98,29 +99,29 @@ namespace NP {
 
 			// #NS# all the following functions are purely to handle the job_finish_times
 
-		  // Find the offset in the job_finish_times vector where the index should be located.
-		  int jft_find(const Job_index pred_job) const
-		  {
-		    int start=0;
-		    int end=job_finish_times.size();
-		    while (start<end) {
-		      int mid=(start+end)/2;
-		      if (job_finish_times[mid].first == pred_job)
-			return mid;
-		      else if (job_finish_times[mid].first < pred_job)
-			start = mid+1;  // mid is too small, mid+1 might fit.
-		      else
-			end = mid;
-		    }
-		    return start;
-		  }
+			// Find the offset in the job_finish_times vector where the index should be located.
+			int jft_find(const Job_index pred_job) const
+			{
+				int start=0;
+				int end=job_finish_times.size();
+				while (start<end) {
+					int mid=(start+end)/2;
+					if (job_finish_times[mid].first == pred_job)
+						return mid;
+					else if (job_finish_times[mid].first < pred_job)
+						start = mid+1;  // mid is too small, mid+1 might fit.
+					else
+						end = mid;
+	       			}
+				return start;
+			}
 
 		        void add_pred(const Job_index pred_job, Interval<Time> ft)
 			{
-			  // keep sorted according to Job_index.
-			  int it = jft_find(pred_job);
-			  job_finish_times.insert(job_finish_times.begin()+it, std::make_pair(pred_job, ft));
-			  // job_finish_times.emplace(pred_job, ft);
+				// keep sorted according to Job_index.
+				int it = jft_find(pred_job);
+				job_finish_times.insert(job_finish_times.begin()+it, std::make_pair(pred_job, ft));
+				// job_finish_times.emplace(pred_job, ft);
 			}
 
 			void add_pred_list(JobFinishTimes jft_list)
@@ -133,47 +134,47 @@ namespace NP {
 
 			void del_pred(const Job_index pred_job)
 			{
-			  auto it = jft_find(pred_job);
-			  if (it < job_finish_times.size() && job_finish_times[it].first==pred_job)
-			    job_finish_times.erase(job_finish_times.begin()+it);
+				auto it = jft_find(pred_job);
+				if (it < job_finish_times.size() && job_finish_times[it].first==pred_job)
+					job_finish_times.erase(job_finish_times.begin()+it);
 			}
 
 			void widen_pathwise_job(const Job_index pred_job, const Interval<Time> ft)
 			{
-			  int it = jft_find(pred_job);
-			  if (it < job_finish_times.size() && job_finish_times[it].first==pred_job) {
+				int it = jft_find(pred_job);
+				if (it < job_finish_times.size() && job_finish_times[it].first==pred_job) {
 					(job_finish_times[it].second).widen(ft);
 				}
 			}
 
 			bool pathwisejob_exists(const Job_index pred_job) const
 			{
-			  int it = jft_find(pred_job);
-			  if (it < job_finish_times.size() && job_finish_times[it].first==pred_job) {
+				int it = jft_find(pred_job);
+				if (it < job_finish_times.size() && job_finish_times[it].first==pred_job) {
 					return true;
 				}
 				return false;
 			}
 
-		  // RV: similar to get_finish_times() in global/state.hpp .
-		  bool pathwisejob_exists(const Job_index pred_job, Interval<Time> &ft) const
+			// RV: similar to get_finish_times() in global/state.hpp .
+			bool pathwisejob_exists(const Job_index pred_job, Interval<Time> &ft) const
 			{
-			  int it = jft_find(pred_job);
-			  if (it < job_finish_times.size() && job_finish_times[it].first==pred_job) {
-				  ft = job_finish_times[it].second;
+				int it = jft_find(pred_job);
+				if (it < job_finish_times.size() && job_finish_times[it].first==pred_job) {
+					ft = job_finish_times[it].second;
 					return true;
 				}
 				return false;
 			}
 
-		  // RV: only called after a check that pathwise_job exists.
-		  const Interval<Time>& get_pathwisejob_ft(const Job_index pathwise_job) const
+			// RV: only called after a check that pathwise_job exists.
+			const Interval<Time>& get_pathwisejob_ft(const Job_index pathwise_job) const
 			{
-			  int it = jft_find(pathwise_job);
-			  //if (it < job_finish_times.size() && job_finish_times[it].first == pathwise_job)
-				  return job_finish_times[it].second;
-				  //	else
-				  // return NULL;
+				int it = jft_find(pathwise_job);
+				//if (it < job_finish_times.size() && job_finish_times[it].first == pathwise_job)
+				return job_finish_times[it].second;
+				//	else
+				// return NULL;
 			}
 
 			
@@ -181,7 +182,7 @@ namespace NP {
 		  // Unused.
 			const Job_index get_pathwisejob_job(const Job_index pathwise_job) const
 			{
-			  return 0; // job_finish_times.find(pathwise_job)->first;
+				return 0; // job_finish_times.find(pathwise_job)->first;
 			}
 
 			const JobFinishTimes& get_pathwise_jobs() const
@@ -189,37 +190,43 @@ namespace NP {
 				return job_finish_times;
 			}
 
-		  // Either check whether the job_finish_times can be merged or merge them without checking.
-		  bool check_or_widen(const JobFinishTimes& from_pwj, bool widen)
-		  {
-			bool allJobsIntersect = true;
-			// The JobFinishTimes vectors are sorted.
-			// Check intersect for matching jobs.
-			auto from_it = from_pwj.begin();
-			auto state_it = job_finish_times.begin();
-			while (from_it != from_pwj.end() &&
-			       state_it != job_finish_times.end()) {
-			  if (from_it->first == state_it->first) {
-			    // Same jobs.
-			    if (widen) {
-			      state_it->second.widen(from_it->second);
-			    } else {
-			      if (!from_it->second.intersects(state_it->second))
+			// Either check whether the job_finish_times can be merged or merge them without checking.
+			bool check_or_widen(const JobFinishTimes& from_pwj, bool widen)
+			{
+				bool allJobsIntersect = true;
+				// The JobFinishTimes vectors are sorted.
+				// Check intersect for matching jobs.
+				auto from_it = from_pwj.begin();
+				auto state_it = job_finish_times.begin();
+				while (from_it != from_pwj.end() &&
+					state_it != job_finish_times.end())
 				{
-				  allJobsIntersect = false;
-				  break;
+					if (from_it->first == state_it->first)
+					{
+						// Same jobs.
+						if (widen)
+						{
+							state_it->second.widen(from_it->second);
+						}
+						else
+						{
+							if (!from_it->second.intersects(state_it->second))
+							{
+								allJobsIntersect = false;
+								break;
+							}
+						}
+						from_it++;
+						state_it++;
+					}
+					else if (from_it->first < state_it->first)
+						from_it++;
+					else
+						state_it++;
 				}
-			    }
-			    from_it++;
-			    state_it++;
-			  } else if (from_it->first < state_it->first)
-			    from_it++;
-			  else
-			    state_it++;
-			}
-			return allJobsIntersect;
+				return allJobsIntersect;
 					  
-		  }
+			}
 		  		  
 			friend std::ostream& operator<< (std::ostream& stream,
 											 const Schedule_state<Time>& s)
@@ -351,36 +358,79 @@ namespace NP {
 				// #NS# I am sorry for this merge function, but I am not sure how to make it better. This merge funciton is messy
 				// because I am trying to merge if possible, before even creating a new state so that I don't have to create a new state
 				// and then throw it away if it can be merged cause i do not know how to handle memory management in that case.
+				// RV: instead of merging with only one state, try to merge with more states if possible.
+				int merge_budget = states.size();
+				int extra_budget = 0;  // Once merged, how many states should still be checked.
+				//#define MERGE_STATISTICS
+#ifdef MERGE_STATISTICS
+				static int stats_count[50] = { 0 };
+				static int stats_total = 0;
+				static int stats_max = 0;
+				static int stats_merge_ok = 0;
+				static int stats_merge_fail = 0;
+				bool stats_print=false;
+				stats_total++;
+				stats_print = (stats_total%500 == 0);
+				if (merge_budget < 50)
+				  stats_count[merge_budget]++;
+				if (merge_budget > stats_max)
+				{
+				  stats_max = merge_budget;
+				  stats_print = true;
+				}
+				if (stats_print) {
+				  std::cerr << "merge stats (" << stats_total << ", "<< stats_max << ") : " << stats_count[0];
+				  for (int i=1; i<50 && i<=stats_max; i++)
+				    {
+				      std::cerr << ", " << stats_count[i];
+				    }
+				  std::cerr << "\n"; 
+				}
+#endif
+				bool result = false;
 				for (auto& state : states)
 				{
+					if (merge_budget <= 0)
+						break;
 					if (new_st.intersects(state->finish_range()))
 					{
-					  Interval<Time> ival{0,0};
-					  // RV:  possible way to optimize:
-					  //      while checking for the intersections, collect references to Intervals.
-					  //      if the merge is possible, use the references to widen the intervals.
-					  if (state->pathwisejob_exists(sched_job.get_job_index(),ival))
-					    {
-					      if (!new_st.intersects(ival))
-							  {
-							    continue;
-							  }
-					    }
-					  // First perform the check.
-					  if (state->check_or_widen(from.get_pathwise_jobs(), false)) {
-					    // When all matching jobs intersect, widen them.
-					    state->check_or_widen(from.get_pathwise_jobs(), true);
-					    // Find sched_job and widen its finish time interval
-					    state->widen_pathwise_job(sched_job.get_job_index(), new_st);
+						Interval<Time> ival{0,0};
 
-					    //Widen the main finish range
-					    state->update_finish_range(new_st);
-					    
-					    return true;
-					  }
+						if (state->pathwisejob_exists(sched_job.get_job_index(),ival))
+						{
+							if (!new_st.intersects(ival))
+								continue;
+						}
+						// First perform the check.
+						if (state->check_or_widen(from.get_pathwise_jobs(), false)) {
+							// When all matching jobs intersect, widen them.
+							state->check_or_widen(from.get_pathwise_jobs(), true);
+							// Find sched_job and widen its finish time interval
+							state->widen_pathwise_job(sched_job.get_job_index(), new_st);
+
+							//Widen the main finish range
+							state->update_finish_range(new_st);
+
+							result = true;
+
+							// Try to merge with a few more states.
+							// std::cerr << "Merged with " << merge_budget << " of " << states.size() << " states left.\n";
+							merge_budget = extra_budget;
+							extra_budget -= 2;
+						}
 					}
+					merge_budget--;
 				}
-				return false;
+#ifdef MERGE_STATISTICS
+				if (result)
+				  stats_merge_ok++;
+				else
+				  stats_merge_fail++;
+				if (stats_print) {
+				  std::cerr << "merge stats ("<< stats_total << ")  ok: "<< stats_merge_ok << ". fail: "<<stats_merge_fail << "\n";
+				}
+#endif
+				return result;
 			}
 
 		};
