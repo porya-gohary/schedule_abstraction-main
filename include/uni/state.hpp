@@ -8,6 +8,7 @@
 #include "index_set.hpp"
 #include "jobs.hpp"
 #include "cache.hpp"
+#include "statistics.hpp"
 
 namespace NP {
 
@@ -362,6 +363,8 @@ namespace NP {
 				int merge_budget = states.size();
 				int extra_budget = 0;  // Once merged, how many states should still be checked.
 				//#define MERGE_STATISTICS
+				static StatCollect stat = StatCollect("merge");
+				stat.tick(merge_budget);
 #ifdef MERGE_STATISTICS
 				static int stats_count[50] = { 0 };
 				static int stats_total = 0;
@@ -421,6 +424,8 @@ namespace NP {
 					}
 					merge_budget--;
 				}
+				stat.tick(result);
+				stat.print();
 #ifdef MERGE_STATISTICS
 				if (result)
 				  stats_merge_ok++;

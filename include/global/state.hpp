@@ -9,6 +9,7 @@
 #include "index_set.hpp"
 #include "jobs.hpp"
 #include "cache.hpp"
+#include "statistics.hpp"
 
 namespace NP {
 
@@ -16,6 +17,8 @@ namespace NP {
 
 	  // RV: Job_index is defined in jobs.hpp in the NP namespace.
 	  // typedef std::size_t Job_index;
+	  typedef Index_set Job_set;
+	  
 		typedef std::vector<Job_index> Job_precedence_set;
 
 		template<class Time> class Schedule_node;
@@ -25,7 +28,9 @@ namespace NP {
 			private:
 
 		  // RV: would another data structure improve access to job_finish_times?
-			typedef typename std::unordered_map<Job_index, Interval<Time>> JobFinishTimes;
+		  //     use vector, as in uni/state.hpp
+		  //typedef typename std::unordered_map<Job_index, Interval<Time>> JobFinishTimes;
+		  typedef typename std::vector<std::pair<Job_index, Interval<Time>>> JobFinishTimes;
 			JobFinishTimes job_finish_times;
 
 			public:
@@ -112,7 +117,7 @@ namespace NP {
 					core_avail.emplace_back(pa[i], ca[i]);
 				}
 
-				job_finish_times.emplace(j, finish_times);
+				add_pred(j, finish_times);
 
 				assert(core_avail.size() > 0);
 				DM("*** new state: constructed " << *this << std::endl);
@@ -140,15 +145,7 @@ namespace NP {
 					if (!core_avail[i].intersects(other.core_avail[i]))
 						return false;
 				//check if JobFinishTimes overlap
-				for (const auto& rj : job_finish_times) {
-					auto it = other.job_finish_times.find(rj.first);
-					if (it != other.job_finish_times.end()) {
-						if (!rj.second.intersects(it->second))
-							return false;
-					}
-				}
-
-				return true;
+				return check_overlap(other.job_finish_times);
 			}
 
 			bool try_to_merge(const Schedule_state<Time>& other)
@@ -181,12 +178,7 @@ namespace NP {
 				certain_jobs.swap(new_cj);
 
 				// merge job_finish_times
-				for (const auto& rj : other.job_finish_times) {
-					auto it = job_finish_times.find(rj.first);
-					if (it != job_finish_times.end()) {
-						it->second.widen(rj.second);
-					}
-				}
+				widen_overlap(other.job_finish_times);
 
 				DM("+++ merged " << other << " into " << *this << std::endl);
 
@@ -204,22 +196,35 @@ namespace NP {
 				return core_avail[0];
 			}
 
+                        // Find the offset in the JobFinishTimes vector where the index should be located.
+			int jft_find(const JobFinishTimes &jft, const Job_index pred_job) const
+                        {
+                                int start=0;
+                                int end=jft.size();
+                                while (start<end) {
+                                        int mid=(start+end)/2;
+                                        if (jft[mid].first == pred_job)
+                                                return mid;
+                                        else if (jft[mid].first < pred_job)
+                                                start = mid+1;  // mid is too small, mid+1 might fit.
+                                        else
+                                                end = mid;
+                                }
+                                return start;
+                        }
+
+
+		  
 			bool get_finish_times(Job_index j, Interval<Time> &ftimes) const
 			{
-				for (const auto& rj : certain_jobs) {
-					// check index
-					if (j == rj.first) {
-						ftimes = rj.second;
-						return true;
-					}
-					// Certain_jobs is sorted in order of increasing job index.
-					// If we see something larger than 'j' we are not going
-					// to find it. For large processor counts, it might make
-					// sense to do a binary search instead.
-					if (j < rj.first)
-						return false;
-				}
-				return false;
+			  int offset = jft_find(certain_jobs, j);
+			  if (offset<certain_jobs.size() && certain_jobs[offset].first == j)
+			  {
+			    ftimes=certain_jobs[offset].second;
+			    return true;
+			  } else {
+			    return false;
+			  }
 			}
 
 			const bool job_incomplete(Job_index j) const
@@ -274,46 +279,130 @@ namespace NP {
 		        //      similar to certain_jobs, it could use a vector<std::pair<Job_index,Interval<Time>>> .
 		        //      Check the impact on memory and computation time.
 		        //      Used operations:  find(), erase(), end().
-			void del_pred(const Job_index pred_job)
+		  // Reuse code of uni/state.hpp
+			void add_pred(const Job_index pred_job, Interval<Time> ft)
 			{
-				job_finish_times.erase(pred_job);
+				// keep sorted according to Job_index.
+				int it = jft_find(job_finish_times, pred_job);
+				job_finish_times.insert(job_finish_times.begin()+it, std::make_pair(pred_job, ft));
 			}
 
-		  // RV:  job_finish_times has Job_index, not JobID. Unclear how this works.
+                        void add_pred_list(JobFinishTimes jft_list)
+                        {
+                                for(auto e: jft_list)
+                                {
+                                        add_pred(e.first, e.second);
+                                }
+                        }
+
+			void del_pred(const Job_index pred_job)
+			{
+				int it = jft_find(job_finish_times, pred_job);
+				if (it < job_finish_times.size() && job_finish_times[it].first==pred_job)
+					job_finish_times.erase(job_finish_times.begin()+it);
+			}
+
+			// RV:  job_finish_times has Job_index, not JobID. Unclear how this works.
 			void widen_pathwise_job(const JobID pred_job, const Interval<Time> ft)
 			{
-				auto it = job_finish_times.find(pred_job);
-				if (it != job_finish_times.end()) {
-					(it->second).widen(ft);
+				int it = jft_find(job_finish_times, pred_job);
+				if (it < job_finish_times.size() && job_finish_times[it].first==pred_job) {
+					(job_finish_times[it].second).widen(ft);
 				}
 			}
 
-		  // RV: Job_index instead of JobID?
+			// RV: Job_index instead of JobID?
 			bool pathwisejob_exists(const JobID pred_job) const
 			{
-				auto it = job_finish_times.find(pred_job);
-				if (it != job_finish_times.end()) {
+				int it = jft_find(job_finish_times, pred_job);
+				if (it < job_finish_times.size() && job_finish_times[it].first==pred_job) {
 					return true;
 				}
 				return false;
 			}
 
+			// RV: similar to get_finish_times() in global/state.hpp .
+			bool pathwisejob_exists(const Job_index pred_job, Interval<Time> &ft) const
+			{
+				int it = jft_find(job_finish_times, pred_job);
+				if (it < job_finish_times.size() && job_finish_times[it].first==pred_job) {
+					ft = job_finish_times[it].second;
+					return true;
+				}
+				return false;
+                        }
+
 			const Interval<Time>& get_pathwisejob_ft(const Job_index pathwise_job) const
 			{
-				return job_finish_times.find(pathwise_job)->second;
+				int it = jft_find(job_finish_times, pathwise_job);
+				//if (it < job_finish_times.size() && job_finish_times[it].first == pathwise_job)
+                                return job_finish_times[it].second;
 			}
 
 		  // RV: Job_index instead of JobID?
 		  //     This function would return the provided parameter, assuming it is found.
-			const JobID& get_pathwisejob_job(const JobID& pathwise_job) const
+		  // not used
+			const Job_index get_pathwisejob_job(const Job_index pathwise_job) const
 			{
-				return job_finish_times.find(pathwise_job)->first;
+				return pathwise_job;
 			}
 
 			const JobFinishTimes& get_pathwise_jobs() const
 			{
 				return job_finish_times;
 			}
+
+			// Either check whether the job_finish_times overlap.
+			bool check_overlap(const JobFinishTimes& from_pwj) const
+			{
+				bool allJobsIntersect = true;
+				// The JobFinishTimes vectors are sorted.
+				// Check intersect for matching jobs.
+				auto from_it = from_pwj.begin();
+				auto state_it = job_finish_times.begin();
+				while (from_it != from_pwj.end() &&
+					state_it != job_finish_times.end())
+				{
+					if (from_it->first == state_it->first)
+					{
+						if (!from_it->second.intersects(state_it->second))
+						{
+							allJobsIntersect = false;
+							break;
+						}
+						from_it++;
+						state_it++;
+					}
+					else if (from_it->first < state_it->first)
+						from_it++;
+					else
+						state_it++;
+				}
+				return allJobsIntersect;
+			}
+
+			void widen_overlap(const JobFinishTimes& from_pwj)
+			{
+				// The JobFinishTimes vectors are sorted.
+				// Assume check_overlap() is true.
+				auto from_it = from_pwj.begin();
+				auto state_it = job_finish_times.begin();
+				while (from_it != from_pwj.end() &&
+					state_it != job_finish_times.end())
+				{
+					if (from_it->first == state_it->first)
+					{
+						state_it->second.widen(from_it->second);
+						from_it++;
+						state_it++;
+					}
+					else if (from_it->first < state_it->first)
+						from_it++;
+					else
+						state_it++;
+				}
+			}
+		  
 
 			// End of functions for pathwise self-suspending exploration
 
@@ -334,6 +423,178 @@ namespace NP {
 
 			// no accidental copies
 			Schedule_state(const Schedule_state& origin)  = delete;
+		};
+
+		template<class Time> class Schedule_node
+		{
+			private:
+
+			Time earliest_pending_release;
+
+			Job_set scheduled_jobs;
+			hash_value_t lookup_key;
+			Interval<Time> finish_time;
+
+			// no accidental copies
+			Schedule_node(const Schedule_node& origin)  = delete;
+
+			typedef Schedule_state<Time> State;
+
+			struct eft_compare 
+			{
+				bool operator() (State* x, State* y) const
+				{
+					return x->earliest_finish_time() < y->earliest_finish_time();
+				}
+			};
+
+			typedef typename std::multiset<State*, eft_compare> State_ref_queue;
+			State_ref_queue states;
+
+			public:
+
+			// initial node
+			Schedule_node()
+			: lookup_key{0}
+			, finish_time{0,0}
+			, earliest_pending_release{0}
+			{
+			}
+
+			// transition: new node by scheduling a job in an existing state
+			Schedule_node(
+				const Schedule_node& from,
+				const State& from_state,
+				const Job<Time>& j,
+				std::size_t idx,
+				Interval<Time> ftimes,
+				const Time next_earliest_release)
+			: scheduled_jobs{from.scheduled_jobs, idx}
+			, lookup_key{from.next_key(j)}
+			, finish_time{ftimes}
+			, earliest_pending_release{next_earliest_release}
+			{
+			}
+
+			Time earliest_job_release() const
+			{
+				return earliest_pending_release;
+			}
+
+			hash_value_t get_key() const
+			{
+				return lookup_key;
+			}
+
+			const Job_set& get_scheduled_jobs() const
+			{
+				return scheduled_jobs;
+			}
+
+			bool matches(const Schedule_node& other) const
+			{
+				return lookup_key == other.lookup_key &&
+					   scheduled_jobs == other.scheduled_jobs;
+			}
+
+			hash_value_t next_key(const Job<Time>& j) const
+			{
+				return get_key() ^ j.get_key();
+			}
+
+			const Interval<Time>& finish_range() const
+			{
+				return finish_time;
+			}
+
+			void add_state(State* s)
+			{
+				states.insert(s);
+			}
+
+			friend std::ostream& operator<< (std::ostream& stream,
+											 const Schedule_node<Time>& n)
+			{
+				stream << "Node(" << n.states.size() << ")";
+				return stream;
+			}
+
+			//return the number of states in the node
+			int states_size() const
+			{
+				return states.size();
+			}
+
+			const State* get_first_state() const
+			{
+				auto first = states.begin();
+				return *first;
+			}
+
+			const State* get_last_state() const
+			{
+				auto last = --(states.end());
+				return *last;
+			}
+
+			const State_ref_queue* get_states() const
+			{
+				return &states;
+			}
+
+			bool merge_states(const Interval<Time> &new_st, const Schedule_state<Time> &from, const Job<Time>& sched_job)
+			{
+				// #NS# I am sorry for this merge function, but I am not sure how to make it better. This merge funciton is messy
+				// because I am trying to merge if possible, before even creating a new state so that I don't have to create a new state
+				// and then throw it away if it can be merged cause i do not know how to handle memory management in that case.
+				// RV: instead of merging with only one state, try to merge with more states if possible.
+				int merge_budget = states.size();
+				int extra_budget = 0;  // Once merged, how many states should still be checked.
+				//#define MERGE_STATISTICS
+				static StatCollect stat = StatCollect("merge");
+				stat.tick(merge_budget);
+
+				bool result = false;
+				for (auto& state : states)
+				{
+					if (merge_budget <= 0)
+						break;
+					if (new_st.intersects(state->finish_range()))
+					{
+						Interval<Time> ival{0,0};
+
+						if (state->pathwisejob_exists(sched_job.get_job_index(),ival))
+						{
+							if (!new_st.intersects(ival))
+								continue;
+						}
+						// First perform the check.
+						if (state->check_or_widen(from.get_pathwise_jobs(), false)) {
+							// When all matching jobs intersect, widen them.
+							state->check_or_widen(from.get_pathwise_jobs(), true);
+							// Find sched_job and widen its finish time interval
+							state->widen_pathwise_job(sched_job.get_job_index(), new_st);
+
+							//Widen the main finish range
+							state->update_finish_range(new_st);
+
+							result = true;
+
+							// Try to merge with a few more states.
+							// std::cerr << "Merged with " << merge_budget << " of " << states.size() << " states left.\n";
+							merge_budget = extra_budget;
+							extra_budget -= 2;
+						}
+					}
+					merge_budget--;
+				}
+
+				stat.tick(result);
+				stat.print();
+
+				return result;
+			}
+
 		};
 
 	}
