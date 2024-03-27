@@ -362,34 +362,10 @@ namespace NP {
 				// RV: instead of merging with only one state, try to merge with more states if possible.
 				int merge_budget = states.size();
 				int extra_budget = 0;  // Once merged, how many states should still be checked.
-				//#define MERGE_STATISTICS
-				static StatCollect stat = StatCollect("merge");
-				stat.tick(merge_budget);
-#ifdef MERGE_STATISTICS
-				static int stats_count[50] = { 0 };
-				static int stats_total = 0;
-				static int stats_max = 0;
-				static int stats_merge_ok = 0;
-				static int stats_merge_fail = 0;
-				bool stats_print=false;
-				stats_total++;
-				stats_print = (stats_total%500 == 0);
-				if (merge_budget < 50)
-				  stats_count[merge_budget]++;
-				if (merge_budget > stats_max)
-				{
-				  stats_max = merge_budget;
-				  stats_print = true;
-				}
-				if (stats_print) {
-				  std::cerr << "merge stats (" << stats_total << ", "<< stats_max << ") : " << stats_count[0];
-				  for (int i=1; i<50 && i<=stats_max; i++)
-				    {
-				      std::cerr << ", " << stats_count[i];
-				    }
-				  std::cerr << "\n"; 
-				}
-#endif
+
+				static StatCollect stats = StatCollect("merge");
+				stats.tick(merge_budget);
+
 				bool result = false;
 				for (auto& state : states)
 				{
@@ -424,17 +400,9 @@ namespace NP {
 					}
 					merge_budget--;
 				}
-				stat.tick(result);
-				stat.print();
-#ifdef MERGE_STATISTICS
-				if (result)
-				  stats_merge_ok++;
-				else
-				  stats_merge_fail++;
-				if (stats_print) {
-				  std::cerr << "merge stats ("<< stats_total << ")  ok: "<< stats_merge_ok << ". fail: "<<stats_merge_fail << "\n";
-				}
-#endif
+				stats.tick(result);
+				stats.print();
+
 				return result;
 			}
 

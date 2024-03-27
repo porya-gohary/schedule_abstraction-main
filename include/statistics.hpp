@@ -12,11 +12,12 @@ namespace NP {
     int max;
     int rettrue;
     int retfalse;
+    int printat;
     bool printit;
     const char *label;
 
-    StatCollect(const char *lab)
-      : total(0), div(1), max(0),rettrue(0),retfalse(0),printit(false),label(lab)
+    StatCollect(const char *lab, int printevery=1000)
+      : total(0), div(1), max(0),rettrue(0),retfalse(0),printit(false),label(lab),printat(printevery)
     {
       for (int i=0; i<50; i++) count[i]=0;
     }
@@ -28,14 +29,16 @@ namespace NP {
 	max = value;
       }
       total++;
-      if (total%500==0) printit=true;
+      if (total%printat==0) printit=true;
       if (value<50) count[value]++;
     }
+
     void tick(bool retvalue)
     {
       if (retvalue)  rettrue++;
       else retfalse++;
     }
+
     void print()
     {
       if (printit) {

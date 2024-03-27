@@ -287,6 +287,7 @@ namespace NP {
 			, be_naive(false)
 			, timeout(max_cpu_time)
 			, max_depth(max_depth)
+			, num_nodes(0)
 			, num_states(0)
 			, num_edges(0)
 			, width(0)

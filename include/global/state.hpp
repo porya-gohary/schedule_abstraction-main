@@ -128,6 +128,10 @@ namespace NP {
 				return lookup_key;
 			}
 
+			// RV: this test is used to detect hash key collisions for states.
+			//     depending on the data structure of scheduled_jobs, it might be expensive.
+			//     to avoid this test, perhaps the key generation for jobs could be improved
+			//     or the hash keys for jobs can be checked for collisions.
 			bool same_jobs_scheduled(const Schedule_state &other) const
 			{
 				return scheduled_jobs == other.scheduled_jobs;
@@ -136,16 +140,30 @@ namespace NP {
 			bool can_merge_with(const Schedule_state<Time>& other) const
 			{
 				assert(core_avail.size() == other.core_avail.size());
-
+				// RV: collect statics:
+				//     1: total number of calls
+				//     2: #calls with matching hash keys
+				//     3: #calls with matching scheduled jobs (<2 means hash collisions)
+				//     4: #calls with intersecting core_avail
+				//     5: #calls with overlapping job_finish_times
+				static StatCollect cmw_stats = StatCollect("can_merge_with",100000);
+				cmw_stats.tick(1);
 				if (get_key() != other.get_key())
 					return false;
-				if (!same_jobs_scheduled(other))
-					return false;
+				cmw_stats.tick(2);
 				for (int i = 0; i < core_avail.size(); i++)
 					if (!core_avail[i].intersects(other.core_avail[i]))
 						return false;
+				cmw_stats.tick(3);
 				//check if JobFinishTimes overlap
-				return check_overlap(other.job_finish_times);
+				bool result = check_overlap(other.job_finish_times);
+				if (!result) return false;
+				cmw_stats.tick(4);
+				if (!same_jobs_scheduled(other))
+					return false;
+				cmw_stats.tick(5);
+				cmw_stats.print();
+				return true;
 			}
 
 			bool try_to_merge(const Schedule_state<Time>& other)
@@ -289,6 +307,7 @@ namespace NP {
 
                         void add_pred_list(JobFinishTimes jft_list)
                         {
+			  // RV: add_pred_list() is probably called when job_finish_times is empty.
                                 for(auto e: jft_list)
                                 {
                                         add_pred(e.first, e.second);
@@ -550,9 +569,9 @@ namespace NP {
 				// RV: instead of merging with only one state, try to merge with more states if possible.
 				int merge_budget = states.size();
 				int extra_budget = 0;  // Once merged, how many states should still be checked.
-				//#define MERGE_STATISTICS
-				static StatCollect stat = StatCollect("merge");
-				stat.tick(merge_budget);
+
+				static StatCollect stats = StatCollect("merge");
+				stats.tick(merge_budget);
 
 				bool result = false;
 				for (auto& state : states)
@@ -589,8 +608,8 @@ namespace NP {
 					merge_budget--;
 				}
 
-				stat.tick(result);
-				stat.print();
+				stats.tick(result);
+				stats.print();
 
 				return result;
 			}

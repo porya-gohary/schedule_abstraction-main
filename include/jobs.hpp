@@ -53,7 +53,9 @@ namespace NP {
 
 		void compute_hash() {
 			auto h = std::hash<Time>{};
-			key = h(arrival.from());
+			//RV: added index to the hash key, which seems to prevent collisions in state/node lookup keys.
+			key = h(index);
+			key = (key << 4) ^ h(arrival.from());
 			key = (key << 4) ^ h(id.task);
 			key = (key << 4) ^ h(arrival.until());
 			key = (key << 4) ^ h(cost.from());
