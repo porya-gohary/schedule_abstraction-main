@@ -80,6 +80,11 @@ namespace NP {
 				return Interval<Time>{rta[index_of(j)]};
 			}
 
+			Interval<Time> get_finish_times(const Job_index index) const
+			{
+				return Interval<Time>{rta[index]};
+			}
+
 			bool is_schedulable() const
 			{
 				return !aborted;
