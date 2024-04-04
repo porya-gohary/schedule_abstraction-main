@@ -77,12 +77,7 @@ namespace NP {
 
 			Interval<Time> get_finish_times(const Job<Time>& j) const
 			{
-				auto rbounds = rta.find(j.get_id());
-				if (rbounds == rta.end()) {
-					return Interval<Time>{0, Time_model::constants<Time>::infinity()};
-				} else {
-					return rbounds->second;
-				}
+				return Interval<Time>{rta[index_of(j)]};
 			}
 
 			bool is_schedulable() const
@@ -198,7 +193,8 @@ namespace NP {
 
 			typedef Interval_lookup_table<Time, Job<Time>, Job<Time>::scheduling_window> Jobs_lut;
 
-			typedef std::unordered_map<JobID, Interval<Time> > Response_times;
+            // NOTE: we don't use Interval<Time> here because the Interval sorts its arguments.
+			typedef std::vector<std::pair<Time, Time>> Response_times;
 
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
 			std::deque<Edge> edges;
@@ -308,22 +304,18 @@ namespace NP {
 				return dl;
 			}
 
-			void update_finish_times(Response_times& r, const JobID& id,
+			void update_finish_times(Response_times& r, const Job_index index,
 			                         Interval<Time> range)
 			{
-				auto rbounds = r.find(id);
-				if (rbounds == r.end()) {
-					r.emplace(id, range);
-				} else {
-					rbounds->second |= range;
-				}
-				DM("RTA " << id << ": " << r.find(id)->second << std::endl);
+				r[index] = std::pair<Time, Time>{std::min(r[index].first, range.from()),
+														 std::max(r[index].second, range.upto())};
+				DM("RTA " << index << ": " << r[index] << std::endl);
 			}
 
 			void update_finish_times(
 				Response_times& r, const Job<Time>& j, Interval<Time> range)
 			{
-				update_finish_times(r, j.get_id(), range);
+				update_finish_times(r, index_of(j), range);
 				if (j.exceeds_deadline(range.upto()))
 					aborted = true;
 			}
@@ -800,6 +792,8 @@ namespace NP {
 			void explore()
 			{
 				make_initial_state();
+				// initialize response-time estimates
+				rta = Response_times(jobs.size(), {Time_model::constants<Time>::infinity(), 0});
 
 				while (current_job_count < jobs.size()) {
 					unsigned long n;
