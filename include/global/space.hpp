@@ -275,6 +275,10 @@ namespace NP {
 			, jobs_by_win(_jobs_by_win)
 			, _predecessors(jobs.size())
 			, predecessors(_predecessors)
+			, rta(Response_times(jobs.size(), {Time_model::constants<Time>::infinity(), 0}))
+#ifdef CONFIG_PARALLEL
+			, partial_rta(Response_times(jobs.size(), {Time_model::constants<Time>::infinity(), 0}))
+#endif
 			{
 				for (const Job<Time>& j : jobs) {
 					_jobs_by_latest_arrival.insert({j.latest_arrival(), &j});
@@ -314,6 +318,14 @@ namespace NP {
 			{
 				r[index] = std::pair<Time, Time>{std::min(r[index].first, range.from()),
 														 std::max(r[index].second, range.upto())};
+				DM("RTA " << index << ": " << r[index] << std::endl);
+			}
+
+			void update_finish_times(Response_times& r, const Job_index index,
+									 std::pair<Time, Time> range)
+			{
+				r[index] = std::pair<Time, Time>{std::min(r[index].first, range.first),
+												 std::max(r[index].second, range.second)};
 				DM("RTA " << index << ": " << r[index] << std::endl);
 			}
 
@@ -797,8 +809,6 @@ namespace NP {
 			void explore()
 			{
 				make_initial_state();
-				// initialize response-time estimates
-				rta = Response_times(jobs.size(), {Time_model::constants<Time>::infinity(), 0});
 
 				while (current_job_count < jobs.size()) {
 					unsigned long n;
@@ -859,8 +869,9 @@ namespace NP {
 #ifdef CONFIG_PARALLEL
 					// propagate any updates to the response-time estimates
 					for (auto& r : partial_rta)
-						for (const auto& elem : r)
-							update_finish_times(rta, elem.first, elem.second);
+						for (int i = 0; i < r.size(); ++i) {
+							update_finish_times(rta, i, r[i]);
+						}
 #endif
 
 #ifndef CONFIG_COLLECT_SCHEDULE_GRAPH
