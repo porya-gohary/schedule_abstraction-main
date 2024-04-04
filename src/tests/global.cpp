@@ -4,6 +4,7 @@
 #include <sstream>
 
 #include "io.hpp"
+#include "global/state.hpp"
 #include "global/space.hpp"
 
 const std::string fig1a_jobs_file =
@@ -25,12 +26,12 @@ TEST_CASE("[global-prec] basic state evolution (RTSS18-Fig-3)") {
 	CHECK(init.core_availability().min() == 0);
 	CHECK(init.core_availability().max() == 0);
 
-	NP::Global::Schedule_state<dtime_t> v1{init, 1, {}, {0, 0}, {5, 15}, 0};
+	NP::Global::Schedule_state<dtime_t> v1{init, 1, {}, {0, 0}, {5, 15}, {} };
 
 	CHECK(v1.core_availability().min() == 0);
 	CHECK(v1.core_availability().max() == 0);
 
-	NP::Global::Schedule_state<dtime_t> vp{v1, 2, {}, {0, 0}, {12, 30}, 0};
+	NP::Global::Schedule_state<dtime_t> vp{v1, 2, {}, {0, 0}, {12, 30}, {} };
 
 	CHECK(vp.core_availability().min() ==  5);
 	CHECK(vp.core_availability().max() == 15);
@@ -38,7 +39,7 @@ TEST_CASE("[global-prec] basic state evolution (RTSS18-Fig-3)") {
 	CHECK(!vp.can_merge_with(init));
 	CHECK(!vp.can_merge_with(v1));
 
-	NP::Global::Schedule_state<dtime_t> v2{init, 2, {}, {0, 0}, {10, 25}, 0};
+	NP::Global::Schedule_state<dtime_t> v2{init, 2, {}, {0, 0}, {10, 25}, {} };
 
 	CHECK(v1.core_availability().min() == 0);
 	CHECK(v1.core_availability().max() == 0);
@@ -46,7 +47,7 @@ TEST_CASE("[global-prec] basic state evolution (RTSS18-Fig-3)") {
 	CHECK(!v2.can_merge_with(v1));
 	CHECK(!v2.try_to_merge(v1));
 
-	NP::Global::Schedule_state<dtime_t> vq{v2, 1, {}, {0, 0}, {8, 20}, 0};
+	NP::Global::Schedule_state<dtime_t> vq{v2, 1, {}, {0, 0}, {8, 20}, { } };
 
 	CHECK(vq.core_availability().min() ==  8);
 	CHECK(vq.core_availability().max() == 20);
