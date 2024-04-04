@@ -193,7 +193,7 @@ namespace NP {
 
 			typedef Interval_lookup_table<Time, Job<Time>, Job<Time>::scheduling_window> Jobs_lut;
 
-            // NOTE: we don't use Interval<Time> here because the Interval sorts its arguments.
+			// NOTE: we don't use Interval<Time> here because the Interval sorts its arguments.
 			typedef std::vector<std::pair<Time, Time>> Response_times;
 
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
