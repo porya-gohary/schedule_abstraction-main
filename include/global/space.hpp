@@ -80,11 +80,6 @@ namespace NP {
 				return Interval<Time>{rta[index_of(j)]};
 			}
 
-			Interval<Time> get_finish_times(const Job_index index) const
-			{
-				return Interval<Time>{rta[index]};
-			}
-
 			bool is_schedulable() const
 			{
 				return !aborted;
@@ -351,7 +346,17 @@ namespace NP {
 
 			std::size_t index_of(const Job<Time>& j) const
 			{
-				return (std::size_t) (&j - &(jobs[0]));
+				// make sure that the job is part of the workload
+				// and catch the case where the job is not part of the workload,
+				// but the user tries to access it anyway
+				auto index =  (std::size_t) (&j - &(jobs[0]));
+				try {
+					jobs.at(index);
+				} catch (std::out_of_range& e) {
+					std::cerr << "Job " << j << " not found in workload." << std::endl;
+					std::abort();
+				}
+				return index;
 			}
 
 			const Job_precedence_set& predecessors_of(const Job<Time>& j) const
