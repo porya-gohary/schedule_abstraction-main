@@ -94,7 +94,7 @@ TEST_CASE("[global-prec] taskset-1") {
 
 	CHECK(space3.is_schedulable());
 
-	for (const NP::Job<dtime_t>& j : jobs) {
+	for (const NP::Job<dtime_t>& j : prob.jobs) {
 		CHECK(nspace3.get_finish_times(j) == space3.get_finish_times(j));
 		CHECK(nspace3.get_finish_times(j).from() != 0);
 	}
@@ -121,7 +121,7 @@ TEST_CASE("[global-prec] taskset-2") {
 
 	CHECK(space2.is_schedulable());
 
-	for (const NP::Job<dtime_t>& j : jobs) {
+	for (const NP::Job<dtime_t>& j : prob.jobs) {
 		CHECK(nspace2.get_finish_times(j) == space2.get_finish_times(j));
 		if (j.least_cost() != 0)
 			CHECK(nspace2.get_finish_times(j).from() != 0);
@@ -138,7 +138,7 @@ TEST_CASE("[global-prec] taskset-2") {
 
 	CHECK(space3.is_schedulable());
 
-	for (const NP::Job<dtime_t>& j : jobs) {
+	for (const NP::Job<dtime_t>& j : prob.jobs) {
 		CHECK(nspace3.get_finish_times(j) == space3.get_finish_times(j));
 		if (j.least_cost() != 0)
 			CHECK(nspace3.get_finish_times(j).from() != 0);

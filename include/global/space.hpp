@@ -77,12 +77,7 @@ namespace NP {
 
 			Interval<Time> get_finish_times(const Job<Time>& j) const
 			{
-				auto rbounds = rta.find(j.get_id());
-				if (rbounds == rta.end()) {
-					return Interval<Time>{0, Time_model::constants<Time>::infinity()};
-				} else {
-					return rbounds->second;
-				}
+				return Interval<Time>{rta[index_of(j)]};
 			}
 
 			bool is_schedulable() const
@@ -198,7 +193,8 @@ namespace NP {
 
 			typedef Interval_lookup_table<Time, Job<Time>, Job<Time>::scheduling_window> Jobs_lut;
 
-			typedef std::unordered_map<JobID, Interval<Time> > Response_times;
+			// NOTE: we don't use Interval<Time> here because the Interval sorts its arguments.
+			typedef std::vector<std::pair<Time, Time>> Response_times;
 
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
 			std::deque<Edge> edges;
@@ -274,6 +270,10 @@ namespace NP {
 			, jobs_by_win(_jobs_by_win)
 			, _predecessors(jobs.size())
 			, predecessors(_predecessors)
+			, rta(Response_times(jobs.size(), {Time_model::constants<Time>::infinity(), 0}))
+#ifdef CONFIG_PARALLEL
+			, partial_rta(Response_times(jobs.size(), {Time_model::constants<Time>::infinity(), 0}))
+#endif
 			{
 				for (const Job<Time>& j : jobs) {
 					_jobs_by_latest_arrival.insert({j.latest_arrival(), &j});
@@ -308,22 +308,26 @@ namespace NP {
 				return dl;
 			}
 
-			void update_finish_times(Response_times& r, const JobID& id,
+			void update_finish_times(Response_times& r, const Job_index index,
 			                         Interval<Time> range)
 			{
-				auto rbounds = r.find(id);
-				if (rbounds == r.end()) {
-					r.emplace(id, range);
-				} else {
-					rbounds->second |= range;
-				}
-				DM("RTA " << id << ": " << r.find(id)->second << std::endl);
+				r[index] = std::pair<Time, Time>{std::min(r[index].first, range.from()),
+														 std::max(r[index].second, range.upto())};
+				DM("RTA " << index << ": " << r[index] << std::endl);
+			}
+
+			void update_finish_times(Response_times& r, const Job_index index,
+									 std::pair<Time, Time> range)
+			{
+				r[index] = std::pair<Time, Time>{std::min(r[index].first, range.first),
+												 std::max(r[index].second, range.second)};
+				DM("RTA " << index << ": " << r[index] << std::endl);
 			}
 
 			void update_finish_times(
 				Response_times& r, const Job<Time>& j, Interval<Time> range)
 			{
-				update_finish_times(r, j.get_id(), range);
+				update_finish_times(r, index_of(j), range);
 				if (j.exceeds_deadline(range.upto()))
 					aborted = true;
 			}
@@ -342,7 +346,17 @@ namespace NP {
 
 			std::size_t index_of(const Job<Time>& j) const
 			{
-				return (std::size_t) (&j - &(jobs[0]));
+				// make sure that the job is part of the workload
+				// and catch the case where the job is not part of the workload,
+				// but the user tries to access it anyway
+				auto index =  (std::size_t) (&j - &(jobs[0]));
+				try {
+					jobs.at(index);
+				} catch (std::out_of_range& e) {
+					std::cerr << "Job " << j << " not found in workload." << std::endl;
+					std::abort();
+				}
+				return index;
 			}
 
 			const Job_precedence_set& predecessors_of(const Job<Time>& j) const
@@ -860,8 +874,9 @@ namespace NP {
 #ifdef CONFIG_PARALLEL
 					// propagate any updates to the response-time estimates
 					for (auto& r : partial_rta)
-						for (const auto& elem : r)
-							update_finish_times(rta, elem.first, elem.second);
+						for (int i = 0; i < r.size(); ++i) {
+							update_finish_times(rta, i, r[i]);
+						}
 #endif
 
 #ifndef CONFIG_COLLECT_SCHEDULE_GRAPH
