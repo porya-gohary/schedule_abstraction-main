@@ -194,15 +194,73 @@ namespace NP {
 		    return true;
 		  }
 
-		  // RV: original function
-		  bool can_merge_with(const Schedule_state& from)
+		  // RV: original function, used in runtests.
+		  bool can_merge_with(const Schedule_state<Time>& other) const
 		  {
-		    return true;
+		    assert(core_avail.size() == other.core_avail.size());
+		    // State has no key or scheduled jobs.
+		    // if (get_key() != other.get_key())
+		    //   return false;
+		    // if (!same_jobs_scheduled(other))
+		    //    return false;
+		    for (int i = 0; i < core_avail.size(); i++)
+		      if (!core_avail[i].intersects(other.core_avail[i]))
+			return false;
+		    //check if JobFinishTimes overlap
+		    //for (const auto& rj : job_finish_times) {
+		    //  auto it = other.job_finish_times.find(rj.first);
+		    //  if (it != other.job_finish_times.end()) {
+		    //	if (!rj.second.intersects(it->second))
+		    //	  return false;
+		    //}
+		    //
+		    //}
+		    return check_overlap(other.job_finish_times);
+		    //return true;
 		  }
 
-		  // RV: original function
-		  bool try_to_merge(const Schedule_state& from)
+		  // RV: original function, used in runtests.
+		  bool try_to_merge(const Schedule_state<Time>& other)
 		  {
+		    if (!can_merge_with(other))
+		      return false;
+		    
+		    for (int i = 0; i < core_avail.size(); i++)
+		      core_avail[i] |= other.core_avail[i];
+
+		    // vector to collect joint certain jobs
+		    std::vector<std::pair<Job_index, Interval<Time>>> new_cj;
+
+		    // walk both sorted job lists to see if we find matches
+		    auto it = certain_jobs.begin();
+		    auto jt = other.certain_jobs.begin();
+		    while (it != certain_jobs.end() &&
+			   jt != other.certain_jobs.end()) {
+		      if (it->first == jt->first) {
+			// same job
+			new_cj.emplace_back(it->first, it->second | jt->second);
+			it++;
+			jt++;
+		      } else if (it->first < jt->first)
+			it++;
+		      else
+			jt++;
+		    }
+		    // move new certain jobs into the state
+		    certain_jobs.swap(new_cj);
+		    
+		    // merge job_finish_times
+		    //for (const auto& rj : other.job_finish_times) {
+		    //  auto it = job_finish_times.find(rj.first);
+		    //  if (it != job_finish_times.end()) {
+		    //it->second.widen(rj.second);
+		    //  }
+		    //}
+		    widen_overlap(other.job_finish_times);
+
+		    
+		    DM("+++ merged " << other << " into " << *this << std::endl);
+		    
 		    return true;
 		  }
 		  
@@ -222,6 +280,7 @@ namespace NP {
 		  bool do_the_merge(const CoreAvailability& cav, const JobFinishTimes& jft,
 				    const JobFinishTimes& cert_j)
 			{
+			  // The check is performed by the caller.
 			        //if (!can_merge_with(cav,jft))
 			        //		return false;
 
@@ -252,7 +311,7 @@ namespace NP {
 				// merge job_finish_times
 				widen_overlap(jft);
 
-				DM("+++ merged " << other << " into " << *this << std::endl);
+				DM("+++ merged (cav,jft,cert_t) into " << *this << std::endl);
 
 				return true;
 			}
@@ -586,14 +645,31 @@ namespace NP {
 				return get_key() ^ j.get_key();
 			}
 
+		  // RV: finish_range / finish_time contains information about the
+		  //     earliest and latest core availability for core 0.
+		  //     whenever a state is changed (through merge) or added,
+		  //     that interval should be adjusted.
 			const Interval<Time>& finish_range() const
 			{
 				return finish_time;
 			}
 
+		  void update_finish_range(const Interval<Time> &update)
+		  {
+		    finish_time.widen(update);
+		  }
+		  
 			void add_state(State* s)
 			{
-				states.insert(s);
+			  // Update finish_time
+			  Interval<Time> ft = s->core_availability();
+			  if (states.size() == 0) {
+			    finish_time = ft;
+			  } else {
+			    // ISSUE: should finish_time be upto the max-of-max or the min-of-max?
+			    finish_time.widen(ft);
+			  }
+			  states.insert(s);
 			}
 
 			friend std::ostream& operator<< (std::ostream& stream,
@@ -658,6 +734,8 @@ namespace NP {
 				      state->do_the_merge(cav, from.get_pathwise_jobs(),
 							  from.get_certain_jobs());
 				      state->widen_pathwise_job(sched_job.get_job_index(), new_finish);
+				      // Update the node finish_time
+				      finish_time.widen(state->core_availability());
 				      
 				      result = true;
 				      

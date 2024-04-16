@@ -46,12 +46,12 @@ TEST_CASE("Intervals") {
 
 TEST_CASE("Job hashes work") {
 	Job<dtime_t> j1{9,  Interval<dtime_t>(0, 0), Interval<dtime_t>(3, 13), 60, 60, 0, 0};
-	Job<dtime_t> j2{9,  Interval<dtime_t>(0, 0), Interval<dtime_t>(3, 13), 60, 60, 0, 1};
+	Job<dtime_t> j2{9,  Interval<dtime_t>(0, 0), Interval<dtime_t>(3, 13), 60, 60, 0, 0};
 	Job<dtime_t> j3{10, Interval<dtime_t>(0, 0), Interval<dtime_t>(3, 13), 60, 60, 0, 2};
 
 	auto h = std::hash<Job<dtime_t>>{};
 
-	CHECK(h(j1) == h(j2));
+	CHECK(h(j1) == h(j2)); // The job index (last argument) can be used to make the hash uniq.
 	CHECK(h(j3) != h(j1));
 }
 

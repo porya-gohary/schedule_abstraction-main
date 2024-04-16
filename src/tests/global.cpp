@@ -44,12 +44,14 @@ TEST_CASE("[global-prec] basic state evolution (RTSS18-Fig-3)") {
 	CHECK(v1.core_availability().min() == 0);
 	CHECK(v1.core_availability().max() == 0);
 
-	CHECK(!v2.can_merge_with(v1));
-	CHECK(!v2.try_to_merge(v1));
+	// With nodes, scheduled_jobs is part of a node, such that state doesn't have a key.
+	// As a result, the merge will work.
+	CHECK(!v2.can_merge_with(v1)); // ISSUE
+	CHECK(!v2.try_to_merge(v1));   // ISSUE
 
 	NP::Global::Schedule_state<dtime_t> vq{v2, 1, {}, {0, 0}, {8, 20}, { } };
 
-	CHECK(vq.core_availability().min() ==  8);
+	CHECK(vq.core_availability().min() ==  8);  // ISSUE: 5
 	CHECK(vq.core_availability().max() == 20);
 
 	CHECK(vq.can_merge_with(vp));
@@ -57,7 +59,7 @@ TEST_CASE("[global-prec] basic state evolution (RTSS18-Fig-3)") {
 
 	CHECK(vp.try_to_merge(vq));
 
-	CHECK(vq.core_availability().min() ==  8);
+	CHECK(vq.core_availability().min() ==  8);  // ISSUE: 5
 	CHECK(vq.core_availability().max() == 20);
 
 	CHECK(vp.core_availability().min() ==  5);
@@ -109,12 +111,12 @@ TEST_CASE("[global] ECRTS18-Fig-1") {
 	auto nspace = NP::Global::State_space<dtime_t>::explore_naively(jobs,
 		num_cpus);
 
-	CHECK_FALSE(nspace.is_schedulable());
+	CHECK_FALSE(nspace.is_schedulable());  // ISSUE
 
 	auto space = NP::Global::State_space<dtime_t>::explore(jobs,
 		num_cpus);
 
-	CHECK_FALSE(space.is_schedulable());
+	CHECK_FALSE(space.is_schedulable()); // ISSUE
 }
 
 static const auto inf = Time_model::constants<dtime_t>::infinity();
@@ -134,10 +136,10 @@ TEST_CASE("[global] Find all next jobs") {
 		CHECK(space.get_finish_times(jobs[0]).until() == 8);
 
 		CHECK(space.get_finish_times(jobs[1]).from()  == 12);
-		CHECK(space.get_finish_times(jobs[1]).until() == 13);
+		CHECK(space.get_finish_times(jobs[1]).until() == 13); // ISSUE: 12
 
 		CHECK(space.get_finish_times(jobs[2]).from()  == 13);
-		CHECK(space.get_finish_times(jobs[2]).until() == 24);
+		CHECK(space.get_finish_times(jobs[2]).until() == 24); // ISSUE: 23
 	}
 
 	SUBCASE("Exploration with merging") {
@@ -148,10 +150,10 @@ TEST_CASE("[global] Find all next jobs") {
 		CHECK(space.get_finish_times(jobs[0]).until() == 8);
 
 		CHECK(space.get_finish_times(jobs[1]).from()  == 12);
-		CHECK(space.get_finish_times(jobs[1]).until() == 13);
+		CHECK(space.get_finish_times(jobs[1]).until() == 13); // ISSUE: 12
 
 		CHECK(space.get_finish_times(jobs[2]).from()  == 13);
-		CHECK(space.get_finish_times(jobs[2]).until() == 24);
+		CHECK(space.get_finish_times(jobs[2]).until() == 24); // ISSUE: 23
 	}
 
 }
@@ -164,16 +166,16 @@ TEST_CASE("[global] Consider large enough interval") {
 	};
 
 	auto nspace = NP::Global::State_space<dtime_t>::explore_naively(jobs, 1);
-	CHECK(nspace.is_schedulable());
+	CHECK(nspace.is_schedulable()); // ISSUE
 
 	CHECK(nspace.get_finish_times(jobs[0]).from()  ==  3);
 	CHECK(nspace.get_finish_times(jobs[0]).until() == 10);
 
 	CHECK(nspace.get_finish_times(jobs[1]).from()  == 12);
-	CHECK(nspace.get_finish_times(jobs[1]).until() == 20);
+	CHECK(nspace.get_finish_times(jobs[1]).until() == 20);  // ISSUE: 12
 
-	CHECK(nspace.get_finish_times(jobs[2]).from()  == 15);
-	CHECK(nspace.get_finish_times(jobs[2]).until() == 19);
+	CHECK(nspace.get_finish_times(jobs[2]).from()  == 15);  // ISSUE: 17
+	CHECK(nspace.get_finish_times(jobs[2]).until() == 19);  // ISSUE: 17
 
 	auto space = NP::Global::State_space<dtime_t>::explore_naively(jobs, 1);
 	CHECK(space.is_schedulable());
@@ -182,10 +184,10 @@ TEST_CASE("[global] Consider large enough interval") {
 	CHECK(space.get_finish_times(jobs[0]).until() == 10);
 
 	CHECK(space.get_finish_times(jobs[1]).from()  == 12);
-	CHECK(space.get_finish_times(jobs[1]).until() == 20);
+	CHECK(space.get_finish_times(jobs[1]).until() == 20); // ISSUE: 12
 
-	CHECK(space.get_finish_times(jobs[2]).from()  == 15);
-	CHECK(space.get_finish_times(jobs[2]).until() == 19);
+	CHECK(space.get_finish_times(jobs[2]).from()  == 15); // ISSUE: 17
+	CHECK(space.get_finish_times(jobs[2]).until() == 19); // ISSUE: 17
 }
 
 TEST_CASE("[global] Respect priorities") {
@@ -223,19 +225,19 @@ TEST_CASE("[global] Respect jitter") {
 	CHECK(nspace.is_schedulable());
 
 	CHECK(nspace.get_finish_times(jobs[0]).from()  ==  3);
-	CHECK(nspace.get_finish_times(jobs[0]).until() == 16);
+	CHECK(nspace.get_finish_times(jobs[0]).until() == 16); // ISSUE: 15
 
 	CHECK(nspace.get_finish_times(jobs[1]).from()  ==  5);
-	CHECK(nspace.get_finish_times(jobs[1]).until() == 15);
+	CHECK(nspace.get_finish_times(jobs[1]).until() == 15); // ISSUE: 8
 
 	auto space = NP::Global::State_space<dtime_t>::explore(jobs, 1);
 	CHECK(space.is_schedulable());
 
 	CHECK(space.get_finish_times(jobs[0]).from()  ==  3);
-	CHECK(space.get_finish_times(jobs[0]).until() == 16);
+	CHECK(space.get_finish_times(jobs[0]).until() == 16); // ISSUE: 15
 
 	CHECK(space.get_finish_times(jobs[1]).from()  ==  5);
-	CHECK(space.get_finish_times(jobs[1]).until() == 15);
+	CHECK(space.get_finish_times(jobs[1]).until() == 15); // ISSUE: 8
 }
 
 TEST_CASE("[global] Be eager") {
@@ -252,10 +254,10 @@ TEST_CASE("[global] Be eager") {
 	CHECK(nspace.get_finish_times(jobs[0]).until() ==  5);
 
 	CHECK(nspace.get_finish_times(jobs[1]).from()  ==  2);
-	CHECK(nspace.get_finish_times(jobs[1]).until() ==  25);
+	CHECK(nspace.get_finish_times(jobs[1]).until() ==  25); // ISSUE: 21
 
 	CHECK(nspace.get_finish_times(jobs[2]).from()  ==  15);
-	CHECK(nspace.get_finish_times(jobs[2]).until() ==  30);
+	CHECK(nspace.get_finish_times(jobs[2]).until() ==  30); // ISSUE: 15
 
 	auto space = NP::Global::State_space<dtime_t>::explore(jobs, 1);
 	CHECK(space.is_schedulable());
@@ -264,10 +266,10 @@ TEST_CASE("[global] Be eager") {
 	CHECK(space.get_finish_times(jobs[0]).until() ==  5);
 
 	CHECK(space.get_finish_times(jobs[1]).from()  ==  2);
-	CHECK(space.get_finish_times(jobs[1]).until() ==  25);
+	CHECK(space.get_finish_times(jobs[1]).until() ==  25); // ISSUE: 21
 
 	CHECK(space.get_finish_times(jobs[2]).from()  ==  15);
-	CHECK(space.get_finish_times(jobs[2]).until() ==  30);
+	CHECK(space.get_finish_times(jobs[2]).until() ==  30); // ISSUE: 15
 }
 
 
@@ -315,25 +317,25 @@ TEST_CASE("[global] Treat equal-priority jobs correctly") {
 	CHECK(nspace.is_schedulable());
 
 	CHECK(nspace.get_finish_times(jobs[0]).from()  ==  2);
-	CHECK(nspace.get_finish_times(jobs[0]).until() ==  1259);
+	CHECK(nspace.get_finish_times(jobs[0]).until() ==  1259);  // ISSUE: 100
 
 	CHECK(nspace.get_finish_times(jobs[1]).from()  ==  50);
-	CHECK(nspace.get_finish_times(jobs[1]).until() ==  1260);
+	CHECK(nspace.get_finish_times(jobs[1]).until() ==  1260); // ISSUE: 1210
 
 	CHECK(nspace.get_finish_times(jobs[2]).from()  ==  1002);
-	CHECK(nspace.get_finish_times(jobs[2]).until() ==  1310);
+	CHECK(nspace.get_finish_times(jobs[2]).until() ==  1310); // ISSUE: 1060
 
 	auto space = NP::Global::State_space<dtime_t>::explore(jobs, 1);
 	CHECK(space.is_schedulable());
 
 	CHECK(nspace.get_finish_times(jobs[0]).from()  ==  2);
-	CHECK(nspace.get_finish_times(jobs[0]).until() ==  1259);
+	CHECK(nspace.get_finish_times(jobs[0]).until() ==  1259); // ISSUE: 100
 
 	CHECK(nspace.get_finish_times(jobs[1]).from()  ==  50);
-	CHECK(nspace.get_finish_times(jobs[1]).until() ==  1260);
+	CHECK(nspace.get_finish_times(jobs[1]).until() ==  1260); // ISSUE: 1210
 
 	CHECK(nspace.get_finish_times(jobs[2]).from()  ==  1002);
-	CHECK(nspace.get_finish_times(jobs[2]).until() ==  1310);
+	CHECK(nspace.get_finish_times(jobs[2]).until() ==  1310); // ISSUE: 1060
 }
 
 TEST_CASE("[global] Equal-priority simultaneous arrivals") {
@@ -346,19 +348,19 @@ TEST_CASE("[global] Equal-priority simultaneous arrivals") {
 	CHECK(nspace.is_schedulable());
 
 	CHECK(nspace.get_finish_times(jobs[0]).from()  ==  2);
-	CHECK(nspace.get_finish_times(jobs[0]).until() ==   9 + 150 + 50);
+	CHECK(nspace.get_finish_times(jobs[0]).until() ==   9 + 150 + 50); // ISSUE: 150
 
 	CHECK(nspace.get_finish_times(jobs[1]).from()  ==  100);
-	CHECK(nspace.get_finish_times(jobs[1]).until() ==  10 + 50 + 150);
+	CHECK(nspace.get_finish_times(jobs[1]).until() ==  10 + 50 + 150); // ISSUE: 160
 
 	auto space = NP::Global::State_space<dtime_t>::explore(jobs, 1);
 	CHECK(space.is_schedulable());
 
 	CHECK(nspace.get_finish_times(jobs[0]).from()  ==  2);
-	CHECK(nspace.get_finish_times(jobs[0]).until() ==   9 + 150 + 50);
+	CHECK(nspace.get_finish_times(jobs[0]).until() ==   9 + 150 + 50);  // ISSUE: 150
 
 	CHECK(nspace.get_finish_times(jobs[1]).from()  ==  100);
-	CHECK(nspace.get_finish_times(jobs[1]).until() ==  10 + 50 + 150);
+	CHECK(nspace.get_finish_times(jobs[1]).until() ==  10 + 50 + 150);  // ISSUE: 160
 }
 
 TEST_CASE("[global] don't skip over deadline-missing jobs") {
@@ -373,14 +375,14 @@ TEST_CASE("[global] don't skip over deadline-missing jobs") {
 	auto nspace = NP::Global::State_space<dtime_t>::explore_naively(jobs, 1);
 	CHECK(!nspace.is_schedulable());
 
-	CHECK(nspace.number_of_edges() == 2);
-	CHECK(nspace.number_of_states() == 3);
+	CHECK(nspace.number_of_edges() == 2);  // ISSUE: 3
+	CHECK(nspace.number_of_states() == 3); // ISSUE: 0
 
 	auto space = NP::Global::State_space<dtime_t>::explore(jobs, 1);
 	CHECK(!space.is_schedulable());
 
-	CHECK(space.number_of_edges() == 2);
-	CHECK(space.number_of_states() == 3);
+	CHECK(space.number_of_edges() == 2); 
+	CHECK(space.number_of_states() == 3);  // ISSUE: 0
 }
 
 TEST_CASE("[global] explore across bucket boundaries") {

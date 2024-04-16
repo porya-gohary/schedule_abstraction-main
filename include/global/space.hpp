@@ -85,22 +85,16 @@ namespace NP {
 
 			Interval<Time> get_finish_times(const Job<Time>& j) const
 			{
-				auto rbounds = rta.find(j.get_job_index());
-				if (rbounds == rta.end()) {
-					return Interval<Time>{0, Time_model::constants<Time>::infinity()};
-				} else {
-					return rbounds->second;
-				}
+			  return get_finish_times(j.get_job_index());
 			}
 
 			Interval<Time> get_finish_times(Job_index j) const
 			{
-				auto rbounds = rta.find(j);
-				if (rbounds == rta.end()) {
-					return Interval<Time>{0, Time_model::constants<Time>::infinity()};
-				} else {
-					return rbounds->second;
-				}
+			  if (!rta[j].valid) {
+			    return Interval<Time>{0, Time_model::constants<Time>::infinity()};
+			  } else {
+			    return rta[j].rt;
+			  }
 			}
 
 			bool is_schedulable() const
@@ -239,11 +233,27 @@ namespace NP {
 
 			typedef Interval_lookup_table<Time, Job<Time>, Job<Time>::scheduling_window> Jobs_lut;
 
-			typedef std::unordered_map<Job_index, Interval<Time> > Response_times;
+		  // Similar to uni/space.hpp, make Response_times a vector of intervals.
+		  
+		  // typedef std::unordered_map<Job_index, Interval<Time> > Response_times;
+		  struct Response_time_item  {
+		    bool valid;  // RV: is rt valid for the given Job_index?
+		    Interval<Time> rt;
+		    
+		    Response_time_item()
+		      : valid(false)
+		      , rt(0,0)
+		    {
+		    }
+		  };
+		  typedef std::vector<Response_time_item> Response_times;
+
+
 
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
 			std::deque<Edge> edges;
 #endif
+		  // Similar to uni/space.hpp, make rta a 
 
 			Response_times rta;
 
@@ -335,6 +345,7 @@ namespace NP {
 			, num_states(0)
 			, num_edges(0)
 			, width(0)
+			, rta(jobs.size())
 			, current_job_count(0)
 			, num_cpus(num_cpus)
 			, jobs_by_latest_arrival_with_susp(_jobs_by_latest_arrival_with_susp)
@@ -399,13 +410,13 @@ namespace NP {
 			void update_finish_times(Response_times& r, const Job_index id,
 									 Interval<Time> range)
 			{
-				auto rbounds = r.find(id);
-				if (rbounds == r.end()) {
-					r.emplace(id, range);
-				} else {
-					rbounds->second |= range;
-				}
-				DM("RTA " << id << ": " << r.find(id)->second << std::endl);
+			  if (!r[id].valid) {
+			    r[id].valid=true;
+			    r[id].rt = range;
+			  } else {
+			    r[id].rt |= range;
+			  }
+				DM("RTA " << id << ": " << r[id].rt << std::endl);
 			}
 
 			void update_finish_times(
@@ -627,6 +638,7 @@ namespace NP {
 				//State& st = new_state(num_cpus);
 				//n->add_state(&st);
 
+				DM("new node - global "<< n << std::endl);
 				auto njobs = n->get_scheduled_jobs().size();
 				auto idx = njobs % num_todo_queues;
 				todo[idx].push_back(n);
@@ -805,7 +817,7 @@ namespace NP {
 		  // when a job has no self-suspension, state is not required.
 		  bool ready(const Node& n, const Job<Time>& j) const
 			{
-			  return unfinished(n, j) && n.job_ready(predecessors_of(j));
+			  return unfinished(n, j) && n.job_ready(predecessors_of(j)) && susp_ready(n,j);
 			}
 
 		  // when a job has self-suspension, susp_ready() should be called.
@@ -843,7 +855,7 @@ namespace NP {
 				{
 					Interval<Time> rbounds = get_finish_times(e->get_fromIndex());
 					if (wants_self_suspensions == PATHWISE_SUSP)
-						rbounds = s.get_pathwisejob_ft(e->get_fromIndex());
+					  rbounds = s.get_pathwisejob_ft(e->get_fromIndex()); // ISSUE: segmentation fault: 
 
 					if (seft <= (rbounds.from() + e->get_minsus()))
 					{
@@ -893,7 +905,8 @@ namespace NP {
 				return n.number_of_scheduled_jobs() == jobs.size();
 			}
 
-			// assumes j is ready, including susp_ready()
+			// assumes j is ready, including susp_ready(), but
+		  // time information of predecessors and suspension still needs to be checked.
 		  Interval<Time> ready_times(const State& s, const Job<Time>& j) const
 			{
 				Interval<Time> r = j.arrival_window();
@@ -955,8 +968,10 @@ namespace NP {
 			}
 
 		  // When a job doesn't depend on suspension, is node information sufficient?
+		  // ISSUE: should n.finish_range().max() be used?
 		  Time latest_ready_time(const Node& n, const Job<Time>& j) const
 			{
+			  //return std::max(j.arrival_window().max(),n.finish_range().max());
 			  return j.arrival_window().max();
 			  // return ready_times(s, j).max();
 			}
@@ -966,9 +981,12 @@ namespace NP {
 			  return ready_times(s, j).min();
 			}
 
-		  Time earliest_ready_time(const Node& s, const Job<Time>& j) const
+		  Time earliest_ready_time(const Node& n, const Job<Time>& j) const
 			{
-			  return j.arrival_window().min();
+			  // RV: when the node keeps track of the finish_times
+			  //     (min/max core availability for core 0 among states)
+			  //     that information should be included here.
+			  return std::max(n.finish_range().min(),j.arrival_window().min());
 			  //return ready_times(s, j).min();
 			}
 
@@ -985,6 +1003,7 @@ namespace NP {
 				const Node& n, Time earliest_ref_ready,
 				const Job<Time>& j_hp, const Job<Time>& j_ref) const
 			{
+			  // ISSUE: how to add node-level finish_time range.
 			  Time t = j_hp.arrival_window().max();
 			  return std::max(t, earliest_ref_ready);
 			}
@@ -1103,6 +1122,9 @@ namespace NP {
 
 				// check everything that overlaps with t_earliest
 				// RV: should state be given to latest_ready_time?
+				// ISSUE: this loop is not restricted to jobs without suspension
+				//        ready(n,j) doesn't check time,
+				//        latest_ready_time(n,j) assumes susp_ready(n,j).
 				for (const Job<Time>& j : jobs_by_win.lookup(t_earliest))
 					if (ready(n, j)){
 						when = std::min(when, latest_ready_time(n, j));
@@ -1204,6 +1226,7 @@ namespace NP {
 			  // Given a node and job, the new state would be added to the same
 			  // next node. Some optimisation might be possible w.r.t. merging.
 			  Node_ref next = nullptr;
+			  DM("--- global:dispatch() "<< n << ", " << j << ", " << t_wc_wos << ", "<<t_high_wos << std::endl);
 			  const auto pair_it = nodes_by_key.find(n.next_key(j));
 			  if (pair_it != nodes_by_key.end()) {
 			    for (Node_ref other : pair_it->second) {
@@ -1211,6 +1234,7 @@ namespace NP {
 			      // RV: If there are collisions, a node could adjust its key, such
 			      //     that future nodes don't have collisions. 
 			      next = other;
+			      DM("=== dispatch: next exists."<< std::endl);
 			      break;
 			    }
 			  }
@@ -1218,10 +1242,18 @@ namespace NP {
 			  for (State *s : *n_states) {
 			    Time t_wc_ws = next_job_ready_with_suspension(n, *s, t_wc_wos);
 			    Time t_high_ws = next_higher_prio_job_ready_with_suspension(n,*s,j,t_high_wos);
+			    DM("=== t_wc_ws = " << t_wc_ws << ", t_wc_wos = " << t_wc_wos << ", t_high_ws = " << t_high_ws << ", t_high_wos = " << t_high_wos << std::endl); 
 			    
 			    Time t_high = std::min(t_high_ws, t_high_wos);
-			    Time t_wc = std::min(t_wc_ws, t_wc_wos);
-			    
+			    // ISSUE: for runtests global:82, this call results in t_wc=0 for job (3,9)
+			    //        that value is used by start_times() and affects _st.second,
+			    //        making the task unschedulable, while it isn't.
+			    //        Check whether t_wc is computed correctly.
+			    //        Check whether start_times() is using the values properly.
+			    Time t_wc = std::max(s->core_availability().min(),
+						 std::min(t_wc_ws, t_wc_wos));
+	    
+			    DM("=== t_high = "<< t_high << ", t_wc = " << t_wc << std::endl);
 			    auto _st = start_times(*s, j, t_wc, t_high);  // RV: no node argument?
 			    if (_st.first > _st.second)
 			      return false; // nope, not schedulable, return.
@@ -1260,7 +1292,7 @@ namespace NP {
 				// If merging didn't work, add a new state.
 				State& new_s = new_state(*s, index_of(j), predecessors_of(j),
 							 st, ftimes, cav);
-				next->add_state(s);
+				next->add_state(&new_s);
 			      }
 			    
 			    // make sure we didn't skip any jobs
@@ -1287,28 +1319,35 @@ namespace NP {
 			{
 			  bool found_one = false;
 			  
-			  DM("----" << std::endl);
+			  DM("---- global:explore(node)" << n.finish_range() << std::endl);
 			  
 			  // (0) define the window of interest
-			  const State& s_first = *(n.get_first_state());
+			  // const State& s_first = *(n.get_first_state());
 			  // earliest time a core is possibly available
-			  auto t_min  = s_first.core_availability().min();
+			  auto t_min  = n.finish_range().min();
 			  // latest time some unfinished job is certainly ready
-			  auto t_job  = next_job_ready(n, s_first, t_min);
+			  // ISSUE: this calls the next_job_ready with and without suspension.
+			  
+			  auto t_job  = next_job_ready_no_suspension(n, t_min);
 			  // latest time some core is certainly available
-			  const State& s_last = *(n.get_last_state());
-			  auto t_core = s_last.core_availability().max();
+			  // const State& s_last = *(n.get_last_state());
+			  // ISSUE: This is not guarenteed to be the max for all states.
+			  auto t_core = n.finish_range().max();
+			  // auto t_core = s_last.core_availability().max();
 			  // latest time by which a work-conserving scheduler
 			  // certainly schedules some job
+			  // ISSUE: t_wc is a max of t_core and t_job, while later functions use a min.
+			  //        t_wc is ignored.
 			  auto t_wc   = std::max(t_core, t_job);
 
-			  DM(s << std::endl);
+			  DM(n << std::endl);
 			  DM("t_min: " << t_min << std::endl
 			     << "t_job: " << t_job << std::endl
 			     << "t_core: " << t_core << std::endl
 			     << "t_wc: " << t_wc << std::endl);
 
-			  Time t_wc_wos = next_job_ready_no_suspension(n,t_min);
+			  // ISSUE:  this should replace t_wc (and its input t_core, t_job).
+			  Time t_wc_wos = std::max(t_core, next_job_ready_no_suspension(n,t_min));
 			  DM("==== [1] ====" << std::endl);
 			  // (1) first check jobs that may be already pending
 			  for (const Job<Time>& j : jobs_by_win.lookup(t_min))

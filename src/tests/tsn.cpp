@@ -98,10 +98,10 @@ TEST_CASE("[TSN] Constant Guardband for TAS with no branching and IPG=0") {
 	CHECK(space.get_finish_times(prob.jobs[0]).min() == 1);
 	CHECK(space.get_finish_times(prob.jobs[0]).max() == 2);
 	CHECK(space.get_finish_times(prob.jobs[1]).min() == 11);
-	CHECK(space.get_finish_times(prob.jobs[1]).max() == 12);
+	CHECK(space.get_finish_times(prob.jobs[1]).max() == 12);  // ISSUE: 19
 	CHECK(space.get_finish_times(prob.jobs[2]).min() == 21);
 	CHECK(space.get_finish_times(prob.jobs[2]).max() == 26);
-	CHECK(space.get_finish_times(prob.jobs[3]).min() == 20);
+	CHECK(space.get_finish_times(prob.jobs[3]).min() == 20);  // ISSUE: 15
 	CHECK(space.get_finish_times(prob.jobs[3]).max() == 22);
 	CHECK(space.get_finish_times(prob.jobs[4]).min() == 52);
 	CHECK(space.get_finish_times(prob.jobs[4]).max() == 56);
@@ -129,15 +129,15 @@ TEST_CASE("[TSN] Constant Guardband for TAS with no branching and IPG=1") {
 	opts.early_exit = false;
 
 	auto space = TSN::State_space<dtime_t>::explore(prob, opts);
-	CHECK(space.is_schedulable());
+	CHECK(space.is_schedulable());  // ISSUE:  false
 
 	CHECK(space.get_finish_times(prob.jobs[0]).min() == 1);
 	CHECK(space.get_finish_times(prob.jobs[0]).max() == 2);
 	CHECK(space.get_finish_times(prob.jobs[1]).min() == 11);
-	CHECK(space.get_finish_times(prob.jobs[1]).max() == 12);
+	CHECK(space.get_finish_times(prob.jobs[1]).max() == 12);  // ISSUE: 22
 	CHECK(space.get_finish_times(prob.jobs[2]).min() == 25);
 	CHECK(space.get_finish_times(prob.jobs[2]).max() == 27);
-	CHECK(space.get_finish_times(prob.jobs[3]).min() == 20);
+	CHECK(space.get_finish_times(prob.jobs[3]).min() == 20);  // ISSUE: 15
 	CHECK(space.get_finish_times(prob.jobs[3]).max() == 22);
 	CHECK(space.get_finish_times(prob.jobs[4]).min() == 52);
 	CHECK(space.get_finish_times(prob.jobs[4]).max() == 56);
@@ -169,12 +169,12 @@ TEST_CASE("[TSN] Constant Guardband for TAS with branching and IPG=0") {
 	CHECK(space.get_finish_times(prob.jobs[0]).min() == 1);
 	CHECK(space.get_finish_times(prob.jobs[0]).max() == 2);
 	CHECK(space.get_finish_times(prob.jobs[1]).min() == 11);
-	CHECK(space.get_finish_times(prob.jobs[1]).max() == 12);
+	CHECK(space.get_finish_times(prob.jobs[1]).max() == 12); // ISSUE: 19
 	CHECK(space.get_finish_times(prob.jobs[2]).min() == 21);
 	CHECK(space.get_finish_times(prob.jobs[2]).max() == 31);
 	CHECK(space.get_finish_times(prob.jobs[3]).min() == 27);
 	CHECK(space.get_finish_times(prob.jobs[3]).max() == 33);
-	CHECK(space.get_finish_times(prob.jobs[4]).min() == 20);
+	CHECK(space.get_finish_times(prob.jobs[4]).min() == 20); // ISSUE: 15
 	CHECK(space.get_finish_times(prob.jobs[4]).max() == 22);
 	CHECK(space.get_finish_times(prob.jobs[5]).min() == 26);
 	CHECK(space.get_finish_times(prob.jobs[5]).max() == 30);
@@ -205,14 +205,14 @@ TEST_CASE("[TSN] Variable Guardband for TAS with no deadline miss and IPG=0") {
 	auto space = TSN::State_space<dtime_t>::explore(prob, opts);
 	CHECK(space.is_schedulable());
 
-	CHECK(space.get_finish_times(prob.jobs[0]).min() == 5);
-	CHECK(space.get_finish_times(prob.jobs[0]).max() == 6);
-	CHECK(space.get_finish_times(prob.jobs[1]).min() == 15);
-	CHECK(space.get_finish_times(prob.jobs[1]).max() == 16);
-	CHECK(space.get_finish_times(prob.jobs[2]).min() == 25);
-	CHECK(space.get_finish_times(prob.jobs[2]).max() == 26);
+	CHECK(space.get_finish_times(prob.jobs[0]).min() == 5);  // ISSUE: 1
+	CHECK(space.get_finish_times(prob.jobs[0]).max() == 6);  // ISSUE: 2
+	CHECK(space.get_finish_times(prob.jobs[1]).min() == 15); // ISSUE: 11
+	CHECK(space.get_finish_times(prob.jobs[1]).max() == 16); // ISSUE: 12
+	CHECK(space.get_finish_times(prob.jobs[2]).min() == 25); // ISSUE: 21
+	CHECK(space.get_finish_times(prob.jobs[2]).max() == 26); 
 	CHECK(space.get_finish_times(prob.jobs[3]).min() == 20);
-	CHECK(space.get_finish_times(prob.jobs[3]).max() == 23);
+	CHECK(space.get_finish_times(prob.jobs[3]).max() == 23); // ISSUE: 22
 	CHECK(space.get_finish_times(prob.jobs[4]).min() == 52);
 	CHECK(space.get_finish_times(prob.jobs[4]).max() == 56);
 
@@ -238,10 +238,10 @@ TEST_CASE("[TSN] Variable Guardband for TAS with deadline miss and IPG=0") {
 	opts.early_exit = false;
 
 	auto space = TSN::State_space<dtime_t>::explore(prob, opts);
-	CHECK(!space.is_schedulable());
+	CHECK(!space.is_schedulable());  // ISSUE
 
-	CHECK(space.get_finish_times(prob.jobs[0]).min() == 5);
-	CHECK(space.get_finish_times(prob.jobs[0]).max() == 6);
+	CHECK(space.get_finish_times(prob.jobs[0]).min() == 5);  // ISSUE: 1
+	CHECK(space.get_finish_times(prob.jobs[0]).max() == 6);  // ISSUE: 2
 	CHECK(space.get_finish_times(prob.jobs[3]).min() == 18);
 	CHECK(space.get_finish_times(prob.jobs[3]).max() == 20);
 
@@ -289,14 +289,14 @@ TEST_CASE("[TSN] Higher Prioirty Open Gate deletion from Eligible Transmission I
 	auto space = TSN::State_space<dtime_t>::explore(prob, opts);
 	CHECK(space.is_schedulable());
 
-	CHECK(space.get_finish_times(prob.jobs[0]).min() == 1000);
-	CHECK(space.get_finish_times(prob.jobs[0]).max() == 1063);
-	CHECK(space.get_finish_times(prob.jobs[1]).min() == 8000);
+	CHECK(space.get_finish_times(prob.jobs[0]).min() == 1000); // ISSUE: 63
+	CHECK(space.get_finish_times(prob.jobs[0]).max() == 1063); // ISSUE: 2063
+	CHECK(space.get_finish_times(prob.jobs[1]).min() == 8000); // ISSUE: 7063
 	CHECK(space.get_finish_times(prob.jobs[1]).max() == 8063);
-	CHECK(space.get_finish_times(prob.jobs[2]).min() == 1089);
+	CHECK(space.get_finish_times(prob.jobs[2]).min() == 1089); // ISSUE: 728
 	CHECK(space.get_finish_times(prob.jobs[2]).max() == 1817);
-	CHECK(space.get_finish_times(prob.jobs[3]).min() == 9089);
-	CHECK(space.get_finish_times(prob.jobs[3]).max() == 9817);
+	CHECK(space.get_finish_times(prob.jobs[3]).min() == 9089); // ISSUE: 8728
+	CHECK(space.get_finish_times(prob.jobs[3]).max() == 9817); 
 
 };
 
