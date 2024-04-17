@@ -292,18 +292,23 @@ namespace NP {
 			// #NS# but it works for now.
 			
 			// In order to store the componenets of the self-suspending tasks, we create a vector of a vector of references
-			// to_suspending_tasks: for each successor, a list of predeccessors are present 
-			// from/_suspending_tasks: for each predecessor, a list of successors are present
+			// to_suspending_tasks: for each job, constaints a list of predeccessors 
+			// from/_suspending_tasks: for each job, contains a list of successors and the suspension time until each successor becomes ready
 			// RV: the suspending_tasks_list might include Job_index, next to JobID.
 			//     the to_suspending_tasks and from_suspending_tasks might have the const protection.
-			typedef std::vector<const Suspending_Task<Time>*> suspending_tasks_to_list;
-			typedef std::vector<Job_index> suspending_tasks_from_list;
+			typedef std::vector<const Suspending_Task<Time>*> Predecessors_list;
+			typedef std::vector<std::pair<Job_index, Interval<Time>>> Successors_list;
+			
+		public:
+			typedef std::vector<Predecessors_list> Predecessors;
+			typedef std::vector<Successors_list> Successors;
 
-			std::vector<suspending_tasks_to_list> _to_suspending_tasks;
-			std::vector<suspending_tasks_from_list> _from_suspending_tasks;
+		private:
+			Predecessors _to_suspending_tasks;
+			Successors _from_suspending_tasks;
 
-			const std::vector<suspending_tasks_to_list>& to_suspending_tasks;
-			const std::vector<suspending_tasks_from_list>& from_suspending_tasks;
+			const Predecessors& to_suspending_tasks;
+			const Successors& from_suspending_tasks;
 
 
 			Nodes nodes;
@@ -373,7 +378,7 @@ namespace NP {
 				}
 				for (const Suspending_Task<Time>& st : susps) {
 					_to_suspending_tasks[st.get_toIndex()].push_back(&st);
-					_from_suspending_tasks[st.get_fromIndex()].push_back(st.get_toIndex());
+					_from_suspending_tasks[st.get_fromIndex()].push_back({ st.get_toIndex(), st.get_suspension() });
 				}
 				for (const Job<Time>& j : jobs) {
 					if (_to_suspending_tasks[j.get_job_index()].size()>0) {
@@ -458,82 +463,12 @@ namespace NP {
 			}
 
 			// find next time by which a job is certainly released
-			// The next certainly released job is found for a particular node, irrespective of prioirty. It is 
-			// first checked to see if it in incomplete and then if IIP exists, it checks for IIp eligibility 
-			// and also prioirty eligibility in case of IIP. The value returned is either the latest arrival 
-			// of a job found and if no job is found infinity is returned.
 			// RV:  IIP is no longer supported?
-
-			// Without suspension, no dependency on state.
-			Time next_certain_job_release_no_suspension(const Node& n)
-			{
-				const Scheduled &already_scheduled = n.get_scheduled_jobs();
-
-				Time nejr = Time_model::constants<Time>::infinity();
-
-				for (auto it = jobs_by_latest_arrival_without_susp
-							   .lower_bound(n.earliest_job_release());
-					 it != jobs_by_latest_arrival_without_susp.end(); it++) {
-					const Job<Time>& j = *(it->second);
-
-					// DM(__FUNCTION__ << " considering:: "  << j << std::endl);
-
-					// not relevant if already scheduled
-					if (!incomplete(already_scheduled, j))
-						continue;
-
-					auto t = j.latest_arrival();
-
-					if(nejr < t)
-						break;
-
-					if(nejr > t) {
-						nejr = t;
-						// RV: any next t will be large. could break here.
-						break;
-					}
-				}
-				return nejr;
-			}
-
-			// With suspension and dependency on state.
-			// max parameter is used to pass the results of 'without_suspension' version
-			Time next_certain_job_release_with_suspension(const Node& n, const State &s,
-								      Time max=Time_model::constants<Time>::infinity())
-			{
-				const Scheduled &already_scheduled = n.get_scheduled_jobs();
-
-				Time nejr = max;
-
-				for (auto it = jobs_by_latest_arrival_with_susp
-							   .lower_bound(n.earliest_job_release());
-					 it != jobs_by_latest_arrival_with_susp.end(); it++) {
-					const Job<Time>& j = *(it->second);
-
-					// DM(__FUNCTION__ << " considering:: "  << j << std::endl);
-
-					if(nejr < j.latest_arrival())
-						break;
-
-					// not relevant if already scheduled
-					if (!incomplete(already_scheduled, j) || !susp_ready(n,j))
-						continue;
-
-					auto t = std::max(j.latest_arrival(), get_slft(n, s, j));
-
-					if(nejr > t)
-						nejr = t;
-						// Not possible to break yet. A later job might have less suspension.
-				}
-				return nejr;
-			}
-
-			// The combined version, where optimization is not possible.
 			Time next_certain_job_release(const Node& n, const State &s)
 			{
-				Time ncjr_wos = next_certain_job_release_no_suspension(n);
-				Time ncjr_ws = next_certain_job_release_with_suspension(n,s, ncjr_wos);
-				return ncjr_ws;
+				Time ncjr_wos = n.get_next_certain_source_job_release();
+				Time ncjr_ws = s.get_earliest_certain_successor_jobs_ready_time();
+				return std::min(ncjr_wos, ncjr_ws);
 			}
 
 			// find next time by which a job of higher priority
@@ -724,6 +659,34 @@ namespace NP {
 				return Time_model::constants<Time>::infinity();
 			}
 
+			// Find the earliest possible certain job release of all source jobs (i.e., without predecessors) 
+			// in a node except for the ignored job
+			Time earliest_certain_source_job_release(
+				const Node& n,
+				const Job<Time>& ignored_job)
+			{
+				DM("      - looking for earliest certain source job release starting from: "
+					<< n.get_next_certain_source_job_release() << std::endl);
+				
+				for (auto it = jobs_by_latest_arrival_without_susp.lower_bound(n.get_next_certain_source_job_release()); it != jobs_by_latest_arrival_without_susp.end(); it++) 
+				{
+					const Job<Time>* jp = it->second;
+					DM("         * looking at " << *jp << std::endl);
+
+					// skip if it is the one we're ignoring or the job was dispatched already
+					if (jp == &ignored_job || !incomplete(n, *jp))  //RV: is this the corrrect test?
+						continue;
+
+					DM("         * found it: " << jp->latest_arrival() << std::endl);
+
+					// it's incomplete and not ignored => found the earliest
+					return jp->latest_arrival();
+				}
+
+				DM("         * No more future releases" << std::endl);
+				return Time_model::constants<Time>::infinity();
+			}
+
 			// Ensure that there is no higher prioirty job that has certainly released
 			bool priority_eligible(const Node& n, const State &s, const Job<Time> &j, Time t)
 			{
@@ -763,7 +726,7 @@ namespace NP {
 			// returns true if all predecessors of j have completed in state s for self-suspending tasks
 			bool susp_ready(const Node &n, const Job<Time> &j)
 			{
-				const suspending_tasks_to_list fsusps = to_suspending_tasks[j.get_job_index()];
+				const Predecessors_list fsusps = to_suspending_tasks[j.get_job_index()];
 				
 				for(auto e : fsusps)
 				{
@@ -775,7 +738,7 @@ namespace NP {
 
 			bool susp_ready_at(const Node &n, const State &s, const Job<Time> &j, Time at)
 			{
-				const suspending_tasks_to_list fsusps = to_suspending_tasks[j.get_job_index()];
+				const Predecessors_list fsusps = to_suspending_tasks[j.get_job_index()];
 
 				for (auto e : fsusps)
 				{
@@ -830,43 +793,6 @@ namespace NP {
 				return true;
 			}
 
-		  // RV: if all states have the same list of completed jobs,
-		  //     The jobsToRemove vector can be applied to all states of a node and stored in a node.
-		  //     remove_jobs_with_no_successors is called from new_state().
-			void remove_jobs_with_no_successors(State& s, const Node& n)
-			{
-				std::vector<Job_index> jobsToRemove;
-
-				for(auto job_info : s.get_pathwise_jobs())
-				{
-					DM("Checking job for removing with no predecessors " << job_info.first << std::endl);
-					Job_index job_check = job_info.first;
-					bool successor_pending = false;
-					
-					// Check if the code block exists before running the loop
-					if (from_suspending_tasks[job_check].size() > 0) {
-						for (auto to_jobs : from_suspending_tasks[job_check]) {
-							if(incomplete(n, to_jobs))
-							{
-								successor_pending = true;
-								break;
-							}
-						}
-					}
-					
-					if(!successor_pending)
-					{
-						DM("Removing job with no successors " << job_check << std::endl);
-						jobsToRemove.push_back(job_check);
-					}
-				}
-
-				// Remove the jobs with no successors
-				for (auto job : jobsToRemove) {
-					s.del_pred(job);
-				}
-			}
-
 			void make_initial_node()
 			{
 				// construct initial node
@@ -900,12 +826,12 @@ namespace NP {
 			}
 			
 			template <typename... Args>
-			Node& new_node(const Node& from_node, const State& from, const Job<Time>& sched_job, Args&&... args)
+			Node& new_node(Interval<Time> ftimes, const Node& from_node, const State& from, const Job<Time>& sched_job, Args&&... args)
 			{
-				nodes.emplace_back(from_node, from, sched_job, std::forward<Args>(args)...);
+				nodes.emplace_back(from_node, sched_job, std::forward<Args>(args)...);
 				Node_ref n_ref = &(*(--nodes.end()));
 
-				State &st = new_state(n_ref->finish_range(), *n_ref, from, sched_job);
+				State &st = new_state(ftimes, *n_ref, from, sched_job);
 
 				n_ref->add_state(&st);
 				DM("State added to node "<< std::endl);
@@ -936,22 +862,11 @@ namespace NP {
 			}
 
 			template <typename... Args>
-			State& new_state(Interval<Time> ftimes, const Node& n, const State& from, const Job<Time>& sched_job)
+			State& new_state(Interval<Time>& ftimes, const Node& n, const State& from, const Job<Time>& sched_job)
 			{
-				states.emplace_back(ftimes);
-				
+				states.emplace_back(n, from, sched_job.get_job_index(), ftimes, from_suspending_tasks);				
 				State_ref s_ref = &(*(--states.end()));
 				num_states++;
-
-				if(want_self_suspensions == PATHWISE_SUSP)
-				{
-					DM("Adding pred list to state "<< std::endl);
-					s_ref->add_pred_list(from.get_pathwise_jobs());
-					s_ref->add_pred(sched_job.get_job_index(), ftimes);
-					remove_jobs_with_no_successors(*s_ref,n);
-					DM("Pred list added to state "<< std::endl);
-				}
-
 				return *s_ref;
 			}
 
@@ -1042,7 +957,7 @@ namespace NP {
 			// Here I do not think anything other than pathwise is needed anymore
 			Time get_seft(const Node &n, const State &s, const Job<Time>& j)
 			{
-				const suspending_tasks_to_list fsusps = to_suspending_tasks[j.get_job_index()];
+				const Predecessors_list fsusps = to_suspending_tasks[j.get_job_index()];
 				Time seft = 0;
 				assert(susp_ready(n, j));
 
@@ -1062,7 +977,7 @@ namespace NP {
 
 			Time get_slft(const Node &n, const State &s, const Job<Time>& j)
 			{
-				const suspending_tasks_to_list fsusps = to_suspending_tasks[j.get_job_index()];
+				const Predecessors_list fsusps = to_suspending_tasks[j.get_job_index()];
 				Time slft = 0;
 
 				for(auto e : fsusps)
@@ -1174,13 +1089,15 @@ namespace NP {
 				Time t_wc = std::max(s.latest_finish_time(), next_certain_job_release(n, s));
 				Time lst = std::min(t_wc, t_high-Time_model::constants<Time>::epsilon());
 								
-				const Node& next =
-					new_node(n, s, j, j.get_job_index(),
-							  next_finish_times(n, s, j, lst),
-							  earliest_possible_job_release(n, j));
+				Node& next =
+					new_node(next_finish_times(n, s, j, lst), n, s, j, j.get_job_index(),
+							  earliest_possible_job_release(n, j),
+							  earliest_certain_source_job_release(n, j));
 				/*DM("      -----> N" << (nodes.end() - nodes.begin())
 				   << std::endl);*/
-				process_new_edge(n, next, j, next.finish_range());
+				State& next_state = new_state(next_finish_times(n, s, j, lst), n, s, j);
+				next.add_state(&next_state);
+				process_new_edge(n, next, j, next_state.finish_range());
 			}
 
 			// Start by making the initial node. While the graph has not finished building and is not aborted, we check to
@@ -1294,9 +1211,9 @@ namespace NP {
 				Interval<Time> finish_range = next_finish_times(n, s, j, lst);//requires lst
 				DM("Creating a new node"<<std::endl);
 				const Node& next =
-					new_node(n, s, j, j.get_job_index(),
-							  finish_range,
-							  earliest_possible_job_release(n, j));
+					new_node(finish_range, n, s, j, j.get_job_index(),
+							  earliest_possible_job_release(n, j),
+							  earliest_certain_source_job_release(n,j));
 				//DM("      -----> N" << (nodes.end() - nodes.begin()) << " " <<(todo[todo_idx].front() - nodes.begin() + 1)
 				//   << std::endl);
 				process_new_edge(n, next, j, finish_range);
@@ -1324,18 +1241,20 @@ namespace NP {
 
 					// #NS# All statemenst below are to be calculated once per node and they are done that way 
 					// the earliest of all the efts of each state in node n
-					auto eft_min = (n.get_first_state())->earliest_finish_time();
+					auto eft_min = n.get_earliest_core_availability(); 
 					// The earliest job release in node n
 					auto rel_min = n.earliest_job_release();
 					// The latest of all the lfts of of each state in node n
-					//RV: the states queue is sorted by eft of each state. It doesn't mean that the last state has the max lft. 
-					auto lft_max = (n.get_last_state())->latest_finish_time();
+					auto lft_max = n.get_latest_core_availability();
 					// among the incomplete jobs of node n, the time at which the earliest certain release occurs.
-					auto nxt_ready_job = next_certain_job_release(n, *(n.get_last_state()));
+					auto nxt_ready_job = n.next_certain_job_ready_time();
 
-					Interval<Time> next_range{std::min(eft_min,rel_min),std::max(lft_max,nxt_ready_job)};
+					auto upbnd_twc = std::max(lft_max,nxt_ready_job);
 
-					DM("=> next range = "<< next_range << std::endl);
+					Time t_wc_ncjr_wos;
+					t_wc_ncjr_wos = n.get_next_certain_source_job_release(); 
+
+					DM("=> upper-bound on twc at node level = "<< upbnd_twc << std::endl);
 
 					// Keep track of the number of states that have led to new states. This is needed to detect
 					// a deadend wherein a state cannot be expanded. The intial value is set to 0 and as we find states that 
@@ -1347,7 +1266,7 @@ namespace NP {
 					// and is either merged, added to the node or a new node is created. 
 					// I did it this way because so that I can use the atleast_one_node variable below, merge might be easier this way?
 					const Job<Time>* jp;
-					foreach_possbly_pending_job_until(n, jp, next_range.upto())
+					foreach_possbly_pending_job_until(n, jp, upbnd_twc)
 					{
 						const Job<Time>& j = *jp;
 
@@ -1360,9 +1279,7 @@ namespace NP {
 
 						// // t_high is computed once per job, and is common to all the states explored
 						Time t_high_wos;
-						Time t_wc_ncjr_wos;
 						t_high_wos = next_certain_higher_priority_job_release_no_suspension(n, j);
-						t_wc_ncjr_wos = next_certain_job_release_no_suspension(n);
 
 						DM("\n---\nChecking for states to expand to for job "<< j.get_id()<<std::endl);
 						for(State *s: *n_states)
@@ -1377,7 +1294,7 @@ namespace NP {
 								// as it is the same for all states in the node.We do need to calculate it for every job though
 								Time t_high_ws = next_certain_higher_priority_job_release_with_suspension(n,*s, j);
 								Time t_high = std::min(t_high_ws,t_high_wos);
-								Time t_wc_ncjr_ws = next_certain_job_release_with_suspension(n,*s);
+								Time t_wc_ncjr_ws = next_certain_job_release(n,*s);
 
 								// #NS# Here, s->latest_finish_time() does need to be calculated once per state, but 
 								// next_certain_job_release is a bit problematic, as it can be calulated once per node, if tehre are no self-suspending

@@ -41,6 +41,11 @@ namespace NP {
 			return sus_times.until();
 		}
 
+		Interval<Time> get_suspension() const
+		{
+			return sus_times;
+		}
+
 		void set_toIndex(Job_index index)
 	  	{
 			toIndex = index;
