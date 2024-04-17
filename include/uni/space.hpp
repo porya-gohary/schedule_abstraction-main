@@ -292,10 +292,10 @@ namespace NP {
 			// #NS# but it works for now.
 			
 			// In order to store the componenets of the self-suspending tasks, we create a vector of a vector of references
-			// to_suspending_tasks: for each job, constaints a list of predeccessors 
+			// predecessors_of: for each job, constaints a list of predeccessors 
 			// from/_suspending_tasks: for each job, contains a list of successors and the suspension time until each successor becomes ready
 			// RV: the suspending_tasks_list might include Job_index, next to JobID.
-			//     the to_suspending_tasks and from_suspending_tasks might have the const protection.
+			//     the predecessors_of and successors_of might have the const protection.
 			typedef std::vector<const Suspending_Task<Time>*> Predecessors_list;
 			typedef std::vector<std::pair<Job_index, Interval<Time>>> Successors_list;
 			
@@ -304,11 +304,11 @@ namespace NP {
 			typedef std::vector<Successors_list> Successors;
 
 		private:
-			Predecessors _to_suspending_tasks;
-			Successors _from_suspending_tasks;
+			Predecessors _predecessors_of;
+			Successors _successors_of;
 
-			const Predecessors& to_suspending_tasks;
-			const Successors& from_suspending_tasks;
+			const Predecessors& predecessors_of;
+			const Successors& successors_of;
 
 
 			Nodes nodes;
@@ -360,11 +360,11 @@ namespace NP {
 			, jobs_by_earliest_arrival(_jobs_by_earliest_arrival)
 			, jobs_by_deadline(_jobs_by_deadline)
 			, _job_precedence_sets(jobs.size())
-			, _to_suspending_tasks(jobs.size())
-			, _from_suspending_tasks(jobs.size())
+			, _predecessors_of(jobs.size())
+			, _successors_of(jobs.size())
 			, job_precedence_sets(_job_precedence_sets)
-			, to_suspending_tasks(_to_suspending_tasks)
-			, from_suspending_tasks(_from_suspending_tasks)
+			, predecessors_of(_predecessors_of)
+			, successors_of(_successors_of)
 			, early_exit(early_exit)
 			, want_self_suspensions(use_self_suspensions)
 			, observed_deadline_miss(false)
@@ -377,11 +377,11 @@ namespace NP {
 					_job_precedence_sets[to.get_job_index()].push_back(from.get_job_index());
 				}
 				for (const Suspending_Task<Time>& st : susps) {
-					_to_suspending_tasks[st.get_toIndex()].push_back(&st);
-					_from_suspending_tasks[st.get_fromIndex()].push_back({ st.get_toIndex(), st.get_suspension() });
+					_predecessors_of[st.get_toIndex()].push_back(&st);
+					_successors_of[st.get_fromIndex()].push_back({ st.get_toIndex(), st.get_suspension() });
 				}
 				for (const Job<Time>& j : jobs) {
-					if (_to_suspending_tasks[j.get_job_index()].size()>0) {
+					if (_predecessors_of[j.get_job_index()].size()>0) {
 						_jobs_by_latest_arrival_with_susp.insert({j.latest_arrival(), &j});
 					} else {
 						_jobs_by_latest_arrival_without_susp.insert({j.latest_arrival(), &j});
@@ -726,7 +726,7 @@ namespace NP {
 			// returns true if all predecessors of j have completed in state s for self-suspending tasks
 			bool susp_ready(const Node &n, const Job<Time> &j)
 			{
-				const Predecessors_list fsusps = to_suspending_tasks[j.get_job_index()];
+				const Predecessors_list fsusps = predecessors_of[j.get_job_index()];
 				
 				for(auto e : fsusps)
 				{
@@ -738,7 +738,7 @@ namespace NP {
 
 			bool susp_ready_at(const Node &n, const State &s, const Job<Time> &j, Time at)
 			{
-				const Predecessors_list fsusps = to_suspending_tasks[j.get_job_index()];
+				const Predecessors_list fsusps = predecessors_of[j.get_job_index()];
 
 				for (auto e : fsusps)
 				{
@@ -864,7 +864,7 @@ namespace NP {
 			template <typename... Args>
 			State& new_state(Interval<Time>& ftimes, const Node& n, const State& from, const Job<Time>& sched_job)
 			{
-				states.emplace_back(n, from, sched_job.get_job_index(), ftimes, from_suspending_tasks);				
+				states.emplace_back(n, from, sched_job.get_job_index(), ftimes, successors_of);				
 				State_ref s_ref = &(*(--states.end()));
 				num_states++;
 				return *s_ref;
@@ -957,7 +957,7 @@ namespace NP {
 			// Here I do not think anything other than pathwise is needed anymore
 			Time get_seft(const Node &n, const State &s, const Job<Time>& j)
 			{
-				const Predecessors_list fsusps = to_suspending_tasks[j.get_job_index()];
+				const Predecessors_list fsusps = predecessors_of[j.get_job_index()];
 				Time seft = 0;
 				assert(susp_ready(n, j));
 
@@ -977,7 +977,7 @@ namespace NP {
 
 			Time get_slft(const Node &n, const State &s, const Job<Time>& j)
 			{
-				const Predecessors_list fsusps = to_suspending_tasks[j.get_job_index()];
+				const Predecessors_list fsusps = predecessors_of[j.get_job_index()];
 				Time slft = 0;
 
 				for(auto e : fsusps)
