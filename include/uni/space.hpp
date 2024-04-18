@@ -462,9 +462,8 @@ namespace NP {
 				return incomplete(n.get_scheduled_jobs(), jobs[j]);
 			}
 
-			// find next time by which a job is certainly released in system state 's'
-			// RV:  IIP is no longer supported?
-			Time next_certain_job_release(const Node& n, const State &s)
+			// find next time by which a job is certainly ready in system state 's'
+			Time next_certain_job_ready_time(const Node& n, const State &s)
 			{
 				Time ncjr_wos = n.get_next_certain_source_job_release();
 				Time ncjr_ws = s.get_earliest_certain_successor_jobs_ready_time();
@@ -575,8 +574,7 @@ namespace NP {
 		if (cpju_macro_local_j->latest_arrival() <= (cpju_macro_local_until))
 
 			// returns true if there is certainly some pending job of higher
-			// priority at the given time ready to be scheduled
-		  
+			// priority at the given time ready to be scheduled		  
 			bool exists_certainly_released_higher_prio_job(
 				const Node& n,
 				const State& s,
@@ -588,9 +586,6 @@ namespace NP {
 
 				DM("    ? " << __FUNCTION__ << " at " << at << ": "
 				   << reference_job << std::endl);
-
-				auto rel_min = n.earliest_job_release();
-
 				// consider all possibly pending jobs and check if they have a higher priority than the 
 				// reference job while also having no predecessor jobs pending.
 				const Job<Time>* jp;
@@ -603,9 +598,7 @@ namespace NP {
 					// check priority
 					if (!j.higher_priority_than(reference_job))
 						continue;
-					// ignore jobs that aren't yet ready, they have predecessor jobs
-					if (!ready(n, j))
-						continue;
+					
 					if (ready_at(n, s, j, at)) {
 						DM("          => found one: " << j << " <<HP<< "
 						   << reference_job << std::endl);
@@ -686,9 +679,8 @@ namespace NP {
 				// job is trivially potentially next, so check the other case.
 
 				if (t_latest < j.earliest_arrival()) {
-					Time r = next_certain_job_release(n, s);
-					// if something else is certainly released before j and IIP-
-					// eligible at the time of certain release, then j can't
+					Time r = next_certain_job_ready_time(n, s);
+					// if something else is certainly released before j, then j can't
 					// possibly be next
 					if (r < j.earliest_arrival())
 						return false;
@@ -718,7 +710,8 @@ namespace NP {
 					return true;
 			}
 
-			bool is_eligible_successor(const Node &n, const State &s, const Job<Time> &j)
+			// Checks if job 'j' may be scheduled next in system state 's'
+			bool is_eligible(const Node &n, const State &s, const Job<Time> &j)
 			{
 				// has been scheduled already, then false
 				if (!incomplete(n, j)) {
@@ -732,13 +725,7 @@ namespace NP {
 					return false;
 				}
 
-				// has predecessors in a self-suspending context, then false
-				if(!ready(n, j)) {
-					DM(" --> not susp ready"  << std::endl);
-					return false;
-				}
-
-				// Job j is not the highest priority job to be scheduled, hen false
+				// Job j is not the highest priority job to be scheduled, then false
 				auto t_s = next_earliest_start_time(n, s, j);
 				if (!priority_eligible(n, s, j, t_s)) {
 					DM("  --> not prio eligible"  << std::endl);
@@ -959,7 +946,7 @@ namespace NP {
 			Time next_earliest_start_time(const Node &n, const State &s, const Job<Time>& j)
 			{
 				// t_S in paper, see definition 6.
-				return std::max(s.earliest_finish_time(), std::max(j.earliest_arrival(), earliest_ready_time(n, s, j)));
+				return std::max(s.earliest_finish_time(), earliest_ready_time(n, s, j));
 			}
 
 			Time next_earliest_finish_time(const Node &n, const State &s, const Job<Time>& j)
@@ -1048,7 +1035,7 @@ namespace NP {
 			void schedule_job(const Node &n, const State& s, const Job<Time> &j)
 			{
 				Time t_high = next_certain_higher_priority_job_release(n, s, j);
-				Time t_wc = std::max(s.latest_finish_time(), next_certain_job_release(n, s));
+				Time t_wc = std::max(s.latest_finish_time(), next_certain_job_ready_time(n, s));
 				Time lst = std::min(t_wc, t_high-Time_model::constants<Time>::epsilon());
 								
 				Node& next =
@@ -1085,7 +1072,7 @@ namespace NP {
 						// relevant job buckets
 						auto ts_min = s->earliest_finish_time();
 						auto rel_min = n.earliest_job_release();
-						auto t_l = std::max(next_certain_job_release(n, *s), s->latest_finish_time());
+						auto t_l = std::max(next_certain_job_ready_time(n, *s), s->latest_finish_time());
 
 						Interval<Time> next_range{std::min(ts_min, rel_min), t_l};
 
@@ -1100,7 +1087,7 @@ namespace NP {
 							const Job<Time>& j = *jp;
 							DM("+ " << j << std::endl);
 							// if it can be scheduled next...
-							if (is_eligible_successor(n, *s, j)) {
+							if (is_eligible(n, *s, j)) {
 								DM("  --> can be next "  << std::endl);
 								// create the relevant state and continue
 								schedule_job(n, *s, j);
@@ -1212,10 +1199,6 @@ namespace NP {
 					auto nxt_ready_job = n.next_certain_job_ready_time();
 
 					auto upbnd_twc = std::max(lft_max,nxt_ready_job);
-
-					Time t_wc_ncjr_wos;
-					t_wc_ncjr_wos = n.get_next_certain_source_job_release(); 
-
 					DM("=> upper-bound on twc at node level = "<< upbnd_twc << std::endl);
 
 					// Keep track of the number of states that have led to new states. This is needed to detect
@@ -1238,32 +1221,23 @@ namespace NP {
 						// If a node was already created, we keep a reference to it
 						Node_ref new_node;
 
-						// t_high is computed once per job, and is common to all the states explored
+						// this part of t_high is computed once per job, and is common to all the states explored
 						Time t_high_wos;
 						t_high_wos = next_certain_higher_priority_source_job_release(n, j);
 
 						DM("\n---\nChecking for states to expand to for job "<< j.get_id()<<std::endl);
 						for(State *s: *n_states)
 						{
-							if (is_eligible_successor(n, *s, j))
+							if (is_eligible(n, *s, j))
 							{
-								// Calculate the t_wc value which in turn will allow you to calculate the 
+								// Calculate the t_wc and t_high values which in turn will allow you to calculate the 
 								// latest start time which uses t_wc and t_high that was calculated before 
 								// looping through all the states.
-
-								// #NS# t_high can be calculated once per job, per node. We do not need to calculate it for every state
-								// as it is the same for all states in the node.We do need to calculate it for every job though
 								Time t_high_ws = next_certain_higher_priority_successor_job_release(n,*s, j);
-								Time t_high = std::min(t_high_ws,t_high_wos);
-								Time t_wc_ncjr_ws = next_certain_job_release(n,*s);
+								Time t_high = std::min(t_high_ws, t_high_wos);
 
-								// #NS# Here, s->latest_finish_time() does need to be calculated once per state, but 
-								// next_certain_job_release is a bit problematic, as it can be calulated once per node, if tehre are no self-suspending
-								// tasks. If there are self-suspending tasks, then it has to be calculated once per state. More comments
-								// on this can be found in the next_certain_job_release function
-								Time t_wc = std::max(s->latest_finish_time(), std::min(t_wc_ncjr_wos,t_wc_ncjr_ws));
+								Time t_wc = std::max(s->latest_finish_time(), next_certain_job_ready_time(n, *s));
 
-								// #NS# lst is calculated once per state, becasue t_wc is calculated once per state
 								Time lst = std::min(t_wc, t_high-Time_model::constants<Time>::epsilon());
 
 								if(node_created == false)
@@ -1287,7 +1261,8 @@ namespace NP {
 											if(found.get_scheduled_jobs() != sched_jobs)
 												continue;
 
-											// If we have reached here, it means that we have found a state where merge is possible.
+											// If we have reached here, it means that we have found a node with the same set of scheduled jobs
+											// Thus, our new state can be added to that node.
 											new_node = it->second;
 											schedule_merge_node(n, new_node, *s, j, lst);
 											node_created = true;
@@ -1295,7 +1270,7 @@ namespace NP {
 										}
 									}
 
-									// if there exists no existing nodes where the new state can be merged into, then a new node is created
+									// if there is no existing nodes where the new state can be merged into, then a new node is created
 									if(node_created == false)
 									{
 										new_node = schedule_new(n, *s, j, lst);
@@ -1304,7 +1279,7 @@ namespace NP {
 								}								
 								else
 								{
-									schedule_merge_edge(n, new_node, *s, j, lst); //match is given here
+									schedule_merge_edge(n, new_node, *s, j, lst); //new_node is given here
 								}
 
 								// If the state is not a deadend, then we already know that the state has been expanded
