@@ -180,6 +180,12 @@ namespace NP {
 			}
 
 		public:
+			const JobFinishTimes& get_pathwise_jobs() const
+			{
+				return job_finish_times;
+			}
+
+			
 			void widen_pathwise_job(const Job_index pred_job, const Interval<Time> ft)
 			{
 				int it = jft_find(pred_job);
@@ -188,20 +194,12 @@ namespace NP {
 				}
 			}
 
-			bool pathwisejob_exists(const Job_index pred_job) const
+			// Checks if the state kept information on the finishing time interval of job in the current system state,
+			// and returns the finishing time interval in the variable 'ft' if that is the case
+			bool pathwisejob_exists(const Job_index job, Interval<Time> &ft) const
 			{
-				int it = jft_find(pred_job);
-				if (it < job_finish_times.size() && job_finish_times[it].first==pred_job) {
-					return true;
-				}
-				return false;
-			}
-
-			// RV: similar to get_finish_times() in global/state.hpp .
-			bool pathwisejob_exists(const Job_index pred_job, Interval<Time> &ft) const
-			{
-				int it = jft_find(pred_job);
-				if (it < job_finish_times.size() && job_finish_times[it].first==pred_job) {
+				int it = jft_find(job);
+				if (it < job_finish_times.size() && job_finish_times[it].first==job) {
 					ft = job_finish_times[it].second;
 					return true;
 				}
@@ -216,19 +214,6 @@ namespace NP {
 				return job_finish_times[it].second;
 				//	else
 				// return NULL;
-			}
-
-			
-		  
-		  // Unused.
-			const Job_index get_pathwisejob_job(const Job_index pathwise_job) const
-			{
-				return 0; // job_finish_times.find(pathwise_job)->first;
-			}
-
-			const JobFinishTimes& get_pathwise_jobs() const
-			{
-				return job_finish_times;
 			}
 
 			// Either check whether the job_finish_times can be merged or merge them without checking.
@@ -391,7 +376,7 @@ namespace NP {
 			void add_state(State* s)
 			{
 				states.insert(s);
-				finish_time.merge(s->finish_range());
+				finish_time.widen(s->finish_range());
 				next_certain_job_ready_time_successors = std::max(next_certain_job_ready_time_successors, s->get_earliest_certain_successor_jobs_ready_time());
 			}
 
@@ -455,8 +440,9 @@ namespace NP {
 							// Find sched_job and widen its finish time interval
 							state->widen_pathwise_job(sched_job.get_job_index(), new_st);
 
-							//Widen the main finish range
+							//Widen the main finish range in the merged state and the node
 							state->update_finish_range(new_st);
+							finish_time.widen(new_st);
 
 							result = true;
 
