@@ -26,7 +26,7 @@ jobs:
         os: [ubuntu-latest, windows-latest]
         build_type: [Release]
         c_compiler: [gcc, clang, cl]
-        cmake_option: [ -DPARALLEL_RUN=OFF, -DPARALLEL_RUN=ON]
+        cmake_option: [-DPARALLEL_RUN=OFF, -DPARALLEL_RUN=ON, -DCOLLECT_SCHEDULE_GRAPHS=ON]
         include:
           - os: windows-latest
             c_compiler: cl
