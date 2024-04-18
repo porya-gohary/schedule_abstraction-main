@@ -462,7 +462,7 @@ namespace NP {
 				return incomplete(n.get_scheduled_jobs(), jobs[j]);
 			}
 
-			// find next time by which a job is certainly released
+			// find next time by which a job is certainly released in system state 's'
 			// RV:  IIP is no longer supported?
 			Time next_certain_job_release(const Node& n, const State &s)
 			{
@@ -471,52 +471,36 @@ namespace NP {
 				return std::min(ncjr_wos, ncjr_ws);
 			}
 
-			// find next time by which a job of higher priority
-			// is certainly released on or after a given point in time
-			// This function is very similar to the next_certain_job release, except that it checks if a job is higher
-			// prioirty job instead of checking for iip eligibility. It also looks for a higher prioirty certain next 
-			// release which means that it is not looking for the earliest certain release in the entire node, but the 
-			// earliest higher prioirty certain job release based on job reference_job
-			// RV: if it is similar to next_certain_job_release, except for some IIP condition, would the function
-			//     be relevant if IIP is no longer supported (or is located in the include/uni_iip directory).
-
-			// Without suspension and independent of state.
-			Time next_certain_higher_priority_job_release_no_suspension(
+			// Find next time by which a source job (i.e., a job without predecessors) of higher priority than the reference_job
+			// is certainly released in any state in the node 'n'. 
+			Time next_certain_higher_priority_source_job_release(
 				const Node& n,
 				const Job<Time>& reference_job)
 			{
 				Time nejr = Time_model::constants<Time>::infinity();
 
-				for (auto it = jobs_by_latest_arrival_without_susp
-							   .lower_bound(n.earliest_job_release()     );
+				for (auto it = jobs_by_latest_arrival_without_susp.lower_bound(n.get_next_certain_source_job_release());
 					 it != jobs_by_latest_arrival_without_susp.end(); it++) {
 					const Job<Time>& j = *(it->second);
+
+					// irrelevant if not of higher priority
+					if (!j.higher_priority_than(reference_job))
+						continue;
 
 					// not relevant if already scheduled
 					if (!incomplete(n, j))
 						continue;
 
-					// irrelevant if not of sufficient priority
-					if (!j.higher_priority_than(reference_job))
-						continue;
-
-					auto t = j.latest_arrival();
-
-					//RV: This test should not be necessary or go before the other tests.
-					if(nejr < t)
-						break;
-					
-					if(nejr > t) {
-						nejr = t;
-						// Jobs ordered by latest_arrival, so next jobs are later.
-						break;
-					}
+					nejr = j.latest_arrival();
+					// Jobs ordered by latest_arrival, so next jobs are later. We can thus stop seraching.
+					break;
 				}
 				return nejr;
 			}
 
-			// With suspension and dependency on state.
-			Time next_certain_higher_priority_job_release_with_suspension(
+			// Find next time by which a successor job (i.e., a job with predecessors) of higher priority than the reference_job
+			// is certainly released in system state 's' at or before a time 'max'.
+			Time next_certain_higher_priority_successor_job_release(
 				const Node& n,
 				const State& s,
 				const Job<Time>& reference_job,
@@ -524,23 +508,23 @@ namespace NP {
 			{
 				Time nejr = max;
 
-				for (auto it = jobs_by_latest_arrival_with_susp
-							   .lower_bound(n.earliest_job_release()     );
-					 it != jobs_by_latest_arrival_with_susp.end(); it++) {
+				for (auto it = jobs_by_latest_arrival_with_susp.lower_bound(s.get_earliest_certain_successor_jobs_ready_time());
+					 it != jobs_by_latest_arrival_with_susp.end(); it++) 
+				{
 					const Job<Time>& j = *(it->second);
 
 					if(nejr < j.latest_arrival())
 						break;
 
-					// not relevant if already scheduled
-					if (!incomplete(n, j) || !susp_ready(n, j))
-						continue;
-
-					// irrelevant if not of sufficient priority
+					// irrelevant if not of higher priority
 					if (!j.higher_priority_than(reference_job))
 						continue;
 
-					auto t = std::max(j.latest_arrival(), get_slft(n, s, j));
+					// not relevant if already scheduled or not ready (i.e., with non-completed predecessors)
+					if (!incomplete(n, j) || !ready(n, j))
+						continue;
+
+					auto t = std::max(j.latest_arrival(), latest_ready_time(n, s, j));
 					
 					if(nejr > t)
 						nejr = t;
@@ -555,8 +539,8 @@ namespace NP {
 				const State& s,
 				const Job<Time>& reference_job)
 			{
-				Time nchpjr_wos = next_certain_higher_priority_job_release_no_suspension(n,reference_job);
-				Time nchpjr_ws = next_certain_higher_priority_job_release_with_suspension(n,s,reference_job, nchpjr_wos);
+				Time nchpjr_wos = next_certain_higher_priority_source_job_release(n,reference_job);
+				Time nchpjr_ws = next_certain_higher_priority_successor_job_release(n,s,reference_job, nchpjr_wos);
 				return nchpjr_ws;
 			}
 
@@ -622,7 +606,7 @@ namespace NP {
 					// ignore jobs that aren't yet ready, they have predecessor jobs
 					if (!ready(n, j))
 						continue;
-					if (susp_ready_at(n, s, j, at)) {
+					if (ready_at(n, s, j, at)) {
 						DM("          => found one: " << j << " <<HP<< "
 						   << reference_job << std::endl);
 						return true;
@@ -721,39 +705,17 @@ namespace NP {
 				return n.get_scheduled_jobs().includes(preds);
 			}
 
-			// #NS# The following funcitons namely, susp_ready and susp_ready_at are used for self-suspending jobs
-			// Again there are loops here that can be done better
-			// returns true if all predecessors of j have completed in state s for self-suspending tasks
-			bool susp_ready(const Node &n, const Job<Time> &j)
+			// Returns true if all predecessors of job 'j' have completed in state 's' no later than 'at'
+			bool ready_at(const Node &n, const State &s, const Job<Time> &j, Time at)
 			{
-				const Predecessors_list fsusps = predecessors_of[j.get_job_index()];
+				if (!ready(n, j))
+					return false;
 				
-				for(auto e : fsusps)
-				{
-					if(!n.get_scheduled_jobs().contains(e->get_fromIndex())) //#NS# Does all this need to be in contains() There should be a better way
-						return false;
-				}
-				return true;
-			}
-
-			bool susp_ready_at(const Node &n, const State &s, const Job<Time> &j, Time at)
-			{
-				const Predecessors_list fsusps = predecessors_of[j.get_job_index()];
-
-				for (auto e : fsusps)
-				{
-					// RV: this test doesn't use the at time.
-					if (!n.get_scheduled_jobs().contains(e->get_fromIndex())) //#NS# Does all this need to be in contains() There should be a better way
-						return false;
-					else {
-					  // RV: This test doesn't refer to variable e.
-					  //     depends on execution times and length of fsusps whether moving the test
-					  //     before the loop makes sense.
-						if (get_slft(n,s,j) > at)
-							return false;
-					}
-				}
-				return true;
+				// if job 'j' is ready in state 's', we check whether it will be ready no later than 'at'
+				if (latest_ready_time(n,s,j) > at)
+					return false;
+				else
+					return true;
 			}
 
 			bool is_eligible_successor(const Node &n, const State &s, const Job<Time> &j)
@@ -771,7 +733,7 @@ namespace NP {
 				}
 
 				// has predecessors in a self-suspending context, then false
-				if(!susp_ready(n, j)) {
+				if(!ready(n, j)) {
 					DM(" --> not susp ready"  << std::endl);
 					return false;
 				}
@@ -953,43 +915,43 @@ namespace NP {
 			// Rules for finding the next state //
 			//////////////////////////////////////
 
-			// #NS# The following funcitons, namely get_seft and get_slft are used for self-suspending jobs
-			// Here I do not think anything other than pathwise is needed anymore
-			Time get_seft(const Node &n, const State &s, const Job<Time>& j)
+			// Returns the earliest time job 'j' may be ready in state 's' 
+			// accounting for precedence and suspension time
+			Time earliest_ready_time(const Node &n, const State &s, const Job<Time>& j)
 			{
-				const Predecessors_list fsusps = predecessors_of[j.get_job_index()];
-				Time seft = 0;
-				assert(susp_ready(n, j));
+				Time seft = j.earliest_arrival;
+				assert(ready(n, j));
 
-				for(auto e : fsusps)
+				for(auto e : predecessors_of[j.get_job_index()])
 				{
-					Interval<Time> rbounds = get_finish_times(jobs[e->get_fromIndex()]);
-					if(want_self_suspensions == PATHWISE_SUSP) // #NS# The rbounds assignment inside this if should always happen
+					Interval<Time> rbounds; 
+					if(want_self_suspensions == PATHWISE_SUSP) 
 						rbounds = s.get_pathwisejob_ft(e->get_fromIndex());
+					else
+						rbounds = get_finish_times(jobs[e->get_fromIndex()]);
 
 					if(seft <= (rbounds.from() + e->get_minsus()))
-					{
 						seft = rbounds.from() + e->get_minsus();
-					}
 				}
 				return seft;
 			}
 
-			Time get_slft(const Node &n, const State &s, const Job<Time>& j)
+			// Returns the latest time job 'j' may be ready in state 's'
+			// accounting for precedence and suspension time
+			Time latest_ready_time(const Node &n, const State &s, const Job<Time>& j)
 			{
-				const Predecessors_list fsusps = predecessors_of[j.get_job_index()];
-				Time slft = 0;
+				Time slft = j.latest_arrival;
 
-				for(auto e : fsusps)
+				for(auto e : predecessors_of[j.get_job_index()])
 				{
-					Interval<Time> rbounds = get_finish_times(e->get_fromIndex());
-					if(want_self_suspensions == PATHWISE_SUSP) // #NS# The rbounds assignment inside this if should always happen
+					Interval<Time> rbounds; 
+					if(want_self_suspensions == PATHWISE_SUSP)
 						rbounds = s.get_pathwisejob_ft(e->get_fromIndex());
+					else 
+						rbounds = get_finish_times(e->get_fromIndex());
 
 					if(slft <= (rbounds.until() + e->get_maxsus()))
-					{
 						slft = rbounds.until() + e->get_maxsus();
-					}
 				}
 				return slft;
 			}
@@ -997,7 +959,7 @@ namespace NP {
 			Time next_earliest_start_time(const Node &n, const State &s, const Job<Time>& j)
 			{
 				// t_S in paper, see definition 6.
-				return std::max(s.earliest_finish_time(), std::max(j.earliest_arrival(), get_seft(n, s, j)));
+				return std::max(s.earliest_finish_time(), std::max(j.earliest_arrival(), earliest_ready_time(n, s, j)));
 			}
 
 			Time next_earliest_finish_time(const Node &n, const State &s, const Job<Time>& j)
@@ -1261,25 +1223,24 @@ namespace NP {
 					// can be expanded, we incremet this variable
 					int num_states_expanded = 0;
 
-					// #NS# the loop below is very messy, essentially I want to check for all the jobs that have not been scheduled next
-					// are they the next potential job to be scheduled, for each state in the node. If they are, then a new state is created
-					// and is either merged, added to the node or a new node is created. 
-					// I did it this way because so that I can use the atleast_one_node variable below, merge might be easier this way?
+					// Check for all the jobs that have not been scheduled next
+					// are they the next potential job to be scheduled, for each state in the node n. 
+					// If they are, then a new state is created and is either merged, added to an exisiting node or a new node is created with that state. 
 					const Job<Time>* jp;
 					foreach_possbly_pending_job_until(n, jp, upbnd_twc)
 					{
 						const Job<Time>& j = *jp;
 
-						// atleast_one_node keeps track of whether atleast one node has been created with the current job
-						// All other states that ensure that the job 'j' is eligible will merge into the same node. 
-						bool atleast_one_node = false;
+						// node_created keeps track of whether a node 'new_node' has been created with the current job
+						// All states in node 'n' for which the job 'j' is eligible will be added to that same node 'new_node'. 
+						bool node_created = false;
 
-						// If atleast_one_node has been found then it has to be stored in the variable match
-						Node_ref match;
+						// If a node was already created, we keep a reference to it
+						Node_ref new_node;
 
-						// // t_high is computed once per job, and is common to all the states explored
+						// t_high is computed once per job, and is common to all the states explored
 						Time t_high_wos;
-						t_high_wos = next_certain_higher_priority_job_release_no_suspension(n, j);
+						t_high_wos = next_certain_higher_priority_source_job_release(n, j);
 
 						DM("\n---\nChecking for states to expand to for job "<< j.get_id()<<std::endl);
 						for(State *s: *n_states)
@@ -1292,7 +1253,7 @@ namespace NP {
 
 								// #NS# t_high can be calculated once per job, per node. We do not need to calculate it for every state
 								// as it is the same for all states in the node.We do need to calculate it for every job though
-								Time t_high_ws = next_certain_higher_priority_job_release_with_suspension(n,*s, j);
+								Time t_high_ws = next_certain_higher_priority_successor_job_release(n,*s, j);
 								Time t_high = std::min(t_high_ws,t_high_wos);
 								Time t_wc_ncjr_ws = next_certain_job_release(n,*s);
 
@@ -1305,7 +1266,7 @@ namespace NP {
 								// #NS# lst is calculated once per state, becasue t_wc is calculated once per state
 								Time lst = std::min(t_wc, t_high-Time_model::constants<Time>::epsilon());
 
-								if(atleast_one_node == false)
+								if(node_created == false)
 								{
 									// Find the key of the next state from state s connected by an edge with job j
 									// Find all states that have the same key
@@ -1327,23 +1288,23 @@ namespace NP {
 												continue;
 
 											// If we have reached here, it means that we have found a state where merge is possible.
-											match = it->second;
-											schedule_merge_node(n, match, *s, j, lst);
-											atleast_one_node = true;
+											new_node = it->second;
+											schedule_merge_node(n, new_node, *s, j, lst);
+											node_created = true;
 											break;
 										}
 									}
 
 									// if there exists no existing nodes where the new state can be merged into, then a new node is created
-									if(atleast_one_node == false)
+									if(node_created == false)
 									{
-										match = schedule_new(n, *s, j, lst);
-										atleast_one_node = true;
+										new_node = schedule_new(n, *s, j, lst);
+										node_created = true;
 									}
 								}								
 								else
 								{
-									schedule_merge_edge(n, match, *s, j, lst); //match is given here
+									schedule_merge_edge(n, new_node, *s, j, lst); //match is given here
 								}
 
 								// If the state is not a deadend, then we already know that the state has been expanded
