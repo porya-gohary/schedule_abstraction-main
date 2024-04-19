@@ -1113,12 +1113,17 @@ namespace NP {
 			void schedule_merge_edge(const Node& n, const Node_ref match, const State& s, const Job<Time> &j, const Time est, const Time lst)
 			{
 				Interval<Time> finish_range = next_finish_times(n, s, j, est, lst);//requires lst
-				if(!match->merge_states(finish_range, s, j))
+				State& st = new_state(finish_range, n, s, j);
+
+				if (match->merge_states(st))
+				{
+					delete& st;
+				}
+				else
 				{
 					if(use_supernodes)
 					{
 						DM("State not merged but added to the node"<<std::endl);
-						State &st = new_state(finish_range, n, s, j);
 						match->add_state(&st);
 					}
 					else
@@ -1131,13 +1136,18 @@ namespace NP {
 			// node but has its own unique edge.
 			void schedule_merge_node(const Node& n, const Node_ref match, const State& s, const Job<Time> &j, const Time est, const Time lst)
 			{
-				Interval<Time> finish_range = next_finish_times(n, s, j, est, lst);//requires lst
-				if(!match->merge_states(finish_range, s, j))
+				Interval<Time> finish_range = next_finish_times(n, s, j, est, lst);
+				State& st = new_state(finish_range, n, s, j);
+
+				if (match->merge_states(st))
+				{
+					delete& st;
+				}
+				else
 				{
 					if(use_supernodes)
 					{
 						DM("State not merged but added to the node");
-						State &st = new_state(finish_range, n, s, j);
 						match->add_state(&st);
 					}
 					else

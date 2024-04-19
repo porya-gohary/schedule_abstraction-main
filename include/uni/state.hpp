@@ -93,6 +93,11 @@ namespace NP {
 					{
 						job_finish_times.push_back(std::make_pair(dispatched_j, ftime_interval));
 						dispatched_j_inserted = true;
+
+						for (auto succ : successors_of[dispatched_j]) {
+							Time max_susp = succ.second.max();
+							earliest_certain_successor_jobs_ready_time = std::min(earliest_certain_successor_jobs_ready_time, ftime_interval.max() + max_susp);
+						}
 					}
 
 					bool successor_pending = false;
@@ -145,6 +150,11 @@ namespace NP {
 			Time get_earliest_certain_successor_jobs_ready_time() const
 			{
 				return earliest_certain_successor_jobs_ready_time;
+			}
+
+			void update_successor_job_ready_time(Time t)
+			{
+				earliest_certain_successor_jobs_ready_time = std::max(earliest_certain_successor_jobs_ready_time, t);
 			}
 
 			// #NS# all the following functions are purely to handle the job_finish_times
@@ -246,7 +256,7 @@ namespace NP {
 			private:
 
 			Time earliest_pending_release;
-			Time next_certain_job_ready_time_successors;
+			Time next_certain_successor_job_ready_time;
 			Time next_certain_source_job_release;
 
 			Job_set scheduled_jobs;
@@ -279,7 +289,7 @@ namespace NP {
 			: lookup_key{0}
 			, finish_time{0,0}
 			, earliest_pending_release{0}
-			, next_certain_job_ready_time_successors{0}
+			, next_certain_successor_job_ready_time{0}
 			, next_certain_source_job_release{0}
 			{
 			}
@@ -297,7 +307,7 @@ namespace NP {
 			, finish_time{0, Time_model::constants<Time>::infinity() }
 			, earliest_pending_release{next_earliest_release}
 			, next_certain_source_job_release{next_certain_source_job_release}
-			, next_certain_job_ready_time_successors{0}
+			, next_certain_successor_job_ready_time{0}
 			{
 			}
 
@@ -319,7 +329,7 @@ namespace NP {
 
 			Time next_certain_job_ready_time() const
 			{
-				return std::min(next_certain_job_ready_time_successors, next_certain_source_job_release);
+				return std::min(next_certain_successor_job_ready_time, next_certain_source_job_release);
 			}
 
 			hash_value_t get_key() const
@@ -366,7 +376,7 @@ namespace NP {
 					finish_time.widen(s->finish_range());
 					
 				states.insert(s);
-				next_certain_job_ready_time_successors = std::max(next_certain_job_ready_time_successors, s->get_earliest_certain_successor_jobs_ready_time());
+				next_certain_successor_job_ready_time = std::max(next_certain_successor_job_ready_time, s->get_earliest_certain_successor_jobs_ready_time());
 			}
 
 			friend std::ostream& operator<< (std::ostream& stream,
@@ -399,14 +409,14 @@ namespace NP {
 				return &states;
 			}
 
-			bool merge_states(const Interval<Time> &new_ft, const Schedule_state<Time> &from, const Job<Time>& sched_job)
+			bool merge_states(const Schedule_state<Time>& s)
 			{
 				// RV: instead of merging with only one state, try to merge with more states if possible.
 				int merge_budget = 1;
 				static StatCollect stats = StatCollect("merge");
 				stats.tick(merge_budget);
 
-				Interval<Time> ft = new_ft;
+				Interval<Time> ft = s.finish_range();
 				State* last_state_merged;
 
 				bool result = false;
@@ -416,22 +426,16 @@ namespace NP {
 					{
 						if (result == false) // if we did not merge with any state yet
 						{
-							Interval<Time> ival{ 0,0 };
-							if (state->pathwisejob_exists(sched_job.get_job_index(), ival))
-							{
-								if (!ft.intersects(ival))
-									continue;
-							}
 							// When the finish time intervals of all jobs with unfinished successors intersect in both states, 
 							// widen their finish time intervals in the existing state.
-							if (state->try_and_merge(from.get_pathwise_jobs()))
+							if (state->try_and_merge(s.get_pathwise_jobs()))
 							{
-								// Find sched_job and widen its finish time interval
-								state->widen_pathwise_job(sched_job.get_job_index(), ft);
-
 								//Widen the main finish range in the merged state and the node
 								state->update_finish_range(ft);
 								finish_time.widen(ft);
+								//update the certain next job ready time in the merged state and node
+								state->update_successor_job_ready_time(s.get_earliest_certain_successor_jobs_ready_time());
+								next_certain_successor_job_ready_time = std::max(next_certain_successor_job_ready_time, s.get_earliest_certain_successor_jobs_ready_time());
 
 								result = true;
 
@@ -451,8 +455,10 @@ namespace NP {
 							// widen their finish time intervals in the existing state.
 							if (state->try_and_merge(last_state_merged->get_pathwise_jobs()))
 							{
-								//Widen the main finish range in the merged state and the node
+								//Widen the main finish range in the merged state
 								state->update_finish_range(last_state_merged->finish_range());
+								//update the certain next job ready time in the merged state
+								state->update_successor_job_ready_time(last_state_merged->get_earliest_certain_successor_jobs_ready_time());
 
 								// the state was merged => we can thus remove the old one from the list of states
 								states.erase(last_state_merged);
