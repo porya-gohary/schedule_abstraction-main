@@ -1029,13 +1029,14 @@ namespace NP {
 				Time lst = std::min(t_wc, t_high-Time_model::constants<Time>::epsilon());
 				Time est = next_earliest_start_time(n, s, j);
 								
+				Interval<Time> finish_range = next_finish_times(n, s, j, est, lst);
 				Node& next =
-					new_node(next_finish_times(n, s, j, est, lst), n, s, j, j.get_job_index(),
+					new_node(finish_range, n, s, j, j.get_job_index(),
 							  earliest_possible_job_release(n, j),
 							  earliest_certain_source_job_release(n, j));
 				/*DM("      -----> N" << (nodes.end() - nodes.begin())
 				   << std::endl);*/
-				State& next_state = new_state(next_finish_times(n, s, j, est, lst), n, s, j);
+				State& next_state = new_state(finish_range, n, s, j);
 				next.add_state(&next_state);
 				process_new_edge(n, next, j, next_state.finish_range());
 			}
