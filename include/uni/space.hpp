@@ -204,14 +204,10 @@ namespace NP {
 
 			typedef Job_set Scheduled;
 
-		  // RV: added Node
+			// All the nodes created through the making of the schedule abstrcation graph are stored in Nodes.
+			// This is done in the function new_node()
 			typedef std::deque<Node> Nodes;
 
-			// All the states created through the making of the schedule abstrcation graph are stored in States.
-			// This is done in the function new_state()
-			typedef std::deque<State> States;
-
-			// Iterators are defined for the to iterate over the elemnts in the Nodes and States deque 
 			typedef Node* Node_ref;
 			typedef State* State_ref;
 
@@ -312,7 +308,6 @@ namespace NP {
 
 
 			Nodes nodes;
-			States states;
 			unsigned long num_nodes, num_states, num_edges, width;
 			Nodes_map nodes_by_key;
 
@@ -810,19 +805,17 @@ namespace NP {
 			template <typename... Args>
 			State& new_state()
 			{
-				states.emplace_back();
-				State_ref s_ref = &(*(--states.end()));
+				State* s = new State();
 				num_states++;
-				return *s_ref;
+				return *s;
 			}
 
 			template <typename... Args>
 			State& new_state(Interval<Time>& ftimes, const Node& n, const State& from, const Job<Time>& sched_job)
 			{
-				states.emplace_back(n, from, sched_job.get_job_index(), ftimes, successors_of);				
-				State_ref s_ref = &(*(--states.end()));
+				State* s = new State(n, from, sched_job.get_job_index(), ftimes, successors_of);
 				num_states++;
-				return *s_ref;
+				return *s;
 			}
 
 			// The todo queue contains the nodes that have to be processed in order to build the graph further,
@@ -1205,7 +1198,7 @@ namespace NP {
 					// Go through all the jobs that are not dispatched yet and are released at or before the latest time 
 					// at which any job will certainly be scheduled in any state in the node n. 
 					for (auto it = jobs_by_earliest_arrival.lower_bound(n.earliest_job_release()); 
-							it != jobs_by_earliest_arrival.end() && it->second->earliest_arrival() <= upbnd_twc;
+							it != jobs_by_earliest_arrival.end() && it->first <= upbnd_twc;
 							it++)
 					{
 						const Job<Time>& j = *(it->second);
