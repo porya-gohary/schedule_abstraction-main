@@ -802,7 +802,6 @@ namespace NP {
 
 			// Create a new state, either the first intial state with no parameters or a new state in the graph with 
 			// finish times ftimes. States created by adding an element to states
-			template <typename... Args>
 			State& new_state()
 			{
 				State* s = new State();
@@ -810,7 +809,6 @@ namespace NP {
 				return *s;
 			}
 
-			template <typename... Args>
 			State& new_state(Interval<Time>& ftimes, const Node& n, const State& from, const Job<Time>& sched_job)
 			{
 				State* s = new State(n, from, sched_job.get_job_index(), ftimes, successors_of);
