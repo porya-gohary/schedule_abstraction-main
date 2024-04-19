@@ -301,6 +301,12 @@ namespace NP {
 			{
 			}
 
+			~Schedule_node()
+			{
+				for (State* s : states)
+					delete s;
+			}
+
 			Time earliest_job_release() const
 			{
 				return earliest_pending_release;
@@ -450,6 +456,7 @@ namespace NP {
 
 								// the state was merged => we can thus remove the old one from the list of states
 								states.erase(last_state_merged);
+								delete last_state_merged;
 
 								// Try to merge with a few more states.
 								// std::cerr << "Merged with " << merge_budget << " of " << states.size() << " states left.\n";
