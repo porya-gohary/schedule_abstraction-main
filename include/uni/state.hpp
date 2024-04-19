@@ -354,8 +354,12 @@ namespace NP {
 
 			void add_state(State* s)
 			{
+				if (states.empty())
+					finish_time = s->finish_range();
+				else
+					finish_time.widen(s->finish_range());
+					
 				states.insert(s);
-				finish_time.widen(s->finish_range());
 				next_certain_job_ready_time_successors = std::max(next_certain_job_ready_time_successors, s->get_earliest_certain_successor_jobs_ready_time());
 			}
 
