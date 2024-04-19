@@ -474,13 +474,17 @@ namespace NP {
 			// is certainly released in any state in the node 'n'. 
 			Time next_certain_higher_priority_source_job_release(
 				const Node& n,
-				const Job<Time>& reference_job)
+				const Job<Time>& reference_job,
+				Time until = Time_model::constants<Time>::infinity())
 			{
-				Time nejr = Time_model::constants<Time>::infinity();
+				Time nejr = until;
 
 				for (auto it = jobs_by_latest_arrival_without_susp.lower_bound(n.get_next_certain_source_job_release());
 					 it != jobs_by_latest_arrival_without_susp.end(); it++) {
 					const Job<Time>& j = *(it->second);
+
+					if (nejr < j.latest_arrival())
+						break;
 
 					// irrelevant if not of higher priority
 					if (!j.higher_priority_than(reference_job))
@@ -491,7 +495,7 @@ namespace NP {
 						continue;
 
 					nejr = j.latest_arrival();
-					// Jobs ordered by latest_arrival, so next jobs are later. We can thus stop seraching.
+					// Jobs ordered by latest_arrival, so next jobs are later. We can thus stop searching.
 					break;
 				}
 				return nejr;
@@ -503,9 +507,9 @@ namespace NP {
 				const Node& n,
 				const State& s,
 				const Job<Time>& reference_job,
-				Time max=Time_model::constants<Time>::infinity())
+				Time until =Time_model::constants<Time>::infinity())
 			{
-				Time nejr = max;
+				Time nejr = until;
 
 				for (auto it = jobs_by_latest_arrival_with_susp.lower_bound(s.get_earliest_certain_successor_jobs_ready_time());
 					 it != jobs_by_latest_arrival_with_susp.end(); it++) 
@@ -536,9 +540,10 @@ namespace NP {
 			Time next_certain_higher_priority_job_release(
 				const Node& n,
 				const State& s,
-				const Job<Time>& reference_job)
+				const Job<Time>& reference_job,
+				Time until = Time_model::constants<Time>::infinity())
 			{
-				Time nchpjr_wos = next_certain_higher_priority_source_job_release(n,reference_job);
+				Time nchpjr_wos = next_certain_higher_priority_source_job_release(n,reference_job, until);
 				Time nchpjr_ws = next_certain_higher_priority_successor_job_release(n,s,reference_job, nchpjr_wos);
 				return nchpjr_ws;
 			}
@@ -906,16 +911,14 @@ namespace NP {
 			// accounting for precedence and suspension time
 			Time earliest_ready_time(const Node &n, const State &s, const Job<Time>& j)
 			{
-				Time seft = j.earliest_arrival;
+				Time seft = j.earliest_arrival();
 				assert(ready(n, j));
 
 				for(auto e : predecessors_of[j.get_job_index()])
 				{
-					Interval<Time> rbounds; 
-					if(want_self_suspensions == PATHWISE_SUSP) 
-						rbounds = s.get_pathwisejob_ft(e->get_fromIndex());
-					else
-						rbounds = get_finish_times(jobs[e->get_fromIndex()]);
+					Interval<Time> rbounds = (want_self_suspensions == PATHWISE_SUSP) ?
+						s.get_pathwisejob_ft(e->get_fromIndex()) :
+						get_finish_times(jobs[e->get_fromIndex()]);
 
 					if(seft <= (rbounds.from() + e->get_minsus()))
 						seft = rbounds.from() + e->get_minsus();
@@ -927,15 +930,13 @@ namespace NP {
 			// accounting for precedence and suspension time
 			Time latest_ready_time(const Node &n, const State &s, const Job<Time>& j)
 			{
-				Time slft = j.latest_arrival;
+				Time slft = j.latest_arrival();
 
 				for(auto e : predecessors_of[j.get_job_index()])
 				{
-					Interval<Time> rbounds; 
-					if(want_self_suspensions == PATHWISE_SUSP)
-						rbounds = s.get_pathwisejob_ft(e->get_fromIndex());
-					else 
-						rbounds = get_finish_times(e->get_fromIndex());
+					Interval<Time> rbounds = (want_self_suspensions == PATHWISE_SUSP) ?
+						s.get_pathwisejob_ft(e->get_fromIndex()) : 
+						get_finish_times(e->get_fromIndex());
 
 					if(slft <= (rbounds.until() + e->get_maxsus()))
 						slft = rbounds.until() + e->get_maxsus();
@@ -1212,7 +1213,7 @@ namespace NP {
 							it != jobs_by_earliest_arrival.end() && it->second->earliest_arrival() <= upbnd_twc;
 							it++)
 					{
-						const Job<Time>& j = *(it->jp);
+						const Job<Time>& j = *(it->second);
 						// j has been scheduled already, it will not be scheduled again
 						if (!incomplete(n, j))
 						{
@@ -1238,13 +1239,13 @@ namespace NP {
 						for (State* s : *n_states)
 						{
 							// calculate the earliest time job j may start executing in state s
-							Time est = next_earliest_start_time(n, s, j);
+							Time est = next_earliest_start_time(n, *s, j);
 
 							// Calculate lst, i.e., the latest time at which job j must start in state s to be 
 							// the next job dispatched by the scheduler, using t_wc and t_high
+							Time t_wc = std::max(s->latest_finish_time(), next_certain_job_ready_time(n, *s));
 							Time t_high_ws = next_certain_higher_priority_successor_job_release(n, *s, j);
 							Time t_high = std::min(t_high_ws, t_high_wos);
-							Time t_wc = std::max(s->latest_finish_time(), next_certain_job_ready_time(n, *s));
 							Time lst = std::min(t_wc, t_high - Time_model::constants<Time>::epsilon());
 
 							// check if j may be scheduled next in system state s (i.e., the earliest time it may start at
