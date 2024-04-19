@@ -1105,36 +1105,8 @@ namespace NP {
 				}
 			}
 
-			// The three schedule functions below are responsible for finsing the finish time interval, adding the
-			// state to a node and managing the edges for the nodes based on the newly created state
-
-			// In schedule_merge_edge, the function handles the addition of a new state where,
-			// not only is the state being merged/added into another node, but it also has a common edge with another job
-			void schedule_merge_edge(const Node& n, const Node_ref match, const State& s, const Job<Time> &j, const Time est, const Time lst)
-			{
-				Interval<Time> finish_range = next_finish_times(n, s, j, est, lst);//requires lst
-				State& st = new_state(finish_range, n, s, j);
-
-				if (match->merge_states(st))
-				{
-					delete& st;
-				}
-				else
-				{
-					if(use_supernodes)
-					{
-						DM("State not merged but added to the node"<<std::endl);
-						match->add_state(&st);
-					}
-					else
-						schedule_new(n, s, j, est, lst);
-				}
-				update_finish_times(j, finish_range);
-			}
-
-			// In schedule_merge_node, the function handles the addition of a new state that is to be merged/added into another 
-			// node but has its own unique edge.
-			void schedule_merge_node(const Node& n, const Node_ref match, const State& s, const Job<Time> &j, const Time est, const Time lst)
+			// Adds a new state into an existing matching node
+			void schedule(const Node& n, const Node_ref match, const State& s, const Job<Time> &j, const Time est, const Time lst)
 			{
 				Interval<Time> finish_range = next_finish_times(n, s, j, est, lst);
 				State& st = new_state(finish_range, n, s, j);
@@ -1151,13 +1123,13 @@ namespace NP {
 						match->add_state(&st);
 					}
 					else
-						schedule_new(n, s, j, est, lst);
+						schedule(n, s, j, est, lst);
 				}
 				process_new_edge(n, *match, j, finish_range);
 			}
 
-			// In schedule_new, the funtion does not attempt to merge but instead creates a new node for the new state
-			Node_ref schedule_new(const Node& n, const State& s, const Job<Time> &j, const Time est, const Time lst)
+			// Creates a new node for a new state
+			Node_ref schedule(const Node& n, const State& s, const Job<Time> &j, const Time est, const Time lst)
 			{
 				Interval<Time> finish_range = next_finish_times(n, s, j, est, lst);//requires est and lst
 				DM("Creating a new node"<<std::endl);
@@ -1223,11 +1195,11 @@ namespace NP {
 							continue;
 						}
 
-						// node_created keeps track of whether a node 'new_node' has been created with the current job
-						// All states in node 'n' for which the job 'j' is eligible will be added to that same node 'new_node'. 
-						bool node_created = false;
+						// nxt_node_created keeps track of whether a node in which we may add any state resulting from dispatching j already exists.
+						// All states in node 'n' for which the job 'j' is eligible will be added to that same node. 
+						bool nxt_node_created = false;
 						// If a node was already created, we keep a reference to it
-						Node_ref new_node;
+						Node_ref next_node;
 
 						// this part of t_high is computed once per job, and is common to all the states explored
 						Time t_high_wos = next_certain_higher_priority_source_job_release(n, j, upbnd_twc + 1);
@@ -1254,7 +1226,7 @@ namespace NP {
 							// is no later than the latest time it must start at)
 							if (est <= lst)
 							{
-								if (node_created == false)
+								if (nxt_node_created == false)
 								{
 									// Find the key of the next state from state s connected by an edge with job j
 									// Find all states that have the same key
@@ -1277,23 +1249,23 @@ namespace NP {
 											// If we have reached here, it means that we have found an existing node with the same 
 											// set of scheduled jobs than the new state resuting from scheduling job j in system state s.
 											// Thus, our new state can be added to that existing node.
-											new_node = it->second;
-											schedule_merge_node(n, new_node, *s, j, est, lst);
-											node_created = true;
+											next_node = it->second;
+											schedule(n, next_node, *s, j, est, lst);
+											nxt_node_created = true;
 											break;
 										}									
 									}
 
 									// if there is no already existing nodes in which the new state can be added, then a new node is created
-									if (node_created == false)
+									if (nxt_node_created == false)
 									{
-										new_node = schedule_new(n, *s, j, est, lst);
-										node_created = true;
+										next_node = schedule(n, *s, j, est, lst);
+										nxt_node_created = true;
 									}
 								}
 								else
 								{
-									schedule_merge_edge(n, new_node, *s, j, est, lst); //new_node is given here
+									schedule(n, next_node, *s, j, est, lst);
 								}
 
 								// If the state is not a deadend, then we already know that the state has been expanded
