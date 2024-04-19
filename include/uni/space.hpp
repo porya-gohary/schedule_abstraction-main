@@ -1198,7 +1198,7 @@ namespace NP {
 					// among the incomplete jobs of node n, the time at which the earliest certain release occurs.
 					auto nxt_ready_job = n.next_certain_job_ready_time();
 
-					auto upbnd_twc = std::max(lft_max,nxt_ready_job);
+					auto upbnd_twc = std::max(lft_max, nxt_ready_job);
 					DM("=> upper-bound on twc at node level = "<< upbnd_twc << std::endl);
 
 					// Keep track of the number of states that have led to new states. This is needed to detect
@@ -1206,41 +1206,52 @@ namespace NP {
 					// can be expanded, we incremet this variable
 					int num_states_expanded = 0;
 
-					// Check for all the jobs that have not been scheduled next
-					// are they the next potential job to be scheduled, for each state in the node n. 
-					// If they are, then a new state is created and is either merged, added to an exisiting node or a new node is created with that state. 
-					const Job<Time>* jp;
-					foreach_possbly_pending_job_until(n, jp, upbnd_twc)
+					// Go through all the jobs that are not dispatched yet and are released at or before the latest time 
+					// at which any job will certainly be scheduled in any state in the node n. 
+					for (auto it = jobs_by_earliest_arrival.lower_bound(n.earliest_job_release()); 
+							it != jobs_by_earliest_arrival.end() && it->second->earliest_arrival() <= upbnd_twc;
+							it++)
 					{
-						const Job<Time>& j = *jp;
+						const Job<Time>& j = *(it->jp);
+						// j has been scheduled already, it will not be scheduled again
+						if (!incomplete(n, j))
+						{
+							continue;
+						}
+
+						// j has predecessors yet to be scheduled, then it cannot be the next job scheduled 
+						// (incomplete predecessors must be scheduled first)
+						if (!ready(n, j)) {
+							continue;
+						}
 
 						// node_created keeps track of whether a node 'new_node' has been created with the current job
 						// All states in node 'n' for which the job 'j' is eligible will be added to that same node 'new_node'. 
 						bool node_created = false;
-
 						// If a node was already created, we keep a reference to it
 						Node_ref new_node;
 
 						// this part of t_high is computed once per job, and is common to all the states explored
-						Time t_high_wos;
-						t_high_wos = next_certain_higher_priority_source_job_release(n, j);
+						Time t_high_wos = next_certain_higher_priority_source_job_release(n, j);
 
-						DM("\n---\nChecking for states to expand to for job "<< j.get_id()<<std::endl);
-						for(State *s: *n_states)
+						DM("\n---\nChecking for states to expand to for job " << j.get_id() << std::endl);
+						for (State* s : *n_states)
 						{
-							if (is_eligible(n, *s, j))
+							// calculate the earliest time job j may start executing in state s
+							Time est = next_earliest_start_time(n, s, j);
+
+							// Calculate lst, i.e., the latest time at which job j must start in state s to be 
+							// the next job dispatched by the scheduler, using t_wc and t_high
+							Time t_high_ws = next_certain_higher_priority_successor_job_release(n, *s, j);
+							Time t_high = std::min(t_high_ws, t_high_wos);
+							Time t_wc = std::max(s->latest_finish_time(), next_certain_job_ready_time(n, *s));
+							Time lst = std::min(t_wc, t_high - Time_model::constants<Time>::epsilon());
+
+							// check if j may be scheduled next in system state s (i.e., the earliest time it may start at
+							// is no later than the latest time it must start at)
+							if (est <= lst)
 							{
-								// Calculate the t_wc and t_high values which in turn will allow you to calculate the 
-								// latest start time which uses t_wc and t_high that was calculated before 
-								// looping through all the states.
-								Time t_high_ws = next_certain_higher_priority_successor_job_release(n,*s, j);
-								Time t_high = std::min(t_high_ws, t_high_wos);
-
-								Time t_wc = std::max(s->latest_finish_time(), next_certain_job_ready_time(n, *s));
-
-								Time lst = std::min(t_wc, t_high-Time_model::constants<Time>::epsilon());
-
-								if(node_created == false)
+								if (node_created == false)
 								{
 									// Find the key of the next state from state s connected by an edge with job j
 									// Find all states that have the same key
@@ -1250,33 +1261,31 @@ namespace NP {
 									auto k = n.next_key(j);
 									auto r = nodes_by_key.equal_range(k);
 
-									if(r.first != r.second) {
-										Job_set sched_jobs{n.get_scheduled_jobs(), j.get_job_index()};
-										for(auto it = r.first; it != r.second; it++)
+									if (r.first != r.second) {
+										Job_set sched_jobs{ n.get_scheduled_jobs(), j.get_job_index() };
+										for (auto it = r.first; it != r.second; it++)
 										{
-											Node &found = *it->second;
-
-											// If the found state and the state that is to be expanded have the same set of scheduled_jobs
-											// only then can we find a match to merge
-											if(found.get_scheduled_jobs() != sched_jobs)
+											Node& found = *it->second;
+ 
+											if (found.get_scheduled_jobs() != sched_jobs)
 												continue;
 
-											// If we have reached here, it means that we have found a node with the same set of scheduled jobs
-											// Thus, our new state can be added to that node.
+											// If we have reached here, it means that we have found an existing node with the same 
+											// set of scheduled jobs than the new state resuting from scheduling job j in system state s.
+											// Thus, our new state can be added to that existing node.
 											new_node = it->second;
 											schedule_merge_node(n, new_node, *s, j, lst);
 											node_created = true;
 											break;
-										}
-									}
+										}									}
 
-									// if there is no existing nodes where the new state can be merged into, then a new node is created
-									if(node_created == false)
+									// if there is no already existing nodes in which the new state can be added, then a new node is created
+									if (node_created == false)
 									{
 										new_node = schedule_new(n, *s, j, lst);
 										node_created = true;
 									}
-								}								
+								}
 								else
 								{
 									schedule_merge_edge(n, new_node, *s, j, lst); //new_node is given here
@@ -1286,7 +1295,7 @@ namespace NP {
 								// so there is no need to increase the num_states_expanded variable. But if the state
 								// is found to be a deadend, then this state can be set to not a deadend because the 
 								// state has just been expanded.
-								if(s->is_deadend())
+								if (s->is_deadend())
 								{
 									s->not_deadend();
 									num_states_expanded++;
