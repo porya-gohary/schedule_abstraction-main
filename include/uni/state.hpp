@@ -15,9 +15,6 @@ namespace NP {
 	// use pointers as a primitive form of unique ID
 
 	namespace Uniproc {
-
-		// Similar to global/state.hpp, an Job_index is the index into the Job array.
-		// typedef std::size_t Job_index;
 	  
 		typedef Index_set Job_set;
 		template<class Time> class Schedule_state;
@@ -30,7 +27,7 @@ namespace NP {
 
 			private:
 
-			// holds tthe finish time interval of the state
+			// holds the finish time interval of the state
 			Interval<Time> finish_time;
 
 			// holds information about the state being a dead end or not
@@ -75,7 +72,12 @@ namespace NP {
 			}
 
 			// transition: new state by scheduling a job in an existing state
-			Schedule_state(const Schedule_node<Time>& container_node, const Schedule_state<Time>& from, const Job_index dispatched_j, Interval<Time> ftime_interval, const Successors& successors_of)
+			Schedule_state(
+				const Schedule_node<Time>& container_node, 
+				const Schedule_state<Time>& from, 
+				const Job_index dispatched_j, 
+				Interval<Time> ftime_interval, 
+				const Successors& successors_of)
 			:finish_time{ftime_interval}
 			{
 				job_finish_times.reserve(from.job_finish_times.size() + 1);
