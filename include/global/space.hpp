@@ -475,6 +475,7 @@ namespace NP {
 							const CoreAvailability empty_cav = {};
 							State& next_s = new_state(*new_n.get_last_state(), j.get_job_index(), predecessors_of(j), frange, frange, empty_cav, new_n.get_scheduled_jobs(), successors);
 							next.add_state(&next_s);
+							num_states++;
 
 							// update response times
 							update_finish_times(j, frange);
@@ -498,6 +499,7 @@ namespace NP {
 				Node& n = new_node(num_cores, jobs_by_earliest_arrival.begin()->first, jobs_by_latest_arrival_without_susp.begin()->first);
 				State& s = new_state(num_cores);
 				n.add_state(&s);
+				num_states++;
 			}
 
 			Nodes& nodes()
@@ -1036,8 +1038,10 @@ namespace NP {
 					// try to merge the new state with existing states.
 					if (next->merge_states(new_s))
 						delete &new_s; // if we could merge no need to keep track of the new state anymore
-					else
+					else {
 						next->add_state(&new_s); // else add the new state to the node
+						num_states++;
+					}
 
 					// make sure we didn't skip any jobs
 					// RV: is an easier detection possible?
@@ -1053,7 +1057,8 @@ namespace NP {
 					count_edge();
 				}
 
-				if (next != nullptr)
+				// if we are not using the naive exploration, we check for deadline misses only per job dispatched
+				if (!be_naive && next != nullptr)
 					check_for_deadline_misses(n, *next);
 
 				return true;
@@ -1159,8 +1164,6 @@ namespace NP {
 
 					// keep track of exploration front width
 					width = std::max(width, n);
-
-					num_nodes += n;
 
 					check_depth_abort();
 					check_cpu_timeout();
