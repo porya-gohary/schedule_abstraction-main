@@ -285,14 +285,13 @@ namespace NP {
 			// successors: for each predecessor, a list of successors are present
 				// RV: how is this used? Similar to definitions above, is a const reference useful?
 				//     It might be useful to store the Job_index in the suspending_task_list.
-			typedef std::vector<const Suspending_Task<Time>*> suspending_task_to_list;
-			typedef std::vector<std::pair<Job_index, Interval<Time>>> Successors_list;
+			typedef std::vector<std::pair<Job_index, Interval<Time>>> Suspensions_list;
 
-			std::vector<suspending_task_to_list> _to_suspending_tasks;
-			std::vector<Successors_list> _successors;
+			std::vector<Suspensions_list> _predecessors_suspensions;
+			std::vector<Suspensions_list> _successors;
 
-			const std::vector<suspending_task_to_list>& to_suspending_tasks;
-			const std::vector<Successors_list>& successors;
+			const std::vector<Suspensions_list>& predecessors_suspensions;
+			const std::vector<Suspensions_list>& successors;
 
 			Nodes_storage nodes_storage;
 
@@ -348,9 +347,9 @@ namespace NP {
 				, jobs_by_win(_jobs_by_win)
 				, _predecessors(jobs.size())
 				, predecessors(_predecessors)
-				, _to_suspending_tasks(jobs.size())
+				, _predecessors_suspensions(jobs.size())
 				, _successors(jobs.size())
-				, to_suspending_tasks(_to_suspending_tasks)
+				, predecessors_suspensions(_predecessors_suspensions)
 				, successors(_successors)
 				, wants_self_suspensions(use_self_suspensions)
 			{
@@ -358,19 +357,21 @@ namespace NP {
 					const Job<Time>& from = lookup<Time>(jobs, e.first);
 					const Job<Time>& to = lookup<Time>(jobs, e.second);
 					_predecessors[to.get_job_index()].push_back(from.get_job_index());
+					_predecessors_suspensions[to.get_job_index()].push_back({ from.get_job_index(), {0,0} });
+					_successors[from.get_job_index()].push_back({ to.get_job_index(), {0,0} });
 				}
 
 				// RV: initialization of to_suspending_tasks and from_suspending_tasks.
 				//     Is st.get_toID() equal to index_of(to) ?
 				//     Is _predecessors[] related to to_suspending_tasks[] ? 
 				for (const Suspending_Task<Time>& st : susps) {
-					_to_suspending_tasks[st.get_toIndex()].push_back(&st);
+					_predecessors_suspensions[st.get_toIndex()].push_back({ st.get_fromIndex(), st.get_suspension() });
 					_predecessors[st.get_toIndex()].push_back(st.get_fromIndex());
 					_successors[st.get_fromIndex()].push_back({ st.get_toIndex(), st.get_suspension() });
 				}
 
 				for (const Job<Time>& j : jobs) {
-					if (_to_suspending_tasks[j.get_job_index()].size() > 0) {
+					if (_predecessors_suspensions[j.get_job_index()].size() > 0) {
 						_jobs_by_latest_arrival_with_susp.insert({ j.latest_arrival(), &j });
 					}
 					else {
@@ -660,82 +661,24 @@ namespace NP {
 				return unfinished(n, j) && n.job_ready(predecessors_of(j));
 			}
 
-			// RV:  Not passing node:  susp_ready(n,s,j) is assumed to be true.
-			Time get_seft(const State& s, const Job<Time>& j) const
-			{
-				const suspending_task_to_list fsusps = to_suspending_tasks[j.get_job_index()];
-				Time seft = 0;  // RV:  what if the list is empty?
-				// assert(susp_ready(n, s, j)); //RV:  susp_ready requires Node.
-
-				for (auto e : fsusps)
-				{
-					Interval<Time> rbounds = get_finish_times(e->get_fromIndex());
-					if (wants_self_suspensions == PATHWISE_SUSP)
-						s.get_finish_times(e->get_fromIndex(), rbounds); // ISSUE: segmentation fault: 
-
-					if (seft <= (rbounds.from() + e->get_minsus()))
-					{
-						seft = rbounds.from() + e->get_minsus();
-					}
-				}
-
-				return seft;
-			}
-
-			Time get_slft(const State& s, const Job<Time>& j) const
-			{
-				const suspending_task_to_list fsusps = to_suspending_tasks[j.get_job_index()];
-				Time slft = 0;
-				// assert(susp_ready(n,s,j)); // RV: susp_ready() requires Node 
-
-				for (auto e : fsusps)
-				{
-					Interval<Time> rbounds = get_finish_times(e->get_fromIndex());
-					if (wants_self_suspensions == PATHWISE_SUSP)
-						s.get_finish_times(e->get_fromIndex(), rbounds);
-
-					if (slft <= (rbounds.until() + e->get_maxsus()))
-					{
-						slft = rbounds.until() + e->get_maxsus();
-					}
-				}
-
-				return slft;
-			}
-
 			bool all_jobs_scheduled(const Node& n) const
 			{
 				return n.number_of_scheduled_jobs() == jobs.size();
 			}
 
-			// assumes j is ready, including susp_ready(), but
-		  // time information of predecessors and suspension still needs to be checked.
+			// assumes j is ready
 			Interval<Time> ready_times(const State& s, const Job<Time>& j) const
 			{
-				assert(ready(j));
 				Interval<Time> r = j.arrival_window();
-				for (auto pred : predecessors_of(j)) {
+				for (auto pred : predecessors_suspensions[j.get_job_index()]) 
+				{
+					auto pred_idx = pred.first;
+					auto pred_susp = pred.second;
 					Interval<Time> ft{ 0, 0 };
-					if (!s.get_finish_times(pred, ft))
-						ft = get_finish_times(jobs[pred]);
-					r.lower_bound(ft.min());
-					r.extend_to(ft.max());
-				}
-				// RV: oldFrom, newFrom, oldUntil and newUntil are unused.
-				//     are get_seft() and get_slft() results reused?
-				Time seft = get_seft(s, j);
-				Time slft = get_slft(s, j);
-				if (r.from() < seft)
-				{
-					//Time oldFrom = r.from();
-					r.lower_bound(seft);
-					//Time newFrom = r.from();
-				}
-				if (r.until() < slft)
-				{
-					//Time oldUntil = r.until();
-					r.extend_to(slft);
-					//Time newUntil = r.until();
+					if (!s.get_finish_times(pred_idx, ft))
+						ft = get_finish_times(jobs[pred_idx]);
+					r.lower_bound(ft.min() + pred_susp.min());
+					r.extend_to(ft.max() + pred_susp.max());
 				}
 				return r;
 			}
@@ -746,23 +689,19 @@ namespace NP {
 				const Job_precedence_set& disregard) const
 			{
 				Interval<Time> r = j.arrival_window();
-				for (auto pred : predecessors_of(j)) {
+				for (auto pred : predecessors_suspensions[j.get_job_index()]) 
+				{
+					auto pred_idx = pred.first;
 					// skip if part of disregard
-					if (contains(disregard, pred))
+					if (contains(disregard, pred_idx))
 						continue;
+					auto pred_susp = pred.second;
 					Interval<Time> ft{ 0, 0 };
-					if (!s.get_finish_times(pred, ft))
-						ft = get_finish_times(jobs[pred]);
-					r.lower_bound(ft.min());
-					r.extend_to(ft.max());
+					if (!s.get_finish_times(pred_idx, ft))
+						ft = get_finish_times(jobs[pred_idx]);
+					r.lower_bound(ft.min() + pred_susp.min());
+					r.extend_to(ft.max() + pred_susp.max());
 				}
-				// RV: similar to previous ready_times()
-				Time seft = get_seft(s, j);
-				Time slft = get_slft(s, j);
-				if (r.from() < seft)
-					r.lower_bound(seft);
-				if (r.until() < slft)
-					r.extend_to(slft);
 				return r;
 			}
 
@@ -868,14 +807,13 @@ namespace NP {
 			std::pair<Time, Time> start_times(
 				const State& s, const Job<Time>& j, Time t_wc, Time t_high) const
 			{
-				auto rt = earliest_ready_time(s, j);  //RV: due to suspension, Node is needed. 
+				auto rt = earliest_ready_time(s, j); 
 				auto at = s.core_availability().min();
 				Time est = std::max(rt, at);
 
 				DM("rt: " << rt << std::endl
 					<< "at: " << at << std::endl);
 
-				// auto t_high = next_higher_prio_job_ready(n, s, j, at.min());
 				Time lst = std::min(t_wc,
 					t_high - Time_model::constants<Time>::epsilon());
 
@@ -1019,10 +957,8 @@ namespace NP {
 					}
 
 					// make sure we didn't skip any jobs
-					// RV: is an easier detection possible?
-					//     can detection be done per node (and earliest core_available?)
 					if (be_naive) {
-						check_for_deadline_misses(n, *next); // ISSUE
+						check_for_deadline_misses(n, *next);
 					}
 
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
@@ -1162,7 +1098,7 @@ namespace NP {
 
 #else
 					for (const Node& n : exploration_front) {
-						explore(n); //  ISSUE
+						explore(n);
 						check_cpu_timeout();
 						if (aborted)
 							break;

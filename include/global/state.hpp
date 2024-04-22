@@ -596,12 +596,13 @@ namespace NP {
 				Interval<Time> ft = s->core_availability();
 				if (states.empty()) {
 					finish_time = ft;
+					next_certain_successor_job_ready_time = s->get_earliest_certain_successor_jobs_ready_time();
 				}
 				else {
 					finish_time.widen(ft);
+					next_certain_successor_job_ready_time = std::max(next_certain_successor_job_ready_time, s->get_earliest_certain_successor_jobs_ready_time());
 				}
 				states.insert(s);
-				next_certain_successor_job_ready_time = std::max(next_certain_successor_job_ready_time, s->get_earliest_certain_successor_jobs_ready_time());
 			}
 
 			friend std::ostream& operator<< (std::ostream& stream,
