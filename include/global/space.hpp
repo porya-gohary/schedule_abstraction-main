@@ -449,8 +449,7 @@ namespace NP {
 				return predecessors[j.get_job_index()];
 			}
 
-			// RV: it seems that jobs can fall through the selection algorithm.
-			//     This function seems state specific due to core_availability.
+			// Check if any job is guaranteed to miss its deadline in any state in the new node
 			void check_for_deadline_misses(const Node& old_n, const Node& new_n)
 			{
 				auto check_from = old_n.get_first_state()->core_availability().min();
@@ -655,34 +654,10 @@ namespace NP {
 				return n.job_incomplete(j.get_job_index());
 			}
 
-			// when a job has no self-suspension, state is not required.
+			// Check wether a job is ready (not dspatched yet and all its predecessors are completed).
 			bool ready(const Node& n, const Job<Time>& j) const
 			{
-				return unfinished(n, j) && n.job_ready(predecessors_of(j)) && susp_ready(n, j);
-			}
-
-			// when a job has self-suspension, susp_ready() should be called.
-			// however, it doesn't check the job_finish_times.
-			// susp_ready_at() is not used.
-			bool ready(const Node& n, const State& s, const Job<Time>& j) const
-			{
-				return unfinished(n, j) && n.job_ready(predecessors_of(j)) && susp_ready(n, j);
-			}
-
-			// RV: if lookup() is time consuming and jobs is fixed, store the result in e.
-			//     susp_ready() is used in assert() calls below, so performance might be relevant.
-			bool susp_ready(const Node& n, const Job<Time>& j) const
-			{
-				const suspending_task_to_list fsusps = to_suspending_tasks[j.get_job_index()];
-
-				for (auto e : fsusps)
-				{
-					if (n.job_incomplete(e->get_fromIndex()))
-					{
-						return false;
-					}
-				}
-				return true;
+				return unfinished(n, j) && n.job_ready(predecessors_of(j));
 			}
 
 			// RV:  Not passing node:  susp_ready(n,s,j) is assumed to be true.
