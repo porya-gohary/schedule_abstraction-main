@@ -67,7 +67,7 @@ namespace NP {
 			// initial state
 			Schedule_state()
 			: finish_time{0, 0}
-			, earliest_certain_successor_jobs_ready_time{0}
+			, earliest_certain_successor_jobs_ready_time{ Time_model::constants<Time>::infinity() }
 			{
 			}
 
@@ -84,22 +84,25 @@ namespace NP {
 
 				// updates the list of finish times of jobs with successors w.r.t. the previous system state
 				// and calculates the earliest time a job with precedence constraints will become ready
-				bool dispatched_j_inserted = false;
+				bool added_j = false;
 				earliest_certain_successor_jobs_ready_time = Time_model::constants<Time>::infinity();
 				for (auto ft : from.job_finish_times)
 				{
 					auto job = ft.first;
 					auto lft = ft.second.max();
 
-					if (!dispatched_j_inserted && job > dispatched_j)
+					if (!added_j && job > dispatched_j)
 					{
-						job_finish_times.push_back(std::make_pair(dispatched_j, ftime_interval));
-						dispatched_j_inserted = true;
-
-						for (auto succ : successors_of[dispatched_j]) {
+						bool successor_pending = false;
+						for (auto succ : successors_of[dispatched_j]) 
+						{
+							successor_pending = true;
 							Time max_susp = succ.second.max();
 							earliest_certain_successor_jobs_ready_time = std::min(earliest_certain_successor_jobs_ready_time, ftime_interval.max() + max_susp);
 						}
+						if (successor_pending)
+							job_finish_times.push_back(std::make_pair(dispatched_j, ftime_interval));
+						added_j = true;
 					}
 
 					bool successor_pending = false;
@@ -112,9 +115,21 @@ namespace NP {
 							earliest_certain_successor_jobs_ready_time = std::min(earliest_certain_successor_jobs_ready_time, lft + max_susp);
 						}
 					}
-
 					if (successor_pending)
 						job_finish_times.push_back(std::make_pair(job, ft.second));
+				}
+
+				if (!added_j)
+				{
+					bool successor_pending = false;
+					for (auto succ : successors_of[dispatched_j])
+					{
+						successor_pending = true;
+						Time max_susp = succ.second.max();
+						earliest_certain_successor_jobs_ready_time = std::min(earliest_certain_successor_jobs_ready_time, ftime_interval.max() + max_susp);
+					}
+					if (successor_pending)
+						job_finish_times.push_back(std::make_pair(dispatched_j, ftime_interval));
 				}
 			}
 
@@ -287,12 +302,15 @@ namespace NP {
 			public:
 
 			// initial node
-			Schedule_node()
+			Schedule_node(
+				const Time next_earliest_release = 0,
+				const Time next_certain_source_job_release = Time_model::constants<Time>::infinity() // the next time a job without predecessor is certainly released
+			)
 			: lookup_key{0}
 			, finish_time{0,0}
-			, earliest_pending_release{0}
-			, next_certain_successor_job_ready_time{0}
-			, next_certain_source_job_release{0}
+			, earliest_pending_release{ next_earliest_release }
+			, next_certain_successor_job_ready_time{ Time_model::constants<Time>::infinity() }
+			, next_certain_source_job_release{ next_certain_source_job_release }
 			{
 			}
 
@@ -309,7 +327,7 @@ namespace NP {
 			, finish_time{0, Time_model::constants<Time>::infinity() }
 			, earliest_pending_release{next_earliest_release}
 			, next_certain_source_job_release{next_certain_source_job_release}
-			, next_certain_successor_job_ready_time{0}
+			, next_certain_successor_job_ready_time{ Time_model::constants<Time>::infinity() }
 			{
 			}
 

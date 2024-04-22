@@ -74,7 +74,7 @@ TEST_CASE("Interval LUT") {
 
 TEST_CASE("state space") {
 
-	NP::Uniproc::Schedule_node<dtime_t> n0;
+	NP::Uniproc::Schedule_node<dtime_t> n0{0,0};
 
 	CHECK(n0.finish_range().from() == 0);
 	CHECK(n0.finish_range().until() == 0);

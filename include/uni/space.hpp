@@ -523,7 +523,7 @@ namespace NP {
 					if (!incomplete(n, j) || !ready(n, j))
 						continue;
 
-					auto t = std::max(j.latest_arrival(), latest_ready_time(n, s, j));
+					auto t = latest_ready_time(n, s, j);
 					
 					if(nejr > t)
 						nejr = t;
@@ -746,16 +746,16 @@ namespace NP {
 			void make_initial_node()
 			{
 				// construct initial node
-				new_node();
+				new_node(jobs_by_earliest_arrival.begin()->first, jobs_by_latest_arrival_without_susp.begin()->first);
 			}
 
 			// create a new node by adding an elemen to nodes, creating a new state and adding this new state to the node,
 			// add this new node to the todo queue as it now a leaf node in the graph, yet to be processed. Add the node
 			// along with its key to nodes_by_key. 
 			template <typename... Args>
-			Node& new_node()
+			Node& new_node(Args&&... args)
 			{
-				nodes.emplace_back();
+				nodes.emplace_back(std::forward<Args>(args)...);
 				Node_ref n_ref = &(*(--nodes.end()));
 
 				State &st = new_state();
