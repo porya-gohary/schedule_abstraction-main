@@ -187,7 +187,7 @@ TEST_CASE("[susp] General Pathwise Uniprocessor Difference") {
 	CHECK(!(gen_nspace.is_schedulable()));
 
 	opts.use_self_suspensions = PATHWISE_SUSP;
-	auto pw_nspace = Uniproc::State_space<dtime_t>::explore(prob, opts);
+	auto pw_nspace = Uniproc::State_space<dtime_t>::explore(prob, opts); //ISSUE
 	CHECK(pw_nspace.is_schedulable());
 }
 

@@ -86,11 +86,11 @@ namespace NP {
 			// and returns the finish time interval if j is found else returns the interval[0,infinity]
 			Interval<Time> get_finish_times(const Job<Time>& j) const
 			{
-				auto rbounds = rta.find(j.get_id());
-				if (rbounds == rta.end()) {
+				auto rt_item = rta[j.get_job_index()];
+				if (!rt_item.valid) {
 					return Interval<Time>{0, Time_model::constants<Time>::infinity()};
 				} else {
-					return rbounds->second;
+					return rt_item.rt;
 				}
 			}
 
@@ -195,10 +195,6 @@ namespace NP {
 
 			typedef std::deque<Node> Nodes;
 
-			// All the states created through the making of the schedule abstrcation graph are stored in States.
-			// This is done in the function new_state()
-			typedef std::deque<State> States;
-
 			// Defining a deque of Interval<Time> so that it might contain the list of intervals when the gate
 			// is open or closed. Or might contain a list of intervals that contain the finish time inetrvals 
 			// for the new state.
@@ -238,7 +234,21 @@ namespace NP {
 			typedef std::deque<Node_ref> Todo_queue;
 
 			// Response_times stores and updates the finish time intervals of the jobs as the graph is being built
-			typedef std::unordered_map<JobID, Interval<Time> > Response_times;
+			// RV: Response_times was there before supernodes. How does this work in global?
+			//     global/space.hpp uses JobID here. Not sure whether Job_index would work better.
+			//     The rta structure will contain the response times of all jobs.
+			//     Instead of using a map with JobID and search, a vector can be used with Job_index as index.
+			struct Response_time_item {
+				bool valid;  // RV: is rt valid for the given Job_index?
+				Interval<Time> rt;
+
+				Response_time_item()
+					: valid(false)
+					, rt(0, 0)
+				{
+				}
+			};
+			typedef std::vector<Response_time_item> Response_times;
 
 			typedef std::vector<std::size_t> Job_precedence_set;
 
@@ -271,7 +281,6 @@ namespace NP {
 			const std::size_t num_fifo_queues;
 
 			Nodes nodes;
-			States states;
 			unsigned long num_nodes, num_states, num_edges, width;
 			Nodes_map nodes_by_key;
 
@@ -314,6 +323,7 @@ namespace NP {
 			, width(0)
 			, todo_idx(0)
 			, current_job_count(0)
+			, rta(jobs.size())
 			, job_precedence_sets(jobs.size())
 			, early_exit(early_exit)
 			, observed_deadline_miss(false)
@@ -363,18 +373,21 @@ namespace NP {
 			// to rta along with its finish time interval
 			void update_finish_times(const Job<Time>& j, Interval<Time> range)
 			{
-				auto rbounds = rta.find(j.get_id());
-				if (rbounds == rta.end()) {
-					rta.emplace(j.get_id(), range);
+				Job_index jidx = j.get_job_index();
+				Response_time_item* rt_item = &(rta[jidx]);
+				if (!rt_item->valid) {
+					rt_item->valid = true;
+					rt_item->rt = range;
 					if (j.exceeds_deadline(range.upto()))
 						observed_deadline_miss = true;
-				} else {
-					rbounds->second.widen(range);
-					if (j.exceeds_deadline(rbounds->second.upto()))
+				}
+				else {
+					rt_item->rt.widen(range);
+					if (j.exceeds_deadline(rt_item->rt.upto()))
 						observed_deadline_miss = true;
 				}
 				DM("      New finish time range for " << j
-				   << ": " << rta.find(j.get_id())->second << std::endl);
+					<< ": " << rt_item->rt << std::endl);
 
 				if (early_exit && observed_deadline_miss)
 					aborted = true;
@@ -530,7 +543,7 @@ namespace NP {
 			void make_initial_node()
 			{
 				// construct initial node
-				new_node(jobs[0], jobs_by_latest_arrival_priority);
+				new_node(jobs_by_latest_arrival_priority);
 			}
 
 			// create a new node by adding an elemen to nodes, creating a new state and adding this new state to the node,
@@ -572,9 +585,7 @@ namespace NP {
 			State& new_state()
 			{
 				DM("Created state [0,0]");
-				states.emplace_back();
-				State_ref s_ref = &(*(--states.end()));
-				//State_ref s_ref = --states.end();
+				State_ref s_ref = new State();
 				num_states++;
 				return *s_ref;
 			}
@@ -583,9 +594,7 @@ namespace NP {
 			State& new_state(Interval<Time> ftimes)
 			{
 				DM("Created state ["<<ftimes.from()<<","<<ftimes.until()<<"]\n");
-				states.emplace_back(ftimes);
-				State_ref s_ref = &(*(--states.end()));
-				//State_ref s_ref = --states.end();
+				State_ref s_ref = new State(ftimes);
 				num_states++;
 				return *s_ref;
 			}
@@ -896,7 +905,6 @@ namespace NP {
 				DM("FR0:"<<finish_ranges[0]);
 				const Node& next =
 					new_node(n, j, 
-					          finish_ranges[0],
 					          earliest_possible_job_release(n, j),
 							  (std::deque<std::multimap<Time, const Job<Time>*>>) jobs_by_latest_arrival_priority);
 				/*DM("      -----> N" << (nodes.end() - nodes.begin()) << " " << (todo[todo_idx].front() - nodes.begin() + 1)

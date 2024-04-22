@@ -100,10 +100,11 @@ namespace NP {
 
 			Job_set scheduled_jobs;
 			hash_value_t lookup_key;
+
+			// finish_time in a node keeps track of the EFT and LFT of the last scheduled job 
+			// in any state in the node
 			Interval<Time> finish_time;
 			std::vector<Time> trmax;
-			const Job<Time>& job_0;
-
 
 			// no accidental copies
 			Schedule_node(const Schedule_node& origin)  = delete;
@@ -130,7 +131,7 @@ namespace NP {
 						const Job<Time>& j = *(it->second);
 
 						// not relevant if already scheduled
-						if (scheduled_jobs.contains(index_of(j)))
+						if (scheduled_jobs.contains(j.get_job_index()))
 							continue;
 
 						trmax.push_back(j.latest_arrival());
@@ -141,17 +142,11 @@ namespace NP {
 				}
 			}
 
-			std::size_t index_of(const Job<Time>& j)
-			{
-				return (std::size_t)(&j - &job_0);
-			}
-
 			public:
 
 			// initial node
-			Schedule_node(const Job<Time>& j0, const std::deque<std::multimap<Time, const Job<Time>*>>& jobs_by_latest_arrival_priority)
-			: job_0{ j0 }
-			, lookup_key{0}
+			Schedule_node(const std::deque<std::multimap<Time, const Job<Time>*>>& jobs_by_latest_arrival_priority)
+			: lookup_key{0}
 			, finish_time{0,0}
 			, earliest_pending_release{0}
 			{
@@ -162,13 +157,11 @@ namespace NP {
 			Schedule_node(
 				const Schedule_node& from,
 				const Job<Time>& j,
-				Interval<Time> ftimes,
 				const Time next_earliest_release,
 				const std::deque<std::multimap<Time, const Job<Time>*>>& jobs_by_latest_arrival_priority)
-			: job_0{from.job_0}
-			, scheduled_jobs{from.scheduled_jobs, (std::size_t)(& j - &from.job_0)}
+			: scheduled_jobs{from.scheduled_jobs, j.get_job_index()}
 			, lookup_key{from.next_key(j)}
-			, finish_time{ftimes}
+			, finish_time{ 0, Time_model::constants<Time>::infinity() }
 			, earliest_pending_release{next_earliest_release}
 			{
 				calculate_trmax(jobs_by_latest_arrival_priority);
@@ -213,6 +206,11 @@ namespace NP {
 
 			void add_state(State* s)
 			{
+				if (states.empty())
+					finish_time = s->finish_range();
+				else
+					finish_time.widen(s->finish_range());
+
 				states.insert(s);
 			}
 
@@ -258,6 +256,7 @@ namespace NP {
 						merged_state->update_finish_range(new_st);
 						s_ref = states.erase(s_ref);
 						states.insert(merged_state);
+						finish_time.widen(merged_state->finish_range());
 						DM("\nState merged\n");
 						return true;
 					}

@@ -720,7 +720,7 @@ namespace NP {
 
 			Time earliest_ready_time(const State& s, const Job<Time>& j) const
 			{
-				return std::max(s.core_availability().min(), j.arrival_window().min());
+				return ready_times(s, j).min(); // std::max(s.core_availability().min(), j.arrival_window().min());
 			}
 
 			// Find next time by which a source job (i.e., a job without predecessors) 
@@ -760,7 +760,7 @@ namespace NP {
 
 			// Find next time by which a successor job (i.e., a job with predecessors) 
 			// of higher priority than the reference_job
-			// is certainly released in system state 's' at or before a time 'max'.
+			// is certainly released in system state 's' at or before a time 'until'.
 			Time next_certain_higher_priority_successor_job_ready_time(
 				const Node& n,
 				const State& s,
@@ -898,7 +898,7 @@ namespace NP {
 					DM("=== t_high = " << t_high << ", t_wc = " << t_wc << std::endl);
 					auto _st = start_times(*s, j, t_wc, t_high);  // RV: no node argument?
 					if (_st.first > _st.second)
-						return false; // nope, not next job that can be dispatched in state s, return.
+						continue; // nope, not next job that can be dispatched in state s, try the next state.
 
 					Interval<Time> st{ _st };
 

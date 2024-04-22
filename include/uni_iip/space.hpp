@@ -194,8 +194,8 @@ namespace NP {
 			typedef std::deque<State> States;
 
 			// Iterators are defined for the to iterate over the elemnts in the Nodes and States deque 
-			typedef typename std::deque<Node>::iterator Node_ref;
-			typedef typename std::deque<State>::iterator State_ref;
+			typedef typename Node* Node_ref;
+			typedef typename State* State_ref;
 
 			// The Nodes_map typedef allows for storing a key-pair of hash_value_t and Node_ref. The hash_value_t is the
 			// typedef defined in jobs.hpp that allows for creating a unique key for each node. A variable called the
@@ -630,7 +630,7 @@ namespace NP {
 			Node& new_node(Args&&... args)
 			{
 				nodes.emplace_back(std::forward<Args>(args)...);
-				Node_ref n_ref = --nodes.end();
+				Node_ref n_ref = &(*(--nodes.end()));
 
 				State &st = (n_ref->get_key()==0) ?
 					new_state() :
@@ -658,7 +658,7 @@ namespace NP {
 			State& new_state()
 			{
 				states.emplace_back();
-				State_ref s_ref = --states.end();
+				State_ref s_ref = &(*(--states.end()));
 				num_states++;
 				return *s_ref;
 			}
@@ -667,7 +667,7 @@ namespace NP {
 			State& new_state(Interval<Time> ftimes)
 			{
 				states.emplace_back(ftimes);
-				State_ref s_ref = --states.end();
+				State_ref s_ref = &(*(--states.end()));
 				num_states++;
 				return *s_ref;
 			}
@@ -746,7 +746,7 @@ namespace NP {
 				assert(deleted);
 
 				// delete from master sequence to free up memory
-				assert(nodes.begin() == n);
+				assert(&(*(nodes.begin())) == n);
 				nodes.pop_front();
 #endif
 			}
@@ -904,9 +904,9 @@ namespace NP {
 
 					DM("\n==================================================="
 					   << std::endl);
-					DM("Looking at: N"
+					/*DM("Looking at: N"
 					   << (todo[todo_idx].front() - nodes.begin() + 1)
-					   << " " << n << std::endl);
+					   << " " << n << std::endl);*/
 					const auto *n_states = n.get_states();
 
 					// for each state in the node n
@@ -1000,8 +1000,8 @@ namespace NP {
 					new_node(n, j, index_of(j),
 					          finish_range,
 					          earliest_possible_job_release(n, j));
-				DM("      -----> N" << (nodes.end() - nodes.begin()) << " " <<(todo[todo_idx].front() - nodes.begin() + 1)
-				   << std::endl);
+				/*DM("      -----> N" << (nodes.end() - nodes.begin()) << " " << (todo[todo_idx].front() - nodes.begin() + 1)
+				   << std::endl);*/
 				process_new_edge(n, next, j, finish_range);
 			}
 
@@ -1014,9 +1014,9 @@ namespace NP {
 
 					DM("\n==================================================="
 					   << std::endl);
-					DM("Looking at: N"
+					/*DM("Looking at: N"
 					   << (todo[todo_idx].front() - nodes.begin() + 1) 
-					   << " " << n << std::endl);
+					   << " " << n << std::endl);*/
 
 					// Identify relevant interval for next job
 					// relevant job buckets
