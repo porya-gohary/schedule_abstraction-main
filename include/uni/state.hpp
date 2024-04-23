@@ -73,10 +73,10 @@ namespace NP {
 
 			// transition: new state by scheduling a job in an existing state
 			Schedule_state(
-				const Schedule_node<Time>& container_node, 
 				const Schedule_state<Time>& from, 
 				const Job_index dispatched_j, 
 				Interval<Time> ftime_interval, 
+				const Job_set& scheduled_jobs,
 				const Successors& successors_of)
 			:finish_time{ftime_interval}
 			{
@@ -110,7 +110,7 @@ namespace NP {
 					bool successor_pending = false;
 					for (auto succ : successors_of[job]) {
 						auto to_job = succ.first->get_job_index();
-						if (!container_node.get_scheduled_jobs().contains(to_job))
+						if (!scheduled_jobs.contains(to_job))
 						{
 							successor_pending = true;
 							Time max_susp = succ.second.max();

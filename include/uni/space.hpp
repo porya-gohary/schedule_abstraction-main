@@ -806,9 +806,9 @@ namespace NP {
 				return *s;
 			}
 
-			State& new_state(Interval<Time>& ftimes, const Node& n, const State& from, const Job<Time>& sched_job)
+			State& new_state(Interval<Time>& ftimes, const State& from, const Job<Time>& sched_job, const Job_set& scheduled_jobs)
 			{
-				State* s = new State(n, from, sched_job.get_job_index(), ftimes, successors_of);
+				State* s = new State(from, sched_job.get_job_index(), ftimes, scheduled_jobs,successors_of);
 				num_states++;
 				return *s;
 			}
@@ -1066,7 +1066,7 @@ namespace NP {
 							  earliest_certain_source_job_release(n, j));
 				/*DM("      -----> N" << (nodes.end() - nodes.begin())
 				   << std::endl);*/
-				State& next_state = new_state(finish_range, n, s, j);
+				State& next_state = new_state(finish_range, s, j, next.get_scheduled_jobs());
 				next.add_state(&next_state);
 				process_new_edge(n, next, j, next_state.finish_range());
 			}
@@ -1139,7 +1139,7 @@ namespace NP {
 			void schedule(const Node& n, const Node_ref match, const State& s, const Job<Time> &j, const Time est, const Time lst)
 			{
 				Interval<Time> finish_range = next_finish_times(n, s, j, est, lst);
-				State& st = new_state(finish_range, n, s, j);
+				State& st = new_state(finish_range, s, j, match->get_scheduled_jobs());
 
 				if (match->merge_states(st))
 				{
@@ -1170,7 +1170,7 @@ namespace NP {
 							  earliest_certain_source_job_release(n,j));
 				//DM("      -----> N" << (nodes.end() - nodes.begin()) << " " <<(todo[todo_idx].front() - nodes.begin() + 1)
 				//   << std::endl);
-				State& next_state = new_state(finish_range, n, s, j);
+				State& next_state = new_state(finish_range, s, j, next.get_scheduled_jobs());
 				next.add_state(&next_state);
 				process_new_edge(n, next, j, finish_range);
 				Node_ref n_ref = &(*(--nodes.end()));
