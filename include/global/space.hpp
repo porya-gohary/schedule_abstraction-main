@@ -965,7 +965,7 @@ namespace NP {
 
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
 					// RV: should this be done for every state.
-					edges.emplace_back(&j, &s, next, ftimes);
+					edges.emplace_back(&j, &n, next, ftimes);
 #endif
 					count_edge();
 				}
@@ -1163,27 +1163,52 @@ namespace NP {
 			friend std::ostream& operator<< (std::ostream& out,
 				const State_space<Time>& space)
 			{
-				std::map<const Schedule_state<Time>*, unsigned int> state_id;
+				std::map<const Schedule_node<Time>*, unsigned int> node_id;
 				unsigned int i = 0;
 				out << "digraph {" << std::endl;
 #ifdef CONFIG_PARALLEL
 				for (const Split_states& states : space.get_states()) {
 					for (const Schedule_state<Time>& s : tbb::flattened2d<Split_states>(states)) {
 #else
-				for (const auto& front : space.get_states()) {
-					for (const Schedule_state<Time>& s : front) {
+				for (const auto& front : space.get_nodes()) {
+					for (const Schedule_node<Time>& n : front) {
 #endif
-						state_id[&s] = i++;
-						out << "\tS" << state_id[&s]
-							<< "[label=\"S" << state_id[&s] << ": ";
-						s.print_vertex_label(out, space.jobs);
-						out << "\"];" << std::endl;
+						/*node_id[&n] = i++;
+						out << "\tS" << node_id[&n]
+							<< "[label=\"S" << node_id[&n] << ": ";
+						n.print_vertex_label(out, space.jobs);
+						out << "\"];" << std::endl;*/
+						node_id[&n] = i++;
+						out << "\tN" << node_id[&n]
+							<< "[label=\"N" << node_id[&n] << ": {";
+						const auto* n_states = n.get_states();
+
+						for (State* s : *n_states)
+						{
+							out << "[";
+							s->print_vertex_label(out, space.jobs);
+								//<< s->earliest_finish_time()
+								//<< ", "
+								//<< s->latest_finish_time()
+								out << "]\\n";
+						}
+						out << "}"
+							<< "\\nER=";
+						if (n.earliest_job_release() ==
+							Time_model::constants<Time>::infinity()) {
+							out << "N/A";
+						}
+						else {
+							out << n.earliest_job_release();
+						}
+						out << "\"];"
+							<< std::endl;
 					}
 				}
 				for (const auto& e : space.get_edges()) {
-					out << "\tS" << state_id[e.source]
+					out << "\tN" << node_id[e.source]
 						<< " -> "
-						<< "S" << state_id[e.target]
+						<< "N" << node_id[e.target]
 						<< "[label=\""
 						<< "T" << e.scheduled->get_task_id()
 						<< " J" << e.scheduled->get_job_id()
@@ -1200,7 +1225,7 @@ namespace NP {
 						<< ";"
 						<< std::endl;
 					if (e.deadline_miss_possible()) {
-						out << "S" << state_id[e.target]
+						out << "N" << node_id[e.target]
 							<< "[color=Red];"
 							<< std::endl;
 					}
