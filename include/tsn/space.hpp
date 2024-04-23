@@ -543,27 +543,20 @@ namespace NP {
 			void make_initial_node()
 			{
 				// construct initial node
-				new_node(jobs_by_latest_arrival_priority);
+				Node& n = new_node(jobs_by_latest_arrival_priority);
+				State& s = new_state();
+				n.add_state(&s);
 			}
 
-			// create a new node by adding an elemen to nodes, creating a new state and adding this new state to the node,
-			// add this new node to the todo queue as it now a leaf node in the graph, yet to be processed. Add the node
-			// along with its key to nodes_by_key. 
+			// create a new node by adding an elemen to nodes, 
+			// add this new node to the todo queue as it is now a leaf node in the graph, yet to be processed. 
+			// Add the node along with its key to nodes_by_key. 
 			template <typename... Args>
 			Node& new_node(Args&&... args)
 			{
 				DM("\nCreated Node: ");
 				nodes.emplace_back(std::forward<Args>(args)...);
 				Node_ref n_ref = &(*(--nodes.end()));
-				//Node_ref n_ref = --nodes.end();
-
-				Interval<Time> fr_ipg = Interval<Time>{n_ref->finish_range().from() + c_ipg, n_ref->finish_range().upto() +c_ipg};
-				
-				State &st = (n_ref->finish_range().upto()==0) ?
-					new_state() :
-					new_state(fr_ipg);
-
-				n_ref->add_state(&st);
 
 				auto njobs = n_ref->get_scheduled_jobs().size();
 				assert (
@@ -860,7 +853,7 @@ namespace NP {
 
 			// In schedule_merge_edge, the function handles the addition of a new state where,
 			// not only is the state being merged into another node, but it also has a common edge with another job
-			void schedule_merge_edge(const Node& n, const Node_ref match, const Job<Time> &j, Intervals finish_ranges)
+			void schedule_merge_edge(const Node& n, const Node_ref match, const Job<Time> &j, const Intervals& finish_ranges)
 			{
 				for(auto fr: finish_ranges)
 				{
@@ -877,7 +870,7 @@ namespace NP {
 
 			// In schedule_merge_node, the function handles the addition of a new state that is to be merged into another 
 			// node but has its own unique edge.
-			void schedule_merge_node(const Node& n, const Node_ref match, const Job<Time> &j, Intervals finish_ranges)
+			void schedule_merge_node(const Node& n, const Node_ref match, const Job<Time> &j, const Intervals& finish_ranges)
 			{
 				for(auto fr: finish_ranges)
 				{
@@ -895,7 +888,7 @@ namespace NP {
 			}
 
 			// In schedule_new, the function does not attempt to merge but instead creates a new node for the new state
-			Node_ref schedule_new(const Node& n, const Job<Time> &j, Intervals finish_ranges)
+			Node_ref schedule_new(const Node& n, const Job<Time> &j, const Intervals& finish_ranges)
 			{
 				DM("Creating a new node"<<std::endl);
 				DM("FR:");
