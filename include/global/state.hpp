@@ -28,7 +28,7 @@ namespace NP {
 
 			typedef std::vector<std::pair<Job_index, Interval<Time>>> JobFinishTimes;
 			typedef std::vector<Interval<Time>> CoreAvailability;
-			typedef std::vector<std::pair<Job_index, Interval<Time>>> Successors_list;
+			typedef std::vector<std::pair<const Job<Time>*, Interval<Time>>> Successors_list;
 			typedef std::vector<Successors_list> Successors;
 
 			// system availability intervals
@@ -148,7 +148,9 @@ namespace NP {
 						{
 							successor_pending = true;
 							Time max_susp = succ.second.max();
-							earliest_certain_successor_jobs_ready_time = std::min(earliest_certain_successor_jobs_ready_time, lft + max_susp);
+							earliest_certain_successor_jobs_ready_time = 
+								std::min(earliest_certain_successor_jobs_ready_time, 
+									std::max(succ.first->latest_arrival(), lft + max_susp));
 						}
 						if (successor_pending)
 							job_finish_times.push_back(std::make_pair(j, finish_times));
@@ -157,12 +159,14 @@ namespace NP {
 
 					bool successor_pending = false;
 					for (auto succ : successors_of[job]) {
-						auto to_job = succ.first;
+						auto to_job = succ.first->get_job_index();
 						if (!scheduled_jobs.contains(to_job))
 						{
 							successor_pending = true;
 							Time max_susp = succ.second.max();
-							earliest_certain_successor_jobs_ready_time = std::min(earliest_certain_successor_jobs_ready_time, job_lft + max_susp);
+							earliest_certain_successor_jobs_ready_time = 
+								std::min(earliest_certain_successor_jobs_ready_time, 
+									std::max(succ.first->latest_arrival(), job_lft + max_susp));
 						}
 					}
 					if (successor_pending)
@@ -176,7 +180,9 @@ namespace NP {
 					{
 						successor_pending = true;
 						Time max_susp = succ.second.max();
-						earliest_certain_successor_jobs_ready_time = std::min(earliest_certain_successor_jobs_ready_time, lft + max_susp);
+						earliest_certain_successor_jobs_ready_time = 
+							std::min(earliest_certain_successor_jobs_ready_time, 
+								std::max(succ.first->latest_arrival(), lft + max_susp));
 					}
 					if (successor_pending)
 						job_finish_times.push_back(std::make_pair(j, finish_times));
@@ -270,9 +276,9 @@ namespace NP {
 			bool get_finish_times(Job_index j, Interval<Time>& ftimes) const
 			{
 				int offset = jft_find(j);
-				if (offset < certain_jobs.size() && certain_jobs[offset].first == j)
+				if (offset < job_finish_times.size() && job_finish_times[offset].first == j)
 				{
-					ftimes = certain_jobs[offset].second;
+					ftimes = job_finish_times[offset].second;
 					return true;
 				}
 				else {

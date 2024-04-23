@@ -187,7 +187,7 @@ TEST_CASE("[susp] General Pathwise Uniprocessor Difference") {
 	CHECK(!(gen_nspace.is_schedulable()));
 
 	opts.use_self_suspensions = PATHWISE_SUSP;
-	auto pw_nspace = Uniproc::State_space<dtime_t>::explore(prob, opts); //ISSUE
+	auto pw_nspace = Uniproc::State_space<dtime_t>::explore(prob, opts);
 	CHECK(pw_nspace.is_schedulable());
 }
 
@@ -213,7 +213,7 @@ TEST_CASE("[susp] Uniproc Global Schedulability Check (sn_susp)") {
 
 	for (const Job<dtime_t>& j : prob.jobs) {
 		CDM("Job " << j << " " << uspace.get_finish_times(j) << " " << gspace.get_finish_times(j) << "\n");
-		CHECK(uspace.get_finish_times(j) == gspace.get_finish_times(j)); // ISSUE: 11-18 , 12-13
+		CHECK(uspace.get_finish_times(j) == gspace.get_finish_times(j)); 
 	}
 }
 
@@ -234,12 +234,12 @@ TEST_CASE("[susp] Uniproc Global Schedulability Check (g_pw_diff)") {
 	prob.num_processors = 1;
 	opts.be_naive = false;
 
-	auto gspace = NP::Global::State_space<dtime_t>::explore(prob, opts); // ISSUE: SEGV FAULT in get_seft() in initial state.
+	auto gspace = NP::Global::State_space<dtime_t>::explore(prob, opts); 
 	CHECK(gspace.is_schedulable());
 
 	for (const Job<dtime_t>& j : prob.jobs) {
 		CDM("Job " << j << " " << uspace.get_finish_times(j) << " " << gspace.get_finish_times(j) << "\n");
-		CHECK(uspace.get_finish_times(j) == gspace.get_finish_times(j)); // ISSUE: 3-45  3-28
+		CHECK(uspace.get_finish_times(j) == gspace.get_finish_times(j)); 
 	}
 }
 

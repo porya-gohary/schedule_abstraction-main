@@ -222,9 +222,6 @@ namespace NP {
 			typedef const Job<Time>* Job_ref;
 			typedef std::multimap<Time, Job_ref> By_time_map;
 
-			// typedef std::deque<State_ref> Todo_queue;
-			typedef std::deque<Node_ref> Todo_queue;
-
 			typedef Interval_lookup_table<Time, Job<Time>, Job<Time>::scheduling_window> Jobs_lut;
 
 			// Similar to uni/space.hpp, make Response_times a vector of intervals.
@@ -285,7 +282,7 @@ namespace NP {
 			// successors: for each predecessor, a list of successors are present
 				// RV: how is this used? Similar to definitions above, is a const reference useful?
 				//     It might be useful to store the Job_index in the suspending_task_list.
-			typedef std::vector<std::pair<Job_index, Interval<Time>>> Suspensions_list;
+			typedef std::vector<std::pair<Job_ref, Interval<Time>>> Suspensions_list;
 
 			std::vector<Suspensions_list> _predecessors_suspensions;
 			std::vector<Suspensions_list> _successors;
@@ -304,9 +301,6 @@ namespace NP {
 			unsigned long current_job_count;
 			unsigned long num_edges;
 
-			static const std::size_t num_todo_queues = 3;
-			Todo_queue todo[num_todo_queues];
-			int todo_idx;
 
 #ifdef CONFIG_PARALLEL
 			tbb::enumerable_thread_specific<unsigned long> edge_counter;
@@ -357,17 +351,17 @@ namespace NP {
 					const Job<Time>& from = lookup<Time>(jobs, e.first);
 					const Job<Time>& to = lookup<Time>(jobs, e.second);
 					_predecessors[to.get_job_index()].push_back(from.get_job_index());
-					_predecessors_suspensions[to.get_job_index()].push_back({ from.get_job_index(), {0,0} });
-					_successors[from.get_job_index()].push_back({ to.get_job_index(), {0,0} });
+					_predecessors_suspensions[to.get_job_index()].push_back({ &from, {0,0} });
+					_successors[from.get_job_index()].push_back({ &to, {0,0} });
 				}
 
 				// RV: initialization of to_suspending_tasks and from_suspending_tasks.
 				//     Is st.get_toID() equal to index_of(to) ?
 				//     Is _predecessors[] related to to_suspending_tasks[] ? 
 				for (const Suspending_Task<Time>& st : susps) {
-					_predecessors_suspensions[st.get_toIndex()].push_back({ st.get_fromIndex(), st.get_suspension() });
+					_predecessors_suspensions[st.get_toIndex()].push_back({ &jobs[st.get_fromIndex()], st.get_suspension() });
 					_predecessors[st.get_toIndex()].push_back(st.get_fromIndex());
-					_successors[st.get_fromIndex()].push_back({ st.get_toIndex(), st.get_suspension() });
+					_successors[st.get_fromIndex()].push_back({ &jobs[st.get_toIndex()], st.get_suspension() });
 				}
 
 				for (const Job<Time>& j : jobs) {
@@ -538,15 +532,10 @@ namespace NP {
 			Node& new_node(Args&&... args)
 			{
 				Node_ref n = alloc_node(std::forward<Args>(args)...);
-
 				DM("new node - global " << n << std::endl);
-				auto njobs = n->number_of_scheduled_jobs();
-				auto idx = njobs % num_todo_queues;
-				todo[idx].push_back(n);
 				//RV:  add node to nodes_by_key map.
 				cache_node(n);
 				num_nodes++;
-				width = std::max(width, (unsigned long)todo[idx].size() - 1);
 				return *n;
 			}
 
@@ -672,7 +661,7 @@ namespace NP {
 				Interval<Time> r = j.arrival_window();
 				for (auto pred : predecessors_suspensions[j.get_job_index()]) 
 				{
-					auto pred_idx = pred.first;
+					auto pred_idx = pred.first->get_job_index();
 					auto pred_susp = pred.second;
 					Interval<Time> ft{ 0, 0 };
 					if (!s.get_finish_times(pred_idx, ft))
@@ -691,7 +680,7 @@ namespace NP {
 				Interval<Time> r = j.arrival_window();
 				for (auto pred : predecessors_suspensions[j.get_job_index()]) 
 				{
-					auto pred_idx = pred.first;
+					auto pred_idx = pred.first->get_job_index();
 					// skip if part of disregard
 					if (contains(disregard, pred_idx))
 						continue;
@@ -771,8 +760,8 @@ namespace NP {
 				Time when = until;
 
 				// a higer priority successor job cannot be ready before 
-				// a successor job of any priority is ready
-				Time t_earliest = s.get_earliest_certain_successor_jobs_ready_time();
+				// a job of any priority is released
+				Time t_earliest = n.earliest_job_release();
 				for (auto it = jobs_by_latest_arrival_with_susp.lower_bound(t_earliest);
 					it != jobs_by_latest_arrival_with_susp.end(); it++) 
 				{

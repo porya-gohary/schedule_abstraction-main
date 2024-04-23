@@ -293,7 +293,7 @@ namespace NP {
 			// RV: the suspending_tasks_list might include Job_index, next to JobID.
 			//     the predecessors_of and successors_of might have the const protection.
 			typedef std::vector<const Suspending_Task<Time>*> Predecessors_list;
-			typedef std::vector<std::pair<Job_index, Interval<Time>>> Successors_list;
+			typedef std::vector<std::pair<Job_ref, Interval<Time>>> Successors_list;
 			
 		public:
 			typedef std::vector<Predecessors_list> Predecessors;
@@ -374,7 +374,7 @@ namespace NP {
 				for (const Suspending_Task<Time>& st : susps) {
 					_predecessors_of[st.get_toIndex()].push_back(&st);
 					_job_precedence_sets[st.get_toIndex()].push_back(st.get_fromIndex());
-					_successors_of[st.get_fromIndex()].push_back({ st.get_toIndex(), st.get_suspension() });
+					_successors_of[st.get_fromIndex()].push_back({ &jobs[st.get_toIndex()], st.get_suspension() });
 				}
 				for (const Job<Time>& j : jobs) {
 					if (_predecessors_of[j.get_job_index()].size()>0) {
@@ -507,7 +507,10 @@ namespace NP {
 			{
 				Time nejr = until;
 
-				for (auto it = jobs_by_latest_arrival_with_susp.lower_bound(s.get_earliest_certain_successor_jobs_ready_time());
+				// a higer priority successor job cannot be ready before 
+				// a job of any priority is released
+				Time t_earliest = n.earliest_job_release();
+				for (auto it = jobs_by_latest_arrival_with_susp.lower_bound(t_earliest);
 					 it != jobs_by_latest_arrival_with_susp.end(); it++) 
 				{
 					const Job<Time>& j = *(it->second);
@@ -746,7 +749,9 @@ namespace NP {
 			void make_initial_node()
 			{
 				// construct initial node
-				new_node(jobs_by_earliest_arrival.begin()->first, jobs_by_latest_arrival_without_susp.begin()->first);
+				Node& n = new_node(jobs_by_earliest_arrival.begin()->first, jobs_by_latest_arrival_without_susp.begin()->first);
+				State& s = new_state();
+				n.add_state(&s);
 			}
 
 			// create a new node by adding an elemen to nodes, creating a new state and adding this new state to the node,
@@ -757,10 +762,6 @@ namespace NP {
 			{
 				nodes.emplace_back(std::forward<Args>(args)...);
 				Node_ref n_ref = &(*(--nodes.end()));
-
-				State &st = new_state();
-				n_ref->add_state(&st);
-
 				auto njobs = n_ref->get_scheduled_jobs().size();
 				assert (
 					(!njobs && num_nodes == 0) // initial state
@@ -780,11 +781,6 @@ namespace NP {
 			{
 				nodes.emplace_back(from_node, sched_job, std::forward<Args>(args)...);
 				Node_ref n_ref = &(*(--nodes.end()));
-
-				State &st = new_state(ftimes, *n_ref, from, sched_job);
-
-				n_ref->add_state(&st);
-				DM("State added to node "<< std::endl);
 
 				auto njobs = n_ref->get_scheduled_jobs().size();
 				assert (
@@ -1114,6 +1110,7 @@ namespace NP {
 				if (match->merge_states(st))
 				{
 					delete& st;
+					num_states--;
 				}
 				else
 				{
@@ -1133,12 +1130,14 @@ namespace NP {
 			{
 				Interval<Time> finish_range = next_finish_times(n, s, j, est, lst);//requires est and lst
 				DM("Creating a new node"<<std::endl);
-				const Node& next =
+				Node& next =
 					new_node(finish_range, n, s, j, j.get_job_index(),
 							  earliest_possible_job_release(n, j),
 							  earliest_certain_source_job_release(n,j));
 				//DM("      -----> N" << (nodes.end() - nodes.begin()) << " " <<(todo[todo_idx].front() - nodes.begin() + 1)
 				//   << std::endl);
+				State& next_state = new_state(finish_range, n, s, j);
+				next.add_state(&next_state);
 				process_new_edge(n, next, j, finish_range);
 				Node_ref n_ref = &(*(--nodes.end()));
 				return n_ref;

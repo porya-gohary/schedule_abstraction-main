@@ -22,7 +22,7 @@ namespace NP {
 
 		template<class Time> class Schedule_state
 		{
-			typedef std::vector<std::pair<Job_index, Interval<Time>>> Successors_list;
+			typedef std::vector<std::pair<const Job<Time>*, Interval<Time>>> Successors_list;
 			typedef std::vector<Successors_list> Successors;
 
 			private:
@@ -98,7 +98,9 @@ namespace NP {
 						{
 							successor_pending = true;
 							Time max_susp = succ.second.max();
-							earliest_certain_successor_jobs_ready_time = std::min(earliest_certain_successor_jobs_ready_time, ftime_interval.max() + max_susp);
+							earliest_certain_successor_jobs_ready_time = 
+								std::min(earliest_certain_successor_jobs_ready_time, 
+									std::max(succ.first->latest_arrival(), ftime_interval.max() + max_susp));
 						}
 						if (successor_pending)
 							job_finish_times.push_back(std::make_pair(dispatched_j, ftime_interval));
@@ -107,12 +109,14 @@ namespace NP {
 
 					bool successor_pending = false;
 					for (auto succ : successors_of[job]) {
-						auto to_job = succ.first;
+						auto to_job = succ.first->get_job_index();
 						if (!container_node.get_scheduled_jobs().contains(to_job))
 						{
 							successor_pending = true;
 							Time max_susp = succ.second.max();
-							earliest_certain_successor_jobs_ready_time = std::min(earliest_certain_successor_jobs_ready_time, lft + max_susp);
+							earliest_certain_successor_jobs_ready_time = 
+								std::min(earliest_certain_successor_jobs_ready_time, 
+									std::max(succ.first->latest_arrival(), lft + max_susp));
 						}
 					}
 					if (successor_pending)
@@ -126,7 +130,9 @@ namespace NP {
 					{
 						successor_pending = true;
 						Time max_susp = succ.second.max();
-						earliest_certain_successor_jobs_ready_time = std::min(earliest_certain_successor_jobs_ready_time, ftime_interval.max() + max_susp);
+						earliest_certain_successor_jobs_ready_time = 
+							std::min(earliest_certain_successor_jobs_ready_time, 
+								std::max(succ.first->latest_arrival(), ftime_interval.max() + max_susp));
 					}
 					if (successor_pending)
 						job_finish_times.push_back(std::make_pair(dispatched_j, ftime_interval));

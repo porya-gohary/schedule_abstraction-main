@@ -167,6 +167,12 @@ namespace NP {
 				calculate_trmax(jobs_by_latest_arrival_priority);
 			}
 
+			~Schedule_node()
+			{
+				for (State* s : states)
+					delete s;
+			}
+
 			Time get_trmax(int priority) const
 			{
 				assert(priority < trmax.size());
