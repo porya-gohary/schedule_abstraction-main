@@ -677,19 +677,32 @@ namespace NP {
 				const State& s, const Job<Time>& j,
 				const Job_precedence_set& disregard) const
 			{
+				Time avail_min = s.earliest_finish_time();
 				Interval<Time> r = j.arrival_window();
+
 				for (auto pred : predecessors_suspensions[j.get_job_index()]) 
 				{
 					auto pred_idx = pred.first->get_job_index();
 					// skip if part of disregard
 					if (contains(disregard, pred_idx))
 						continue;
+
+					// if there is no suspension time and there is a single core, then
+					// predecessors are finished as soon as the processor becomes available
 					auto pred_susp = pred.second;
-					Interval<Time> ft{ 0, 0 };
-					if (!s.get_finish_times(pred_idx, ft))
-						ft = get_finish_times(jobs[pred_idx]);
-					r.lower_bound(ft.min() + pred_susp.min());
-					r.extend_to(ft.max() + pred_susp.max());
+					if (num_cpus == 1 && pred_susp.max() == 0)
+					{
+						r.lower_bound(avail_min);
+						r.extend_to(avail_min);
+					}
+					else
+					{
+						Interval<Time> ft{ 0, 0 };
+						if (!s.get_finish_times(pred_idx, ft))
+							ft = get_finish_times(jobs[pred_idx]);
+						r.lower_bound(ft.min() + pred_susp.min());
+						r.extend_to(ft.max() + pred_susp.max());
+					}
 				}
 				return r;
 			}
