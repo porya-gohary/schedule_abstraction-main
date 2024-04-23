@@ -526,7 +526,7 @@ namespace NP {
 					if (!incomplete(n, j) || !ready(n, j))
 						continue;
 
-					auto t = latest_ready_time(n, s, j);
+					auto t = latest_ready_time_hp(n, s, j);
 					
 					if(nejr > t)
 						nejr = t;
@@ -603,7 +603,7 @@ namespace NP {
 					if (!j.higher_priority_than(reference_job))
 						continue;
 					
-					if (ready_at(n, s, j, at)) {
+					if (ready_at_hp(n, s, j, at)) {
 						DM("          => found one: " << j << " <<HP<< "
 						   << reference_job << std::endl);
 						return true;
@@ -702,13 +702,14 @@ namespace NP {
 			}
 
 			// Returns true if all predecessors of job 'j' have completed in state 's' no later than 'at'
-			bool ready_at(const Node &n, const State &s, const Job<Time> &j, Time at)
+			// assumes the job to check is a higher priority job than the job we try to disptach
+			bool ready_at_hp(const Node &n, const State &s, const Job<Time> &j, Time at)
 			{
 				if (!ready(n, j))
 					return false;
 				
 				// if job 'j' is ready in state 's', we check whether it will be ready no later than 'at'
-				if (latest_ready_time(n,s,j) > at)
+				if (latest_ready_time_hp(n,s,j) > at)
 					return false;
 				else
 					return true;
@@ -919,15 +920,48 @@ namespace NP {
 			Time latest_ready_time(const Node &n, const State &s, const Job<Time>& j)
 			{
 				Time slft = j.latest_arrival();
+				Time avail_max = s.latest_finish_time();
 
 				for(auto e : predecessors_of[j.get_job_index()])
 				{
-					Interval<Time> rbounds = (want_self_suspensions == PATHWISE_SUSP) ?
-						s.get_pathwisejob_ft(e->get_fromIndex()) : 
-						get_finish_times(e->get_fromIndex());
+					Time susp_max = e->get_maxsus();
+					// if there is no suspension, and the predecessor has been dispatched already,
+					// then the precedence constraint is certainly resolved when the processor become available
+					if (susp_max == 0)
+						slft = std::max(slft, avail_max);
+					else
+					{
+						Interval<Time> rbounds = (want_self_suspensions == PATHWISE_SUSP) ?
+							s.get_pathwisejob_ft(e->get_fromIndex()) :
+							get_finish_times(e->get_fromIndex());
 
-					if(slft <= (rbounds.until() + e->get_maxsus()))
-						slft = rbounds.until() + e->get_maxsus();
+						slft = std::max(slft, rbounds.until() + susp_max);
+					}
+				}
+				return slft;
+			}
+
+			// assumes the job to check is a higher priority job than the job we try to disptach
+			Time latest_ready_time_hp(const Node& n, const State& s, const Job<Time>& j)
+			{
+				Time slft = j.latest_arrival();
+				Time avail_min = s.earliest_finish_time();
+
+				for (auto e : predecessors_of[j.get_job_index()])
+				{
+					Time susp_max = e->get_maxsus();
+					// if there is no suspension, and the predecessor has been dispatched already,
+					// then the precedence constraint is certainly resolved when the processor become available
+					if (susp_max == 0)
+						slft = std::max(slft, avail_min);
+					else
+					{
+						Interval<Time> rbounds = (want_self_suspensions == PATHWISE_SUSP) ?
+							s.get_pathwisejob_ft(e->get_fromIndex()) :
+							get_finish_times(e->get_fromIndex());
+
+						slft = std::max(slft, rbounds.until() + susp_max);
+					}
 				}
 				return slft;
 			}
