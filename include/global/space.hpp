@@ -953,7 +953,12 @@ namespace NP {
 					// try to merge the new state with existing states.
 					if (next->merge_states(new_s))
 						delete &new_s; // if we could merge no need to keep track of the new state anymore
-					else {
+					else 
+					{
+						// if we do not want to use super nodes, create one node per state
+						if(use_supernodes==false and next->get_states()->size() > 0)
+							next = &(new_node(n, j, index_of(j), earliest_possible_job_release(n, j), earliest_certain_source_job_release(n, j)));
+
 						next->add_state(&new_s); // else add the new state to the node
 						num_states++;
 					}
