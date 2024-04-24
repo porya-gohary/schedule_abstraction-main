@@ -1145,17 +1145,18 @@ namespace NP {
 				{
 					delete& st;
 					num_states--;
+					process_new_edge(n, *match, j, finish_range);
 				}
 				else
 				{
-					if(use_supernodes)
+					if (use_supernodes)
 					{
 						DM("State not merged but added to the node");
 						match->add_state(&st);
 						process_new_edge(n, *match, j, finish_range);
 					}
 					else
-					{ 
+					{
 						Node& next_node =
 							new_node(finish_range, n, s, j, j.get_job_index(),
 								earliest_possible_job_release(n, j),

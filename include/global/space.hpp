@@ -311,6 +311,8 @@ namespace NP {
 
 			const unsigned int num_cpus;
 
+			bool use_supernodes = true;
+
 			State_space(const Workload& jobs,
 				const Precedence_constraints& dag_edges,
 				const Suspending_Tasks& susps,
