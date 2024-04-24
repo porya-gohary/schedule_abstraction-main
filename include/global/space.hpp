@@ -899,7 +899,7 @@ namespace NP {
 
 					DM("=== t_high = " << t_high << ", t_wc = " << t_wc << std::endl);
 					auto _st = start_times(*s, j, t_wc, t_high);  // RV: no node argument?
-					if (_st.first > _st.second)
+					if (_st.first > t_wc || _st.first >= t_high)
 						continue; // nope, not next job that can be dispatched in state s, try the next state.
 
 					Interval<Time> st{ _st };
@@ -1008,7 +1008,7 @@ namespace NP {
 						Time t_high_wos = next_certain_higher_priority_source_job_release(n, j, upbnd_t_wc+1);
 						// if there is a higher priority job that is certainly ready before job j is released at the earliest, 
 						// then j will never be the next job dispached by the scheduler
-						if (t_high_wos <= j.earliest_arrival())
+						if (t_high_wos <= j.earliest_arrival() || t_high_wos <= n.finish_range().min())
 							continue;
 						found_one |= dispatch(n, j, upbnd_t_wc, t_high_wos);
 					}

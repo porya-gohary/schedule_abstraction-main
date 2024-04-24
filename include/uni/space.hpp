@@ -1246,7 +1246,7 @@ namespace NP {
 
 						// if there is a higher priority job that is certainly ready before job j is released at the earliest, 
 						// then j will never be the next job dispached by the scheduler
-						if (t_high_wos <= j.earliest_arrival())
+						if (t_high_wos <= j.earliest_arrival() || t_high_wos <= n.get_earliest_core_availability())
 							continue;
 
 						DM("\n---\nChecking for states to expand to for job " << j.get_id() << std::endl);
@@ -1264,7 +1264,7 @@ namespace NP {
 
 							// check if j may be scheduled next in system state s (i.e., the earliest time it may start at
 							// is no later than the latest time it must start at)
-							if (est <= lst)
+							if (est <= t_wc && est < t_high)
 							{
 								if (nxt_node_created == false)
 								{
