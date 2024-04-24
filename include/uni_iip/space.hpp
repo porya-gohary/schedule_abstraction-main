@@ -194,8 +194,8 @@ namespace NP {
 			typedef std::deque<State> States;
 
 			// Iterators are defined for the to iterate over the elemnts in the Nodes and States deque 
-			typedef typename Node* Node_ref;
-			typedef typename State* State_ref;
+			typedef Node* Node_ref;
+			typedef State* State_ref;
 
 			// The Nodes_map typedef allows for storing a key-pair of hash_value_t and Node_ref. The hash_value_t is the
 			// typedef defined in jobs.hpp that allows for creating a unique key for each node. A variable called the
