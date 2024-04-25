@@ -75,67 +75,77 @@ namespace NP {
 			Schedule_state(
 				const Schedule_state<Time>& from, 
 				const Job_index dispatched_j, 
+				Interval<Time> start_times,
 				Interval<Time> ftime_interval, 
 				const Job_set& scheduled_jobs,
-				const Successors& successors_of)
+				const Successors& successors_of,
+				bool useJobFinishTimes = true)
 			:finish_time{ftime_interval}
 			{
-				job_finish_times.reserve(from.job_finish_times.size() + 1);
-
-				// updates the list of finish times of jobs with successors w.r.t. the previous system state
-				// and calculates the earliest time a job with precedence constraints will become ready
-				bool added_j = false;
 				earliest_certain_successor_jobs_ready_time = Time_model::constants<Time>::infinity();
-				for (auto ft : from.job_finish_times)
+				if (useJobFinishTimes)
 				{
-					auto job = ft.first;
-					auto lft = ft.second.max();
+					job_finish_times.reserve(from.job_finish_times.size() + 1);
 
-					if (!added_j && job > dispatched_j)
+					// updates the list of finish times of jobs with successors w.r.t. the previous system state
+					// and calculates the earliest time a job with precedence constraints will become ready
+					bool added_j = false;
+					for (auto ft : from.job_finish_times)
+					{
+						auto job = ft.first;
+						//auto lft = ft.second.max();
+						auto lst_dipatched = start_times.max();
+						auto lft = std::min(ft.second.max(), lst_dipatched - Time_model::constants<Time>::epsilon());
+						auto eft = ft.second.min();
+
+						if (!added_j && job > dispatched_j)
+						{
+							bool successor_pending = false;
+							for (auto succ : successors_of[dispatched_j])
+							{
+								successor_pending = true;
+								Time max_susp = succ.second.max();
+								earliest_certain_successor_jobs_ready_time =
+									std::min(earliest_certain_successor_jobs_ready_time,
+										std::max(succ.first->latest_arrival(), ftime_interval.max() + max_susp));
+							}
+							if (successor_pending)
+								job_finish_times.push_back(std::make_pair(dispatched_j, ftime_interval));
+							added_j = true;
+						}
+
+						bool successor_pending = false;
+						for (auto succ : successors_of[job]) {
+							auto to_job = succ.first->get_job_index();
+							if (!scheduled_jobs.contains(to_job))
+							{
+								successor_pending = true;
+								Time max_susp = succ.second.max();
+								earliest_certain_successor_jobs_ready_time =
+									std::min(earliest_certain_successor_jobs_ready_time,
+										std::max(succ.first->latest_arrival(), lft + max_susp));
+							}
+						}
+						if (successor_pending)
+						{
+							job_finish_times.push_back(std::make_pair(job, std::make_pair(eft, lft)));
+						}
+					}
+
+					if (!added_j)
 					{
 						bool successor_pending = false;
-						for (auto succ : successors_of[dispatched_j]) 
+						for (auto succ : successors_of[dispatched_j])
 						{
 							successor_pending = true;
 							Time max_susp = succ.second.max();
-							earliest_certain_successor_jobs_ready_time = 
-								std::min(earliest_certain_successor_jobs_ready_time, 
+							earliest_certain_successor_jobs_ready_time =
+								std::min(earliest_certain_successor_jobs_ready_time,
 									std::max(succ.first->latest_arrival(), ftime_interval.max() + max_susp));
 						}
 						if (successor_pending)
 							job_finish_times.push_back(std::make_pair(dispatched_j, ftime_interval));
-						added_j = true;
 					}
-
-					bool successor_pending = false;
-					for (auto succ : successors_of[job]) {
-						auto to_job = succ.first->get_job_index();
-						if (!scheduled_jobs.contains(to_job))
-						{
-							successor_pending = true;
-							Time max_susp = succ.second.max();
-							earliest_certain_successor_jobs_ready_time = 
-								std::min(earliest_certain_successor_jobs_ready_time, 
-									std::max(succ.first->latest_arrival(), lft + max_susp));
-						}
-					}
-					if (successor_pending)
-						job_finish_times.push_back(std::make_pair(job, ft.second));
-				}
-
-				if (!added_j)
-				{
-					bool successor_pending = false;
-					for (auto succ : successors_of[dispatched_j])
-					{
-						successor_pending = true;
-						Time max_susp = succ.second.max();
-						earliest_certain_successor_jobs_ready_time = 
-							std::min(earliest_certain_successor_jobs_ready_time, 
-								std::max(succ.first->latest_arrival(), ftime_interval.max() + max_susp));
-					}
-					if (successor_pending)
-						job_finish_times.push_back(std::make_pair(dispatched_j, ftime_interval));
 				}
 			}
 
@@ -213,6 +223,61 @@ namespace NP {
 				assert(jft_find(job) < job_finish_times.size());
 				return job_finish_times[jft_find(job)].second;
 			}
+
+			// Check whether the job_finish_times intersect
+			/*bool can_merge_with(const Schedule_state<Time>& s)
+			{
+				if (!finish_time.intersects(s.finish_time))
+					return false;
+
+				bool allJobsIntersect = true;
+				auto from_it = from_pwj.begin();
+				auto state_it = job_finish_times.begin();
+
+				while (from_it != from_pwj.end() && state_it != job_finish_times.end())
+				{
+					if (from_it->first == state_it->first)
+					{
+						if (!from_it->second.intersects(state_it->second))
+						{
+							allJobsIntersect = false;
+							break;
+						}
+						from_it++;
+						state_it++;
+					}
+					else if (from_it->first < state_it->first)
+						from_it++;
+					else
+						state_it++;
+				}
+				return allJobsIntersect;
+			}
+
+			// Check whether the job_finish_times can be merged and merge them if yes.
+			bool try_and_merge(const Schedule_state<Time>& s)
+			{
+				if (!can_merge_with(from_pwj))
+					return false;
+
+				auto from_it = from_pwj.begin();
+				auto state_it = job_finish_times.begin();
+
+				while (from_it != from_pwj.end() && state_it != job_finish_times.end())
+				{
+					if (from_it->first == state_it->first)
+					{
+						state_it->second.widen(from_it->second);
+						from_it++;
+						state_it++;
+					}
+					else if (from_it->first < state_it->first)
+						from_it++;
+					else
+						state_it++;
+				}
+				return true;
+			}*/
 
 			// Check whether the job_finish_times intersect
 			bool can_merge_with(const JobFinishTimes& from_pwj)
@@ -439,7 +504,8 @@ namespace NP {
 				return &states;
 			}
 
-			bool merge_states(const Schedule_state<Time>& s)
+			bool merge_states(const Schedule_state<Time>& s,
+				bool useJobFinishTimes = true)
 			{
 				// RV: instead of merging with only one state, try to merge with more states if possible.
 				int merge_budget = 1;

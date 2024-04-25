@@ -806,9 +806,9 @@ namespace NP {
 				return *s;
 			}
 
-			State& new_state(Interval<Time>& ftimes, const State& from, const Job<Time>& sched_job, const Job_set& scheduled_jobs)
+			State& new_state(Interval<Time>& start_times, Interval<Time>& ftimes, const State& from, const Job<Time>& sched_job, const Job_set& scheduled_jobs)
 			{
-				State* s = new State(from, sched_job.get_job_index(), ftimes, scheduled_jobs,successors_of);
+				State* s = new State(from, sched_job.get_job_index(), start_times, ftimes, scheduled_jobs,successors_of);
 				num_states++;
 				return *s;
 			}
@@ -1066,7 +1066,8 @@ namespace NP {
 							  earliest_certain_source_job_release(n, j));
 				/*DM("      -----> N" << (nodes.end() - nodes.begin())
 				   << std::endl);*/
-				State& next_state = new_state(finish_range, s, j, next.get_scheduled_jobs());
+				Interval<Time> start_times{ est, lst };
+				State& next_state = new_state(start_times, finish_range, s, j, next.get_scheduled_jobs());
 				next.add_state(&next_state);
 				process_new_edge(n, next, j, next_state.finish_range());
 			}
@@ -1136,10 +1137,57 @@ namespace NP {
 			}
 
 			// Adds a new state into an existing matching node
-			void schedule(const Node& n, const Node_ref match, const State& s, const Job<Time> &j, const Time est, const Time lst)
+			void schedule_wo_supernodes(const Node& n, hash_value_t key, const State& s, const Job<Time> &j, const Time est, const Time lst)
+			{
+				Job_set sched_jobs{ n.get_scheduled_jobs(), j.get_job_index() };
+				Interval<Time> finish_range = next_finish_times(n, s, j, est, lst);
+				Interval<Time> start_times{ est, lst };
+				State& st = new_state(start_times, finish_range, s, j, sched_jobs);
+
+				bool found_match = false;
+				auto r = nodes_by_key.equal_range(key);
+
+				if (r.first != r.second)
+				{
+					for (auto it = r.first; it != r.second; it++)
+					{
+						Node& found = *it->second;
+
+						if (found.get_scheduled_jobs() != sched_jobs)
+							continue;
+
+						// If we have reached here, it means that we have found an existing node with the same 
+						// set of scheduled jobs than the new state resuting from scheduling job j in system state s.
+						// Thus, our new state can be added to that existing node.
+						auto match = it->second;
+						if (match->merge_states(st))
+						{
+							delete& st;
+							num_states--;
+							process_new_edge(n, *match, j, finish_range);
+							found_match = true;
+							break;
+						}
+					}
+				}
+
+				if(found_match == false)
+				{
+					Node& next_node =
+						new_node(finish_range, n, s, j, j.get_job_index(),
+							earliest_possible_job_release(n, j),
+							earliest_certain_source_job_release(n, j));
+					next_node.add_state(&st);
+					process_new_edge(n, next_node, j, finish_range);
+				}
+			}
+
+			// Adds a new state into an existing matching node
+			void schedule(const Node& n, const Node_ref match, const State& s, const Job<Time>& j, const Time est, const Time lst)
 			{
 				Interval<Time> finish_range = next_finish_times(n, s, j, est, lst);
-				State& st = new_state(finish_range, s, j, match->get_scheduled_jobs());
+				Interval<Time> start_times{ est, lst };
+				State& st = new_state(start_times, finish_range, s, j, match->get_scheduled_jobs());
 
 				if (match->merge_states(st))
 				{
@@ -1149,21 +1197,9 @@ namespace NP {
 				}
 				else
 				{
-					if (use_supernodes)
-					{
-						DM("State not merged but added to the node");
-						match->add_state(&st);
-						process_new_edge(n, *match, j, finish_range);
-					}
-					else
-					{
-						Node& next_node =
-							new_node(finish_range, n, s, j, j.get_job_index(),
-								earliest_possible_job_release(n, j),
-								earliest_certain_source_job_release(n, j));
-						next_node.add_state(&st);
-						process_new_edge(n, next_node, j, finish_range);
-					}
+					DM("State not merged but added to the node");
+					match->add_state(&st);
+					process_new_edge(n, *match, j, finish_range);
 				}
 			}
 
@@ -1178,7 +1214,8 @@ namespace NP {
 							  earliest_certain_source_job_release(n,j));
 				//DM("      -----> N" << (nodes.end() - nodes.begin()) << " " <<(todo[todo_idx].front() - nodes.begin() + 1)
 				//   << std::endl);
-				State& next_state = new_state(finish_range, s, j, next.get_scheduled_jobs());
+				Interval<Time> start_times{ est, lst };
+				State& next_state = new_state(start_times, finish_range, s, j, next.get_scheduled_jobs());
 				next.add_state(&next_state);
 				process_new_edge(n, next, j, finish_range);
 				Node_ref n_ref = &(*(--nodes.end()));
@@ -1267,7 +1304,12 @@ namespace NP {
 							// is no later than the latest time it must start at)
 							if (est <= t_wc && est < t_high)
 							{
-								if (nxt_node_created == false)
+								if (use_supernodes == false)
+								{
+									auto k = n.next_key(j);
+									schedule_wo_supernodes(n, k, *s, j, est, lst);
+								}
+								else if (nxt_node_created == false)
 								{
 									// Find the key of the next state from state s connected by an edge with job j
 									// Find all states that have the same key
