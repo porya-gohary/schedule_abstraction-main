@@ -313,7 +313,7 @@ namespace NP {
 			{
 				r[index] = std::pair<Time, Time>{std::min(r[index].first, range.from()),
 														 std::max(r[index].second, range.upto())};
-				DM("RTA " << index << ": " << r[index] << std::endl);
+				DM("RTA " << index << ": [" << r[index].first << ", " << r[index].second << "]" << std::endl);
 			}
 
 			void update_finish_times(Response_times& r, const Job_index index,
@@ -321,7 +321,7 @@ namespace NP {
 			{
 				r[index] = std::pair<Time, Time>{std::min(r[index].first, range.first),
 												 std::max(r[index].second, range.second)};
-				DM("RTA " << index << ": " << r[index] << std::endl);
+				DM("RTA " << index << ": [" << r[index].first << ", " << r[index].second << "]" << std::endl);
 			}
 
 			void update_finish_times(
