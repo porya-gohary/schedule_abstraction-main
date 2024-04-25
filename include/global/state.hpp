@@ -139,7 +139,16 @@ namespace NP {
 				for (auto ft : from.job_finish_times)
 				{
 					auto job = ft.first;
+					auto job_eft = ft.second.min();
 					auto job_lft = ft.second.max();
+					// if there is a single core, then we know that 
+					// jobs that were disptached in the past cannot have 
+					// finished later than when our new job starts executing
+					if (core_avail.size() == 1)
+					{
+						if (job_lft > lst)
+							job_lft = lst;
+					}
 
 					if (!added_j && job > j)
 					{
@@ -170,7 +179,7 @@ namespace NP {
 						}
 					}
 					if (successor_pending)
-						job_finish_times.push_back(std::make_pair(job, ft.second));
+						job_finish_times.push_back(std::make_pair(job, std::make_pair(job_eft, job_lft)));
 				}
 
 				if (!added_j)
@@ -300,25 +309,35 @@ namespace NP {
 				return true;
 			}
 
-			bool can_merge_with(const Schedule_state<Time>& other) const
+			bool can_merge_with(const Schedule_state<Time>& other, bool useJobFinishTimes = false) const
 			{
 				if (core_avail_overlap(other.core_avail))
-					return check_finish_times_overlap(other.job_finish_times);
+				{
+					if (useJobFinishTimes)
+						return check_finish_times_overlap(other.job_finish_times);
+					else
+						return true;
+				}
 				else
 					return false;
 			}
 
-			bool can_merge_with(const CoreAvailability& cav, const JobFinishTimes& jft) const
+			bool can_merge_with(const CoreAvailability& cav, const JobFinishTimes& jft, bool useJobFinishTimes = false) const
 			{
 				if (core_avail_overlap(cav))
-					return check_finish_times_overlap(jft);
+				{
+					if (useJobFinishTimes)
+						return check_finish_times_overlap(jft);
+					else
+						return true;
+				}
 				else
 					return false;
 			}
 
-			bool try_to_merge(const Schedule_state<Time>& other)
+			bool try_to_merge(const Schedule_state<Time>& other, bool useJobFinishTimes = false)
 			{
-				if (!can_merge_with(other))
+				if (!can_merge_with(other, useJobFinishTimes))
 					return false;
 
 				merge(other.core_avail, other.job_finish_times, other.certain_jobs, other.earliest_certain_successor_jobs_ready_time);
@@ -641,7 +660,7 @@ namespace NP {
 				return &states;
 			}
 
-			bool merge_states(const Schedule_state<Time>& s)
+			bool merge_states(const Schedule_state<Time>& s, bool useJobFinishTimes = false)
 			{
 				// RV: instead of merging with only one state, try to merge with more states if possible.
 				int merge_budget = 1;
@@ -654,7 +673,7 @@ namespace NP {
 				{
 					if (result == false)
 					{
-						if (state->try_to_merge(s))
+						if (state->try_to_merge(s, useJobFinishTimes))
 						{
 							// Update the node finish_time
 							finish_time.widen(s.core_availability());
@@ -674,7 +693,7 @@ namespace NP {
 					}
 					else // if we already merged with one state at least
 					{
-						if (state->try_to_merge(*last_state_merged))
+						if (state->try_to_merge(*last_state_merged, useJobFinishTimes))
 						{
 							// the state was merged => we can thus remove the old one from the list of states
 							states.erase(last_state_merged);

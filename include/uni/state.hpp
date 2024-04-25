@@ -90,9 +90,8 @@ namespace NP {
 				for (auto ft : from.job_finish_times)
 				{
 					auto job = ft.first;
-					//auto lft = ft.second.max();
 					auto lst_dipatched = start_times.max();
-					auto lft = std::min(ft.second.max(), lst_dipatched - Time_model::constants<Time>::epsilon());
+					auto lft = std::min(ft.second.max(), lst_dipatched);
 					auto eft = ft.second.min();
 
 					if (!added_j && job > dispatched_j)

@@ -53,7 +53,7 @@ namespace NP {
 				assert(opts.early_exit);
 
 				auto s = State_space(prob.jobs, prob.dag, prob.sts, prob.num_processors, opts.timeout,
-					opts.max_depth, opts.num_buckets, opts.use_self_suspensions);
+					opts.max_depth, opts.num_buckets, opts.use_self_suspensions, opts.use_supernodes);
 				s.be_naive = opts.be_naive;
 				s.cpu_time.start();
 				s.explore(); // ISSUE
@@ -308,9 +308,7 @@ namespace NP {
 			Processor_clock cpu_time;
 			const double timeout;
 			unsigned int wants_self_suspensions;
-
 			const unsigned int num_cpus;
-
 			bool use_supernodes = true;
 
 			State_space(const Workload& jobs,
@@ -320,7 +318,8 @@ namespace NP {
 				double max_cpu_time = 0,
 				unsigned int max_depth = 0,
 				std::size_t num_buckets = 1000,
-				unsigned int use_self_suspensions = NOSUSP)
+				unsigned int use_self_suspensions = NOSUSP,
+				bool use_supernodes = true)
 				: _jobs_by_win(Interval<Time>{0, max_deadline(jobs)},
 					max_deadline(jobs) / num_buckets)
 				, jobs(jobs)
@@ -348,6 +347,7 @@ namespace NP {
 				, predecessors_suspensions(_predecessors_suspensions)
 				, successors(_successors)
 				, wants_self_suspensions(use_self_suspensions)
+				, use_supernodes(use_supernodes)
 			{
 				for (auto e : dag_edges) {
 					const Job<Time>& from = lookup<Time>(jobs, e.first);
@@ -434,7 +434,7 @@ namespace NP {
 
 			std::size_t index_of(const Job<Time>& j) const
 			{
-				return (std::size_t)(&j - &(jobs[0]));
+				return j.get_job_index();// (std::size_t)(&j - &(jobs[0]));
 			}
 			const Job<Time>& reverse_index_of(std::size_t index) const
 			{
@@ -552,32 +552,6 @@ namespace NP {
 				list.push_front(s);
 			}
 
-			// returns true if state was merged
-			State_ref merge_or_cache_state(State_ref s)
-			{
-				States_map_accessor acc;
-
-				while (true) {
-					// check if key exists
-					if (states_by_key.find(acc, s->get_key())) {
-						for (State_ref other : acc->second)
-							if (other->try_to_merge(*s))
-								return other;
-						// If we reach here, we failed to merge, so go ahead
-						// and insert it.
-						insert_cache_state(acc, s);
-						return s;
-						// otherwise, key doesn't exist yet, let's try to create it
-					}
-					else if (states_by_key.insert(acc, s->get_key())) {
-						// We created the list, so go ahead and insert our state.
-						insert_cache_state(acc, s);
-						return s;
-					}
-					// if we raced with concurrent creation, try again
-				}
-			}
-
 			// make node available for fast lookup
 			void insert_cache_node(Nodes_map_accessor& acc, Node_ref n)
 			{
@@ -585,32 +559,6 @@ namespace NP {
 
 				Node_refs& list = acc->second;
 				list.push_front(n);
-			}
-
-			// returns true if node was merged
-			Node_ref merge_or_cache_node(Node_ref n)
-			{
-				Nodes_map_accessor acc;
-
-				while (true) {
-					// check if key exists
-					if (nodes_by_key.find(acc, n->get_key())) {
-						for (Node_ref other : acc->second)
-							if (other->try_to_merge(*n))
-								return other;
-						// If we reach here, we failed to merge, so go ahead
-						// and insert it.
-						insert_cache_node(acc, n);
-						return n;
-						// otherwise, key doesn't exist yet, let's try to create it
-					}
-					else if (nodes_by_key.insert(acc, n->get_key())) {
-						// We created the list, so go ahead and insert our node.
-						insert_cache_node(acc, n);
-						return n;
-					}
-					// if we raced with concurrent creation, try again
-				}
 			}
 
 #else
@@ -883,6 +831,47 @@ namespace NP {
 				return Time_model::constants<Time>::infinity();
 			}
 
+			// Create a new state st, try to merge st in an existing node. If the merge is unsuccessful, create a new node and add st
+			Node& dispatch_wo_supernodes(const Node& n, const State& s, const Job<Time>& j, Interval<Time> start_times, Interval<Time> finish_times)
+			{
+				Job_set sched_jobs{ n.get_scheduled_jobs(), j.get_job_index() };
+				// Compute core_avail for the state where j is started.
+				CoreAvailability cav;
+				s.next_core_avail(j.get_job_index(), predecessors_of(j), start_times, finish_times, cav);
+				// create a new state resulting from scheduling j in state s.
+				State& st = new_state(s, j.get_job_index(), predecessors_of(j),
+					start_times, finish_times, cav, sched_jobs, successors);
+
+				bool found_match = false;
+				hash_value_t key = n.next_key(j);
+				const auto pair_it = nodes_by_key.find(n.next_key(j));
+				if (pair_it != nodes_by_key.end()) 
+				{
+					for (Node_ref other : pair_it->second) 
+					{
+						if (other->get_scheduled_jobs() != sched_jobs)
+							continue;
+
+						// If we have reached here, it means that we have found an existing node with the same 
+						// set of scheduled jobs than the new state resuting from scheduling job j in system state s.
+						// Thus, our new state can be added to that existing node.
+						if (other->merge_states(st, wants_self_suspensions == PATHWISE_SUSP))
+						{
+							delete& st;
+							return *other;
+						}
+					}
+				}
+
+				Node& next_node = new_node(n, j, j.get_job_index(), 
+					earliest_possible_job_release(n, j), 
+					earliest_certain_source_job_release(n, j));
+				
+				next_node.add_state(&st);	
+				num_states++;
+				return next_node;
+			}
+
 			bool dispatch(const Node& n, const Job<Time>& j, Time t_wc_wos, Time t_high_wos)
 			{				
 				// All states in node 'n' for which the job 'j' is eligible will 
@@ -914,60 +903,63 @@ namespace NP {
 					// update finish-time estimates
 					update_finish_times(j, ftimes);
 
-					// expand the graph, merging if possible
-					// RV: compute loopup key
-					//     check whether a node exists
-					//     + merge with state in node or add extra state.
-					//     - create a new node.
-					
-					// If be_naive, a new node and a new state should be created for each new job dispatch.
-					if (be_naive)
-						next = &(new_node(n, j, index_of(j), earliest_possible_job_release(n, j), earliest_certain_source_job_release(n, j)));
-					
-					if (next == nullptr)
+					if (use_supernodes == false)
 					{
-						const auto pair_it = nodes_by_key.find(n.next_key(j));
-						if (pair_it != nodes_by_key.end()) {
-							Job_set new_sched_jobs{ n.get_scheduled_jobs(), j.get_job_index() };
-							for (Node_ref other : pair_it->second) {
-								if (other->get_scheduled_jobs() == new_sched_jobs)
-								{
-									next = other;
-									DM("=== dispatch: next exists." << std::endl);
-									break;
+						next = &(dispatch_wo_supernodes(n, *s, j, st, ftimes));
+					}
+					else
+					{
+						// expand the graph, merging if possible
+						// RV: compute loopup key
+						//     check whether a node exists
+						//     + merge with state in node or add extra state.
+						//     - create a new node.
+
+						// If be_naive, a new node and a new state should be created for each new job dispatch.
+						if (be_naive)
+							next = &(new_node(n, j, j.get_job_index(), earliest_possible_job_release(n, j), earliest_certain_source_job_release(n, j)));
+
+						if (next == nullptr)
+						{
+							const auto pair_it = nodes_by_key.find(n.next_key(j));
+							if (pair_it != nodes_by_key.end()) {
+								Job_set new_sched_jobs{ n.get_scheduled_jobs(), j.get_job_index() };
+								for (Node_ref other : pair_it->second) {
+									if (other->get_scheduled_jobs() == new_sched_jobs)
+									{
+										next = other;
+										DM("=== dispatch: next exists." << std::endl);
+										break;
+									}
 								}
 							}
+							// If there is no node yet, create one.
+							if (next == nullptr)
+								next = &(new_node(n, j, j.get_job_index(), earliest_possible_job_release(n, j), earliest_certain_source_job_release(n, j)));
 						}
-					}
-					// If there is no node yet, create one.
-					if (next == nullptr)
-						next = &(new_node(n, j, index_of(j), earliest_possible_job_release(n, j), earliest_certain_source_job_release(n, j)));
 
-					// next should always exist at this point, possibly without states
+						// next should always exist at this point, possibly without states
 
-					// Compute core_avail for the state where j is started.
-					CoreAvailability cav;
-					s->next_core_avail(j.get_job_index(), predecessors_of(j), st, ftimes, cav);
-					// create a new state resulting from scheduling j in state s.
-					State& new_s = new_state(*s, index_of(j), predecessors_of(j),
-						st, ftimes, cav, next->get_scheduled_jobs(), successors);
+						// Compute core_avail for the state where j is started.
+						CoreAvailability cav;
+						s->next_core_avail(j.get_job_index(), predecessors_of(j), st, ftimes, cav);
+						// create a new state resulting from scheduling j in state s.
+						State& new_s = new_state(*s, j.get_job_index(), predecessors_of(j),
+							st, ftimes, cav, next->get_scheduled_jobs(), successors);
 
-					// try to merge the new state with existing states.
-					if (next->merge_states(new_s))
-						delete &new_s; // if we could merge no need to keep track of the new state anymore
-					else 
-					{
-						// if we do not want to use super nodes, create one node per state
-						if(use_supernodes==false and next->get_states()->size() > 0)
-							next = &(new_node(n, j, index_of(j), earliest_possible_job_release(n, j), earliest_certain_source_job_release(n, j)));
+						// try to merge the new state with existing states.
+						if (!(next->get_states()->empty()) && next->merge_states(new_s, wants_self_suspensions == PATHWISE_SUSP))
+							delete& new_s; // if we could merge no need to keep track of the new state anymore
+						else
+						{
+							next->add_state(&new_s); // else add the new state to the node
+							num_states++;
+						}
 
-						next->add_state(&new_s); // else add the new state to the node
-						num_states++;
-					}
-
-					// make sure we didn't skip any jobs
-					if (be_naive) {
-						check_for_deadline_misses(n, *next);
+						// make sure we didn't skip any jobs
+						if (be_naive) {
+							check_for_deadline_misses(n, *next);
+						}
 					}
 
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
@@ -1006,9 +998,9 @@ namespace NP {
 					<< "avail_max: " << avail_max << std::endl
 					<< "upbnd_t_wc: " << upbnd_t_wc << std::endl);
 
-				DM("==== [1] ====" << std::endl);
+				//DM("==== [1] ====" << std::endl);
 				// (1) first check jobs that may be already pending
-				for (const Job<Time>& j : jobs_by_win.lookup(t_min))
+				/*for (const Job<Time>& j : jobs_by_win.lookup(t_min))
 				{
 					if (j.earliest_arrival() <= t_min && ready(n, j)) 
 					{
@@ -1021,9 +1013,9 @@ namespace NP {
 					}
 				}
 
-				DM("==== [2] ====" << std::endl);
+				DM("==== [2] ====" << std::endl);*/
 				// (2) check jobs that are released only later in the interval
-				for (auto it = jobs_by_earliest_arrival.upper_bound(t_min);
+				for (auto it = jobs_by_earliest_arrival.lower_bound(t_min);
 					it != jobs_by_earliest_arrival.end();
 					it++) 
 				{

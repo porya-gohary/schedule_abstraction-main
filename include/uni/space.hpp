@@ -1136,7 +1136,7 @@ namespace NP {
 				}
 			}
 
-			// Adds a new state into an existing matching node
+			// Create a new state st, try to merge st in an existing node. If the merge is unsuccessful, create a new node and add st
 			void schedule_wo_supernodes(const Node& n, hash_value_t key, const State& s, const Job<Time> &j, const Time est, const Time lst)
 			{
 				Job_set sched_jobs{ n.get_scheduled_jobs(), j.get_job_index() };
