@@ -808,7 +808,7 @@ namespace NP {
 
 			State& new_state(Interval<Time>& start_times, Interval<Time>& ftimes, const State& from, const Job<Time>& sched_job, const Job_set& scheduled_jobs)
 			{
-				State* s = new State(from, sched_job.get_job_index(), start_times, ftimes, scheduled_jobs,successors_of);
+				State* s = new State(from, sched_job.get_job_index(), start_times, ftimes, scheduled_jobs, successors_of, (want_self_suspensions == PATHWISE_SUSP));
 				num_states++;
 				return *s;
 			}
@@ -1160,7 +1160,7 @@ namespace NP {
 						// set of scheduled jobs than the new state resuting from scheduling job j in system state s.
 						// Thus, our new state can be added to that existing node.
 						auto match = it->second;
-						if (match->merge_states(st))
+						if (match->merge_states(st, want_self_suspensions == PATHWISE_SUSP))
 						{
 							delete& st;
 							num_states--;
@@ -1189,7 +1189,7 @@ namespace NP {
 				Interval<Time> start_times{ est, lst };
 				State& st = new_state(start_times, finish_range, s, j, match->get_scheduled_jobs());
 
-				if (match->merge_states(st))
+				if (match->merge_states(st, want_self_suspensions == PATHWISE_SUSP))
 				{
 					delete& st;
 					num_states--;

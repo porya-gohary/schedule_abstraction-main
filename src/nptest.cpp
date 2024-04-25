@@ -475,7 +475,7 @@ int main(int argc, char** argv)
 	}
 	selfsuspending_file = (const std::string&) options.get("selfsuspending_file");
 	const std::string& sstype = options.get("sstype");
-	want_pathwise = sstype == "pathwise";
+	want_pathwise = options.is_set_by_user("sstype");
 
 	want_aborts = options.is_set_by_user("abort_file");
 	if (want_aborts && parser.args().size() > 1) {

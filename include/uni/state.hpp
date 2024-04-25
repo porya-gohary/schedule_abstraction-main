@@ -79,11 +79,11 @@ namespace NP {
 				Interval<Time> ftime_interval, 
 				const Job_set& scheduled_jobs,
 				const Successors& successors_of,
-				bool useJobFinishTimes = true)
+				bool useJobFinishTimes = false)
 			:finish_time{ftime_interval}
 			{
 				earliest_certain_successor_jobs_ready_time = Time_model::constants<Time>::infinity();
-				if (useJobFinishTimes)
+				//if (useJobFinishTimes)
 				{
 					job_finish_times.reserve(from.job_finish_times.size() + 1);
 
@@ -174,47 +174,15 @@ namespace NP {
 				return finish_time;
 			}
 
-			void update_finish_range(const Interval<Time> &update)
+			/*void update_finish_range(const Interval<Time>& update)
 			{
 				assert(update.intersects(finish_time));
 				finish_time.widen(update);
-			}
+			}*/
 
 			Time get_earliest_certain_successor_jobs_ready_time() const
 			{
 				return earliest_certain_successor_jobs_ready_time;
-			}
-
-			void update_successor_job_ready_time(Time t)
-			{
-				earliest_certain_successor_jobs_ready_time = std::max(earliest_certain_successor_jobs_ready_time, t);
-			}
-
-			// #NS# all the following functions are purely to handle the job_finish_times
-			const JobFinishTimes& get_pathwise_jobs() const
-			{
-				return job_finish_times;
-			}
-
-			
-			void widen_pathwise_job(const Job_index job, const Interval<Time> ft)
-			{
-				auto it = jft_find(job);
-				if (it < job_finish_times.size() && job_finish_times[it].first == job)
-					job_finish_times[it].second.widen(ft);
-			}
-
-			// Checks if the state kept information on the finishing time interval of job in the current system state,
-			// and returns the finishing time interval in the variable 'ft' if that is the case
-			bool pathwisejob_exists(const Job_index job, Interval<Time> &ft) const
-			{
-				auto it = jft_find(job);
-				if (it < job_finish_times.size() && job_finish_times[it].first == job)
-				{
-					ft = job_finish_times[it].second;
-					return true;
-				}
-				return false;
 			}
 
 			// RV: only called after a check that job exists.
@@ -225,16 +193,19 @@ namespace NP {
 			}
 
 			// Check whether the job_finish_times intersect
-			/*bool can_merge_with(const Schedule_state<Time>& s)
+			bool can_merge_with(const Schedule_state<Time>& s, bool useJobFinishTimes = false)
 			{
 				if (!finish_time.intersects(s.finish_time))
 					return false;
 
+				if (!useJobFinishTimes)
+					return true;
+
 				bool allJobsIntersect = true;
-				auto from_it = from_pwj.begin();
+				auto from_it = s.job_finish_times.begin();
 				auto state_it = job_finish_times.begin();
 
-				while (from_it != from_pwj.end() && state_it != job_finish_times.end())
+				while (from_it != s.job_finish_times.end() && state_it != job_finish_times.end())
 				{
 					if (from_it->first == state_it->first)
 					{
@@ -255,15 +226,21 @@ namespace NP {
 			}
 
 			// Check whether the job_finish_times can be merged and merge them if yes.
-			bool try_and_merge(const Schedule_state<Time>& s)
+			bool try_and_merge(const Schedule_state<Time>& s, bool useJobFinishTimes = false)
 			{
-				if (!can_merge_with(from_pwj))
+				if (!can_merge_with(s, useJobFinishTimes))
 					return false;
 
-				auto from_it = from_pwj.begin();
+				finish_time.widen(s.finish_time);
+				earliest_certain_successor_jobs_ready_time = std::max(earliest_certain_successor_jobs_ready_time, s.get_earliest_certain_successor_jobs_ready_time());
+
+				if (!useJobFinishTimes)
+					return true;
+
+				auto from_it = s.job_finish_times.begin();
 				auto state_it = job_finish_times.begin();
 
-				while (from_it != from_pwj.end() && state_it != job_finish_times.end())
+				while (from_it != s.job_finish_times.end() && state_it != job_finish_times.end())
 				{
 					if (from_it->first == state_it->first)
 					{
@@ -277,58 +254,6 @@ namespace NP {
 						state_it++;
 				}
 				return true;
-			}*/
-
-			// Check whether the job_finish_times intersect
-			bool can_merge_with(const JobFinishTimes& from_pwj)
-			{
-				bool allJobsIntersect = true;
-				auto from_it = from_pwj.begin();
-				auto state_it = job_finish_times.begin();
-
-				while (from_it != from_pwj.end() &&	state_it != job_finish_times.end())
-				{
-					if (from_it->first == state_it->first)
-					{
-						if (!from_it->second.intersects(state_it->second))
-						{
-							allJobsIntersect = false;
-							break;
-						}
-						from_it++;
-						state_it++;
-					}
-					else if (from_it->first < state_it->first)
-						from_it++;
-					else
-						state_it++;
-				}
-				return allJobsIntersect;
-			}
-
-			// Check whether the job_finish_times can be merged and merge them if yes.
-			bool try_and_merge(const JobFinishTimes& from_pwj)
-			{
-				if (!can_merge_with(from_pwj))
-					return false;
-
-				auto from_it = from_pwj.begin();
-				auto state_it = job_finish_times.begin();
-
-				while (from_it != from_pwj.end() &&	state_it != job_finish_times.end())
-				{
-					if (from_it->first == state_it->first)
-					{
-						state_it->second.widen(from_it->second);
-						from_it++;
-						state_it++;
-					}
-					else if (from_it->first < state_it->first)
-						from_it++;
-					else
-						state_it++;
-				}
-				return true;	  
 			}
 		  		  
 			friend std::ostream& operator<< (std::ostream& stream,
@@ -505,7 +430,7 @@ namespace NP {
 			}
 
 			bool merge_states(const Schedule_state<Time>& s,
-				bool useJobFinishTimes = true)
+				bool useJobFinishTimes = false)
 			{
 				// RV: instead of merging with only one state, try to merge with more states if possible.
 				int merge_budget = 1;
@@ -524,13 +449,11 @@ namespace NP {
 						{
 							// When the finish time intervals of all jobs with unfinished successors intersect in both states, 
 							// widen their finish time intervals in the existing state.
-							if (state->try_and_merge(s.get_pathwise_jobs()))
+							if (state->try_and_merge(s, useJobFinishTimes))
 							{
-								//Widen the main finish range in the merged state and the node
-								state->update_finish_range(ft);
+								//Widen the main finish range in the node
 								finish_time.widen(ft);
-								//update the certain next job ready time in the merged state and node
-								state->update_successor_job_ready_time(s.get_earliest_certain_successor_jobs_ready_time());
+								//update the certain next job ready time in the node
 								next_certain_successor_job_ready_time = std::max(next_certain_successor_job_ready_time, s.get_earliest_certain_successor_jobs_ready_time());
 
 								result = true;
@@ -549,13 +472,8 @@ namespace NP {
 						{
 							// When the finish time intervals of all jobs with unfinished successors intersect in both states, 
 							// widen their finish time intervals in the existing state.
-							if (state->try_and_merge(last_state_merged->get_pathwise_jobs()))
+							if (state->try_and_merge(*last_state_merged, useJobFinishTimes))
 							{
-								//Widen the main finish range in the merged state
-								state->update_finish_range(last_state_merged->finish_range());
-								//update the certain next job ready time in the merged state
-								state->update_successor_job_ready_time(last_state_merged->get_earliest_certain_successor_jobs_ready_time());
-
 								// the state was merged => we can thus remove the old one from the list of states
 								states.erase(last_state_merged);
 								delete last_state_merged;
