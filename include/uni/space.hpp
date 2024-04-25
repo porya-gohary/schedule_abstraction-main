@@ -808,7 +808,7 @@ namespace NP {
 
 			State& new_state(Interval<Time>& start_times, Interval<Time>& ftimes, const State& from, const Job<Time>& sched_job, const Job_set& scheduled_jobs)
 			{
-				State* s = new State(from, sched_job.get_job_index(), start_times, ftimes, scheduled_jobs, successors_of, (want_self_suspensions == PATHWISE_SUSP));
+				State* s = new State(from, sched_job.get_job_index(), start_times, ftimes, scheduled_jobs, successors_of);
 				num_states++;
 				return *s;
 			}

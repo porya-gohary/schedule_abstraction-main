@@ -78,61 +78,24 @@ namespace NP {
 				Interval<Time> start_times,
 				Interval<Time> ftime_interval, 
 				const Job_set& scheduled_jobs,
-				const Successors& successors_of,
-				bool useJobFinishTimes = false)
+				const Successors& successors_of)
 			:finish_time{ftime_interval}
 			{
 				earliest_certain_successor_jobs_ready_time = Time_model::constants<Time>::infinity();
-				//if (useJobFinishTimes)
+				job_finish_times.reserve(from.job_finish_times.size() + 1);
+
+				// updates the list of finish times of jobs with successors w.r.t. the previous system state
+				// and calculates the earliest time a job with precedence constraints will become ready
+				bool added_j = false;
+				for (auto ft : from.job_finish_times)
 				{
-					job_finish_times.reserve(from.job_finish_times.size() + 1);
+					auto job = ft.first;
+					//auto lft = ft.second.max();
+					auto lst_dipatched = start_times.max();
+					auto lft = std::min(ft.second.max(), lst_dipatched - Time_model::constants<Time>::epsilon());
+					auto eft = ft.second.min();
 
-					// updates the list of finish times of jobs with successors w.r.t. the previous system state
-					// and calculates the earliest time a job with precedence constraints will become ready
-					bool added_j = false;
-					for (auto ft : from.job_finish_times)
-					{
-						auto job = ft.first;
-						//auto lft = ft.second.max();
-						auto lst_dipatched = start_times.max();
-						auto lft = std::min(ft.second.max(), lst_dipatched - Time_model::constants<Time>::epsilon());
-						auto eft = ft.second.min();
-
-						if (!added_j && job > dispatched_j)
-						{
-							bool successor_pending = false;
-							for (auto succ : successors_of[dispatched_j])
-							{
-								successor_pending = true;
-								Time max_susp = succ.second.max();
-								earliest_certain_successor_jobs_ready_time =
-									std::min(earliest_certain_successor_jobs_ready_time,
-										std::max(succ.first->latest_arrival(), ftime_interval.max() + max_susp));
-							}
-							if (successor_pending)
-								job_finish_times.push_back(std::make_pair(dispatched_j, ftime_interval));
-							added_j = true;
-						}
-
-						bool successor_pending = false;
-						for (auto succ : successors_of[job]) {
-							auto to_job = succ.first->get_job_index();
-							if (!scheduled_jobs.contains(to_job))
-							{
-								successor_pending = true;
-								Time max_susp = succ.second.max();
-								earliest_certain_successor_jobs_ready_time =
-									std::min(earliest_certain_successor_jobs_ready_time,
-										std::max(succ.first->latest_arrival(), lft + max_susp));
-							}
-						}
-						if (successor_pending)
-						{
-							job_finish_times.push_back(std::make_pair(job, std::make_pair(eft, lft)));
-						}
-					}
-
-					if (!added_j)
+					if (!added_j && job > dispatched_j)
 					{
 						bool successor_pending = false;
 						for (auto succ : successors_of[dispatched_j])
@@ -145,7 +108,40 @@ namespace NP {
 						}
 						if (successor_pending)
 							job_finish_times.push_back(std::make_pair(dispatched_j, ftime_interval));
+						added_j = true;
 					}
+
+					bool successor_pending = false;
+					for (auto succ : successors_of[job]) {
+						auto to_job = succ.first->get_job_index();
+						if (!scheduled_jobs.contains(to_job))
+						{
+							successor_pending = true;
+							Time max_susp = succ.second.max();
+							earliest_certain_successor_jobs_ready_time =
+								std::min(earliest_certain_successor_jobs_ready_time,
+									std::max(succ.first->latest_arrival(), lft + max_susp));
+						}
+					}
+					if (successor_pending)
+					{
+						job_finish_times.push_back(std::make_pair(job, std::make_pair(eft, lft)));
+					}
+				}
+
+				if (!added_j)
+				{
+					bool successor_pending = false;
+					for (auto succ : successors_of[dispatched_j])
+					{
+						successor_pending = true;
+						Time max_susp = succ.second.max();
+						earliest_certain_successor_jobs_ready_time =
+							std::min(earliest_certain_successor_jobs_ready_time,
+								std::max(succ.first->latest_arrival(), ftime_interval.max() + max_susp));
+					}
+					if (successor_pending)
+						job_finish_times.push_back(std::make_pair(dispatched_j, ftime_interval));
 				}
 			}
 
@@ -233,9 +229,6 @@ namespace NP {
 
 				finish_time.widen(s.finish_time);
 				earliest_certain_successor_jobs_ready_time = std::max(earliest_certain_successor_jobs_ready_time, s.get_earliest_certain_successor_jobs_ready_time());
-
-				if (!useJobFinishTimes)
-					return true;
 
 				auto from_it = s.job_finish_times.begin();
 				auto state_it = job_finish_times.begin();
