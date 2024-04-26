@@ -664,8 +664,6 @@ namespace NP {
 			{
 				// RV: instead of merging with only one state, try to merge with more states if possible.
 				int merge_budget = 1;
-				static StatCollect stats = StatCollect("merge");
-				stats.tick(merge_budget);
 
 				State* last_state_merged;
 				bool result = false;
@@ -709,9 +707,6 @@ namespace NP {
 						}
 					}
 				}
-
-				stats.tick(result);
-				stats.print();
 
 				return result;
 			}
