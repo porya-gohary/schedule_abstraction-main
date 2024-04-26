@@ -60,7 +60,7 @@ TEST_CASE("Interval LUT") {
 
 	Interval_lookup_table<dtime_t, Job<dtime_t>, &Job<dtime_t>::scheduling_window> lut(Interval<dtime_t>(0, 60), 10);
 
-	Job<dtime_t> j1{10, Interval<dtime_t>(0, 0), Interval<dtime_t>(3, 13), 60, 60};
+	Job<dtime_t> j1{10, Interval<dtime_t>(0, 0), Interval<dtime_t>(3, 13), 60, 60, 0};
 
 	lut.insert(j1);
 
@@ -83,10 +83,10 @@ TEST_CASE("state space") {
 
 	CHECK(h(n0) == 0);
 
-	Job<dtime_t> j1{10, Interval<dtime_t>(0, 0), Interval<dtime_t>(3, 13), 60, 60};
+	Job<dtime_t> j1{10, Interval<dtime_t>(0, 0), Interval<dtime_t>(3, 13), 60, 60, 0};
 
-	CHECK(j1.least_cost() == 3);
-	CHECK(j1.maximal_cost() == 13);
+	CHECK(j1.least_exec_time() == 3);
+	CHECK(j1.maximal_exec_time() == 13);
 	CHECK(j1.earliest_arrival() == 0);
 	CHECK(j1.latest_arrival() == 0);
 }

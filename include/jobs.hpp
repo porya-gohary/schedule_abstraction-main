@@ -115,19 +115,19 @@ namespace NP {
 
 		Time least_exec_time(unsigned int ncores = 1) const
 		{
-			assert((ncores - paralelism.min()) >= 0 && ((ncores - parallelism.min()) < exec_times.size()));
+			assert((ncores - parallelism.min()) >= 0 && ((ncores - parallelism.min()) < exec_time.size()));
 			return exec_time[ncores - parallelism.min()].from();
 		}
 
 		Time maximal_exec_time(unsigned int ncores = 1) const
 		{
-			assert((ncores - paralelism.min()) >= 0 && ((ncores - parallelism.min()) < exec_times.size()));
+			assert((ncores - parallelism.min()) >= 0 && ((ncores - parallelism.min()) < exec_time.size()));
 			return exec_time[ncores - parallelism.min()].upto();
 		}
 
 		const Interval<Time>& get_cost(unsigned int ncores = 1) const
 		{
-			assert((ncores - paralelism.min()) >= 0 && ((ncores - parallelism.min()) < exec_times.size()));
+			assert((ncores - parallelism.min()) >= 0 && ((ncores - parallelism.min()) < exec_time.size()));
 			return exec_time[ncores - parallelism.min()];
 		}
 

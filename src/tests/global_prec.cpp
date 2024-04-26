@@ -123,7 +123,7 @@ TEST_CASE("[global-prec] taskset-2") {
 
 	for (const NP::Job<dtime_t>& j : jobs) {
 		CHECK(nspace2.get_finish_times(j) == space2.get_finish_times(j));
-		if (j.least_cost() != 0)
+		if (j.least_exec_time() != 0)
 		  CHECK(nspace2.get_finish_times(j).from() != 0);  // ISSUE: 0
 	}
 
@@ -140,7 +140,7 @@ TEST_CASE("[global-prec] taskset-2") {
 
 	for (const NP::Job<dtime_t>& j : jobs) {
 		CHECK(nspace3.get_finish_times(j) == space3.get_finish_times(j));
-		if (j.least_cost() != 0)
+		if (j.least_exec_time() != 0)
 		  CHECK(nspace3.get_finish_times(j).from() != 0);  // ISSUE: 0
 	}
 }
