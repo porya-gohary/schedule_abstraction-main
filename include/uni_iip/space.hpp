@@ -162,12 +162,12 @@ namespace NP {
 
 				Time earliest_start_time() const
 				{
-					return finish_range.from() - scheduled->least_cost();
+					return finish_range.from() - scheduled->least_exec_time();
 				}
 
 				Time latest_start_time() const
 				{
-					return finish_range.upto() - scheduled->maximal_cost();
+					return finish_range.upto() - scheduled->maximal_exec_time();
 				}
 
 			};
@@ -766,7 +766,7 @@ namespace NP {
 				Time earliest_start = next_earliest_start_time(s, j);
 
 				// e_k, equation 5
-				return earliest_start + j.least_cost();
+				return earliest_start + j.least_exec_time();
 			}
 
 			// For all the jobs sorted by their latest arrival, check if they have already been scheduled, 
@@ -814,7 +814,7 @@ namespace NP {
 					iip_latest_start);
 
 				return std::min(own_latest_start, last_start_before_other)
-					   + j.maximal_cost();
+					   + j.maximal_exec_time();
 			}
 
 			Time next_earliest_job_abortion(const Abort_action<Time> &a)

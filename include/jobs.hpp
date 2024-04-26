@@ -36,15 +36,18 @@ namespace NP {
 		}
 	};
 
+	
 	template<class Time> class Job {
 
 	public:
 		typedef std::vector<Job<Time>> Job_set;
 		typedef Time Priority; // Make it a time value to support EDF
+		typedef std::vector<Interval<Time>> Cost;
 
 	private:
 		Interval<Time> arrival;
-		Interval<Time> cost;
+		Interval<unsigned int> parallelism; // on which range of core numbers can it run in parallel
+		Cost exec_time; // execution time range depending on the number of cores assigned to the job to execute
 		Time deadline;
 		Priority priority;
 		JobID id;
@@ -58,9 +61,9 @@ namespace NP {
 			key = (key << 4) ^ h(arrival.from());
 			key = (key << 4) ^ h(id.task);
 			key = (key << 4) ^ h(arrival.until());
-			key = (key << 4) ^ h(cost.from());
+			key = (key << 4) ^ h(exec_time[0].from());
 			key = (key << 4) ^ h(deadline);
-			key = (key << 4) ^ h(cost.upto());
+			key = (key << 4) ^ h(exec_time[0].upto());
 			key = (key << 4) ^ h(id.job);
 			key = (key << 4) ^ h(priority);
 		}
@@ -68,12 +71,24 @@ namespace NP {
 	public:
 
 		Job(unsigned long id,
-			Interval<Time> arr, Interval<Time> cost,
+			Interval<Time> arr, Cost exec_time,
+			Interval<unsigned int> parallelism,
 			Time dl, Priority prio,
-			unsigned long tid = 0,
-			Job_index idx = 0)
-		: arrival(arr), cost(cost),
+			Job_index idx,
+			unsigned long tid = 0)
+		: arrival(arr), exec_time(exec_time), parallelism(parallelism),
 		  deadline(dl), priority(prio), id(id, tid), index(idx)
+		{
+			compute_hash();
+		}
+
+		Job(unsigned long id,
+			Interval<Time> arr, Interval<Time> exec_time,
+			Time dl, Priority prio,
+			Job_index idx,
+			unsigned long tid = 0)
+			: arrival(arr), exec_time(1, exec_time), parallelism({ 1, 1 }),
+			deadline(dl), priority(prio), id(id, tid), index(idx)
 		{
 			compute_hash();
 		}
@@ -98,24 +113,42 @@ namespace NP {
 			return arrival;
 		}
 
-		Time least_cost() const
+		Time least_exec_time(unsigned int ncores = 1) const
 		{
-			return cost.from();
+			assert((ncores - paralelism.min()) >= 0 && ((ncores - parallelism.min()) < exec_times.size()));
+			return exec_time[ncores - parallelism.min()].from();
 		}
 
-		Time maximal_cost() const
+		Time maximal_exec_time(unsigned int ncores = 1) const
 		{
-			return cost.upto();
+			assert((ncores - paralelism.min()) >= 0 && ((ncores - parallelism.min()) < exec_times.size()));
+			return exec_time[ncores - parallelism.min()].upto();
 		}
 
-		const Interval<Time>& get_cost() const
+		const Interval<Time>& get_cost(unsigned int ncores = 1) const
 		{
-			return cost;
+			assert((ncores - paralelism.min()) >= 0 && ((ncores - parallelism.min()) < exec_times.size()));
+			return exec_time[ncores - parallelism.min()];
 		}
 
 		Priority get_priority() const
 		{
 			return priority;
+		}
+
+		unsigned int get_min_parallelism() const
+		{
+			return parallelism.min();
+		}
+
+		unsigned int get_max_parallelism() const
+		{
+			return parallelism.max();
+		}
+
+		const Interval<unsigned int>& get_parallelism() const
+		{
+			return parallelism;
 		}
 
 		Time get_deadline() const
@@ -197,9 +230,10 @@ namespace NP {
 
 		friend std::ostream& operator<< (std::ostream& stream, const Job& j)
 		{
-			stream << "Job{" << j.id.job << ", " << j.arrival << ", "
-			       << j.cost << ", " << j.deadline << ", " << j.priority
-			       << ", " << j.id.task << "}";
+			stream << "Job{" << j.id.task << ", " << j.id.job << ", " << j.arrival << ", ";
+			for (auto i : j.exec_time)
+				stream << i << ", ";
+			stream << j.deadline << ", " << j.priority "}";
 			return stream;
 		}
 

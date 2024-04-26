@@ -168,12 +168,12 @@ namespace NP {
 
 				Time earliest_start_time() const
 				{
-					return finish_range.from() - scheduled->least_cost();
+					return finish_range.from() - scheduled->least_exec_time();
 				}
 
 				Time latest_start_time() const
 				{
-					return finish_range.upto() - scheduled->maximal_cost();
+					return finish_range.upto() - scheduled->maximal_exec_time();
 				}
 
 			};
@@ -414,14 +414,14 @@ namespace NP {
 			Time get_guard_band(const Job<Time>& j, Time priority)
 			{
 				if (tasQueues[priority].is_variable())
-					return std::max((Time)0, j.maximal_cost() - Time_model::constants<Time>::epsilon());
+					return std::max((Time)0, j.maximal_exec_time() - Time_model::constants<Time>::epsilon());
 				return tasQueues[priority].get_guardband();
 			}
 
 			Time get_min_guard_band(const Job<Time>& j, Time priority)
 			{
 				if (tasQueues[priority].is_variable())
-					return std::max((Time) 0, j.least_cost() - Time_model::constants<Time>::epsilon());
+					return std::max((Time) 0, j.least_exec_time() - Time_model::constants<Time>::epsilon());
 				return tasQueues[priority].get_guardband();
 			}
 
@@ -778,9 +778,9 @@ namespace NP {
 							{
 								continue;
 							}
-							if(largest_cmax < hpj.maximal_cost())
+							if(largest_cmax < hpj.maximal_exec_time())
 							{
-								largest_cmax = hpj.maximal_cost();
+								largest_cmax = hpj.maximal_exec_time();
 							}
 						}
 						if (largest_cmax > 0)
@@ -817,7 +817,7 @@ namespace NP {
 				{
 					for (auto st : ST)
 					{
-						FT.emplace_back(Interval<Time>{st.from() + j.least_cost(), std::min(st.upto() + j.maximal_cost(), tasQueues[j.get_priority()].next_close(st.upto()))});
+						FT.emplace_back(Interval<Time>{st.from() + j.least_exec_time(), std::min(st.upto() + j.maximal_exec_time(), tasQueues[j.get_priority()].next_close(st.upto()))});
 
 					}
 				}
@@ -825,7 +825,7 @@ namespace NP {
 				{
 					for (auto st : ST)
 					{
-						FT.emplace_back(Interval<Time>{st.from() + j.least_cost(), st.upto() + j.maximal_cost()});
+						FT.emplace_back(Interval<Time>{st.from() + j.least_exec_time(), st.upto() + j.maximal_exec_time()});
 
 					}
 				}

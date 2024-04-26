@@ -192,7 +192,7 @@ namespace NP {
 		in.exceptions(state_before);
 
 		return Job<Time>{jid, Interval<Time>{arr_min, arr_max},
-						Interval<Time>{cost_min, cost_max}, dl, prio, tid, idx};
+						Interval<Time>{cost_min, cost_max}, dl, prio, idx, tid};
 	}
 
 	template<class Time>

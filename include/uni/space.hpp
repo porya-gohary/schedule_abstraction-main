@@ -178,12 +178,12 @@ namespace NP {
 
 				Time earliest_start_time() const
 				{
-					return finish_range.from() - scheduled->least_cost();
+					return finish_range.from() - scheduled->least_exec_time();
 				}
 
 				Time latest_start_time() const
 				{
-					return finish_range.upto() - scheduled->maximal_cost();
+					return finish_range.upto() - scheduled->maximal_exec_time();
 				}
 
 			};
@@ -975,12 +975,12 @@ namespace NP {
 			Time next_earliest_finish_time(const Job<Time>& j, Time est)
 			{
 				// e_k, equation 5
-				return est + j.least_cost();
+				return est + j.least_exec_time();
 			}
 
 			Time next_latest_finish_time(const Job<Time>& j, Time lst)
 			{
-				return lst + j.maximal_cost();
+				return lst + j.maximal_exec_time();
 			}
 
 			Time next_earliest_job_abortion(const Abort_action<Time> &a)

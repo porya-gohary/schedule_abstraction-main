@@ -62,8 +62,8 @@ namespace NP {
 					const Job<Time>& h = *it->second;
 					if (space.incomplete(n, h)) {
 						Time latest = h.get_deadline()
-						              - h.maximal_cost()
-						              - j.maximal_cost();
+						              - h.maximal_exec_time()
+						              - j.maximal_exec_time();
 
 						DM("latest=" << latest << " " << h << std::endl);
 						return latest;
@@ -108,7 +108,7 @@ namespace NP {
 
 			Critical_window_IIP(const Space &space, const Jobs &jobs)
 			: space(space)
-			, max_cost(maximal_cost(jobs))
+			, max_cost(maximal_exec_time(jobs))
 			, n_tasks(count_tasks(jobs))
 			{
 			}
@@ -121,9 +121,9 @@ namespace NP {
 				// travers from job with latest to job with earliest deadline
 				for (auto it  = ijs.rbegin(); it != ijs.rend(); it++)
 					latest = std::min(latest, (*it)->get_deadline())
-					         - (*it)->maximal_cost();
+					         - (*it)->maximal_exec_time();
 				DM("latest=" << latest << " " << std::endl);
-				return latest - j.maximal_cost();
+				return latest - j.maximal_exec_time();
 			}
 
 			private:
@@ -132,11 +132,11 @@ namespace NP {
 			const Time max_cost;
 			const std::size_t n_tasks;
 
-			static Time maximal_cost(const Jobs &jobs)
+			static Time maximal_exec_time(const Jobs &jobs)
 			{
 				Time cmax = 0;
 				for (auto j : jobs)
-					cmax = std::max(cmax, j.maximal_cost());
+					cmax = std::max(cmax, j.maximal_exec_time());
 				return cmax;
 			}
 
