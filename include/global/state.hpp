@@ -30,6 +30,7 @@ namespace NP {
 			typedef std::vector<Interval<Time>> CoreAvailability;
 			typedef std::vector<std::pair<const Job<Time>*, Interval<Time>>> Successors_list;
 			typedef std::vector<Successors_list> Successors;
+			typedef Interval<unsigned int> Parallelism;
 
 			// system availability intervals
 			CoreAvailability core_avail;
@@ -37,8 +38,24 @@ namespace NP {
 			// keeps track of the earliest time a job with at least one predecessor becomes certainly ready
 			Time earliest_certain_successor_jobs_ready_time;
 
-			// imprecise set of certainly running jobs
-			std::vector<std::pair<Job_index, Interval<Time>>> certain_jobs;
+			struct Running_job {
+				Job_index idx;
+				Parallelism parallelism;
+				Interval<Time> finish_time;
+
+				Running_job(
+					Job_index idx,
+					Parallelism parallelism,
+					Interval<Time> finish_time
+				)
+				:	idx(idx),
+					parallelism(parallelism),
+					finish_time(finish_time)
+				{}
+			};
+
+			// imprecise set of certainly running jobs, on how many cores they run, and when they should finish
+			std::vector<Running_job> certain_jobs;
 
 			// job_finish_times holds the finish times of all the jobs that still have unscheduled successor
 			JobFinishTimes job_finish_times;
@@ -83,7 +100,8 @@ namespace NP {
 				Interval<Time> finish_times,
 				const CoreAvailability& next_core_avail,
 				const Job_set& scheduled_jobs,
-				const Successors& successors_of)
+				const Successors& successors_of,
+				unsigned int ncores = 1)
 			{
 				auto est = start_times.min();
 				auto lst = start_times.max();
@@ -102,18 +120,18 @@ namespace NP {
 				bool added_j = false;
 				for (const auto& rj : from.certain_jobs) 
 				{
-					auto running_job = rj.first;
-					auto running_job_eft = rj.second.min();
+					auto running_job = rj.idx;
 					if (contains(predecessors, running_job)) 
 					{
-						n_prec++; // keep track of the number of predecessors of j that are certainly running
+						n_prec+= rj.parallelism.min(); // keep track of the number of predecessors of j that are certainly running
 					}
-					else if (lst <= running_job_eft) 
+					else if (lst <= rj.finish_time.min())
 					{
 						if (!added_j && running_job > j) 
 						{
 							// right place to add j
-							certain_jobs.emplace_back(j, finish_times);
+							Parallelism p(ncores, ncores);
+							certain_jobs.emplace_back(j, p, finish_times);
 							added_j = true;
 						}
 						certain_jobs.emplace_back(rj);
@@ -121,10 +139,13 @@ namespace NP {
 				}
 				// if we didn't add it yet, add it at the back
 				if (!added_j)
-					certain_jobs.emplace_back(j, finish_times);
+				{
+					Parallelism p(ncores, ncores);
+					certain_jobs.emplace_back(j, p, finish_times);
+				}
 
 				// calculate the new core availability intervals
-				if (next_core_avail.size() > 1)
+				if (!next_core_avail.empty())
 					core_avail = next_core_avail;
 				else
 					from.next_core_avail(j, predecessors, start_times, finish_times, core_avail);
@@ -200,10 +221,10 @@ namespace NP {
 				DM("*** new state: constructed " << *this << std::endl);
 			}
 
-			// Return the core availability resulting from scheduling job j 
+			// Return the core availability resulting from scheduling job j on ncores
 			// in the current state
 			void next_core_avail(Job_index j, const Job_precedence_set& predecessors,
-				Interval<Time> start_times, Interval<Time> finish_times,
+				Interval<Time> start_times, Interval<Time> finish_times, unsigned int ncores,
 				CoreAvailability& result) const
 			{
 				int n_cores = core_avail.size();
@@ -219,12 +240,11 @@ namespace NP {
 
 				int n_prec = 0;
 
-				// Compute the number of active predecessors.
+				// Compute the number of cores certainly used by active predecessors.
 				// certain_jobs is sorted. If predecessors is sorted, some improvement is possible.
 				for (const auto& rj : certain_jobs) {
-					auto x = rj.first;
-					if (contains(predecessors, x)) {
-						n_prec++;
+					if (contains(predecessors, rj.idx)) {
+						n_prec+=rj.parallelism.min();
 					}
 				}
 
@@ -237,32 +257,44 @@ namespace NP {
 				bool eft_added_to_pa = false;
 				bool lft_added_to_ca = false;
 
-				// note, we must skip first element in from.core_avail
-				if (n_prec > 1) {
+				// note, we must skip the first ncores elements in from.core_avail
+				if (n_prec > ncores) {
 					// if there are n_prec predecessors running, n_prec cores must be available when j starts
-					for (int i = 1; i < n_prec; i++) {
+					for (int i = ncores; i < n_prec; i++) {
 						pa.push_back(est); // TODO: GN: check whether we can replace by est all the time since predecessors must possibly be finished by est to let j start
 						ca.push_back(std::min(lst, std::max(est, core_avail[i].max())));
 					}
 				}
 				else {
-					n_prec = 1;
+					n_prec = ncores;
 				}
 				for (int i = n_prec; i < core_avail.size(); i++) {
 					if (!eft_added_to_pa && eft < core_avail[i].min()) 
 					{
-						pa.push_back(eft);
+						// add the finish time of j ncores times since it runs on ncores
+						for(int p=0; p<ncores; p++)
+							pa.push_back(eft);
 						eft_added_to_pa = true;
 					}
 					pa.push_back(std::max(est, core_avail[i].min()));
 					if (!lft_added_to_ca && lft < core_avail[i].max()) {
-						ca.push_back(lft);
+						// add the finish time of j ncores times since it runs on ncores
+						for (int p = 0; p < ncores; p++)
+							ca.push_back(lft);
 						lft_added_to_ca = true;
 					}
 					ca.push_back(std::max(est, core_avail[i].max()));
 				}
-				if (!eft_added_to_pa) pa.push_back(eft);
-				if (!lft_added_to_ca) ca.push_back(lft);
+				if (!eft_added_to_pa) {
+					// add the finish time of j ncores times since it runs on ncores
+					for (int p = 0; p < ncores; p++)
+						pa.push_back(eft);
+				}
+				if (!lft_added_to_ca) {
+					// add the finish time of j ncores times since it runs on ncores
+					for (int p = 0; p < ncores; p++)
+						ca.push_back(lft);
+				}
 
 				for (int i = 0; i < core_avail.size(); i++) 
 				{
@@ -271,10 +303,21 @@ namespace NP {
 				}
 			}
 
-			Interval<Time> core_availability() const
+			// Return the core availability resulting from scheduling job j 
+			// in the current state
+			void next_core_avail(Job_index j, const Job_precedence_set& predecessors,
+				Interval<Time> start_times, Interval<Time> finish_times,
+				CoreAvailability& result) const
+			{
+				next_core_avail(j, predecessors, start_times, finish_times, 1, result);
+			}
+
+			Interval<Time> core_availability(unsigned long p = 1) const
 			{
 				assert(core_avail.size() > 0);
-				return core_avail[0];
+				assert(core_avail.size() >= p);
+				assert(p > 0);
+				return core_avail[p-1];
 			}
 
 			Time earliest_finish_time() const
@@ -349,27 +392,27 @@ namespace NP {
 			void merge(
 				const CoreAvailability& cav, 
 				const JobFinishTimes& jft,
-				const JobFinishTimes& cert_j,
+				const std::vector<Running_job>& cert_j,
 				Time ecsj_ready_time)
 			{
 				for (int i = 0; i < core_avail.size(); i++)
 					core_avail[i] |= cav[i];
 
 				// vector to collect joint certain jobs
-				std::vector<std::pair<Job_index, Interval<Time>>> new_cj;
+				std::vector<Running_job> new_cj;
 
 				// walk both sorted job lists to see if we find matches
 				auto it = certain_jobs.begin();
 				auto jt = cert_j.begin();
 				while (it != certain_jobs.end() &&
 					jt != cert_j.end()) {
-					if (it->first == jt->first) {
+					if (it->idx == jt->idx) {
 						// same job
-						new_cj.emplace_back(it->first, it->second | jt->second);
+						new_cj.emplace_back(it->idx, it->parallelism | jt->parallelism, it->finish_time | jt->finish_time);
 						it++;
 						jt++;
 					}
-					else if (it->first < jt->first)
+					else if (it->idx < jt->idx)
 						it++;
 					else
 						jt++;
@@ -394,7 +437,7 @@ namespace NP {
 					stream << "[" << a.from() << ", " << a.until() << "] ";
 				stream << "(";
 				for (const auto& rj : s.certain_jobs)
-					stream << rj.first << "";
+					stream << rj.idx << "";
 				stream << ") " << ")";
 				stream << " @ " << &s;
 				return stream;
@@ -411,9 +454,9 @@ namespace NP {
 				for (const auto& rj : certain_jobs) {
 					if (!first)
 						out << ", ";
-					out << "T" << jobs[rj.first].get_task_id()
-						<< "J" << jobs[rj.first].get_job_id() << ":"
-						<< rj.second.min() << "-" << rj.second.max();
+					out << "T" << jobs[rj.idx].get_task_id()
+						<< "J" << jobs[rj.idx].get_job_id() << ":"
+						<< rj.finish_time.min() << "-" << rj.finish_time.max();
 					first = false;
 				}
 				out << "}";
