@@ -83,18 +83,34 @@ namespace NP {
 				return explore(p, o);
 			}
 
-			Interval<Time> get_finish_times(const Job<Time>& j) const
+			// return the BCRT and WCRT of job j when executed on ncores if ncores > 0
+			// return the BCRT and WCRT for any parallelism if ncores = 0
+			Interval<Time> get_finish_times(const Job<Time>& j, unsigned int ncores = 0) const
 			{
-				return get_finish_times(j.get_job_index());
+				return get_finish_times(j.get_job_index(), ncores);
 			}
 
-			Interval<Time> get_finish_times(Job_index j) const
+			Interval<Time> get_finish_times(Job_index j, unsigned int ncores = 0) const
 			{
-				if (!rta[j].valid) {
-					return Interval<Time>{0, Time_model::constants<Time>::infinity()};
+				assert(ncores <= num_cpus);
+				if (ncores == 0)
+				{
+					for (int p = 0; p < num_cpus; p++)
+					{
+						Time bcet = Time_model::constants<Time>::infinity();
+						Time wcet = 0;
+						if (rta[j][p].valid) {
+							bcet = std::min(bcet, rta[j][p].rt.min());
+							wcet = std::max(wcet, rta[j][p].rt.max());
+						}
+						return Interval<Time>{bcet, wcet};
+					}
+				}
+				else if (rta[j][ncores - 1].valid) {
+					return rta[j][ncores - 1].rt;
 				}
 				else {
-					return rta[j].rt;
+					return Interval<Time>{0, Time_model::constants<Time>::infinity()};
 				}
 			}
 
@@ -237,7 +253,7 @@ namespace NP {
 				{
 				}
 			};
-			typedef std::vector<Response_time_item> Response_times;
+			typedef std::vector<std::vector<Response_time_item>> Response_times;
 
 
 
@@ -332,7 +348,7 @@ namespace NP {
 				, num_states(0)
 				, num_edges(0)
 				, width(0)
-				, rta(jobs.size())
+				, rta(jobs.size(), std::vector<Response_time_item>(num_cpus))
 				, current_job_count(0)
 				, num_cpus(num_cpus)
 				, jobs_by_latest_arrival_with_susp(_jobs_by_latest_arrival_with_susp)
@@ -400,27 +416,28 @@ namespace NP {
 			}
 
 			void update_finish_times(Response_times& r, const Job_index id,
-				Interval<Time> range)
+				Interval<Time> range, unsigned int ncores = 1)
 			{
-				if (!r[id].valid) {
-					r[id].valid = true;
-					r[id].rt = range;
+				auto p = ncores - 1;
+				if (!r[id][p].valid) {
+					r[id][p].valid = true;
+					r[id][p].rt = range;
 				}
 				else {
-					r[id].rt |= range;
+					r[id][p].rt |= range;
 				}
-				DM("RTA " << id << ": " << r[id].rt << std::endl);
+				DM("RTA " << id << ": " << r[id][ncores].rt << std::endl);
 			}
 
 			void update_finish_times(
-				Response_times& r, const Job<Time>& j, Interval<Time> range)
+				Response_times& r, const Job<Time>& j, Interval<Time> range, unsigned int ncores = 1)
 			{
-				update_finish_times(r, j.get_job_index(), range);
+				update_finish_times(r, j.get_job_index(), range, ncores);
 				if (j.exceeds_deadline(range.upto()))
 					aborted = true;
 			}
 
-			void update_finish_times(const Job<Time>& j, Interval<Time> range)
+			void update_finish_times(const Job<Time>& j, Interval<Time> range, unsigned int ncores = 1)
 			{
 				Response_times& r =
 #ifdef CONFIG_PARALLEL
@@ -428,7 +445,7 @@ namespace NP {
 #else
 					rta;
 #endif
-				update_finish_times(r, j, range);
+				update_finish_times(r, j, range, ncores);
 			}
 
 
