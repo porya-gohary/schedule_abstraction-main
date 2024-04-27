@@ -3,6 +3,7 @@
 
 #include <ostream>
 #include <vector>
+#include <map>
 #include <algorithm> // for find
 #include <functional> // for hash
 #include <exception>
@@ -42,7 +43,7 @@ namespace NP {
 	public:
 		typedef std::vector<Job<Time>> Job_set;
 		typedef Time Priority; // Make it a time value to support EDF
-		typedef std::vector<Interval<Time>> Cost;
+		typedef std::map<unsigned int, Interval<Time>> Cost;
 
 	private:
 		Interval<Time> arrival;
@@ -83,13 +84,14 @@ namespace NP {
 		}
 
 		Job(unsigned long id,
-			Interval<Time> arr, Interval<Time> exec_time,
+			Interval<Time> arr, Interval<Time> cost,
 			Time dl, Priority prio,
 			Job_index idx,
 			unsigned long tid = 0)
-			: arrival(arr), exec_time(1, exec_time), parallelism({ 1, 1 }),
+			: arrival(arr), parallelism({ 1, 1 }),
 			deadline(dl), priority(prio), id(id, tid), index(idx)
 		{
+			exec_time.emplace(1, cost);
 			compute_hash();
 		}
 
@@ -115,20 +117,43 @@ namespace NP {
 
 		Time least_exec_time(unsigned int ncores = 1) const
 		{
-			assert((ncores - parallelism.min()) >= 0 && ((ncores - parallelism.min()) < exec_time.size()));
-			return exec_time[ncores - parallelism.min()].from();
+			assert(ncores >= parallelism.min() && ncores <= parallelism.max());
+			auto cost = exec_time.find(ncores);
+			if (cost == exec_time.end())
+				return Time_model::constants<Time>::infinity();
+			else
+				return cost->second.min();
 		}
 
 		Time maximal_exec_time(unsigned int ncores = 1) const
 		{
-			assert((ncores - parallelism.min()) >= 0 && ((ncores - parallelism.min()) < exec_time.size()));
-			return exec_time[ncores - parallelism.min()].upto();
+			assert(ncores >= parallelism.min() && ncores <= parallelism.max());
+			auto cost = exec_time.find(ncores);
+			if (cost == exec_time.end())
+				return Time_model::constants<Time>::infinity();
+			else
+				return cost->second.max();
 		}
 
 		const Interval<Time>& get_cost(unsigned int ncores = 1) const
 		{
-			assert((ncores - parallelism.min()) >= 0 && ((ncores - parallelism.min()) < exec_time.size()));
-			return exec_time[ncores - parallelism.min()];
+			assert(ncores >= parallelism.min() && ncores <= parallelism.max());
+			auto cost = exec_time.find(ncores);
+			if (cost == exec_time.end())
+				return Interval<Time>{Time_model::constants<Time>::infinity(), Time_model::constants<Time>::infinity()};
+			else
+				return cost->second;
+		}
+
+		int get_next_parallelism(unsigned int ncores) const
+		{
+			assert(ncores < parallelism.max());
+			auto it = exec_time.find(ncores);
+			if (it == exec_time.end() or ++it == exec_time.end())
+				return -1;
+			else
+				return (++it)->first;
+
 		}
 
 		Priority get_priority() const

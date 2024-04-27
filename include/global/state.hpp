@@ -35,8 +35,12 @@ namespace NP {
 			// system availability intervals
 			CoreAvailability core_avail;
 
-			// keeps track of the earliest time a job with at least one predecessor becomes certainly ready
-			Time earliest_certain_successor_jobs_ready_time;
+			// keeps track of the earliest time a job with at least one predecessor is certainly ready and certainly has enough free cores to start executing
+			Time earliest_certain_successor_jobs_disptach;
+
+			// keeps track of the earliest time a gang source job (a job with no predecessor that requires more than one core to execute) 
+			// is certainly arrived and certainly has enough free cores to start executing
+			Time earliest_certain_gang_source_job_disptach;
 
 			struct Running_job {
 				Job_index idx;
@@ -83,10 +87,11 @@ namespace NP {
 		public:
 
 			// initial state -- nothing yet has finished, nothing is running
-			Schedule_state(unsigned int num_processors)
+			Schedule_state(const unsigned int num_processors, const Time next_certain_gang_source_job_disptach)
 				: core_avail{ num_processors, Interval<Time>(Time(0), Time(0)) }
 				, certain_jobs{}
-				, earliest_certain_successor_jobs_ready_time{ Time_model::constants<Time>::infinity() }
+				, earliest_certain_successor_jobs_disptach{ Time_model::constants<Time>::infinity() }
+				, earliest_certain_gang_source_job_disptach{ next_certain_gang_source_job_disptach }
 			{
 				assert(core_avail.size() > 0);
 			}
@@ -101,7 +106,9 @@ namespace NP {
 				const CoreAvailability& next_core_avail,
 				const Job_set& scheduled_jobs,
 				const Successors& successors_of,
+				const Time next_certain_gang_source_job_disptach,
 				unsigned int ncores = 1)
+				: earliest_certain_gang_source_job_disptach(next_certain_gang_source_job_disptach)
 			{
 				auto est = start_times.min();
 				auto lst = start_times.max();
@@ -153,15 +160,15 @@ namespace NP {
 				assert(core_avail.size() > 0);
 
 				// update the list of finish times of jobs with successors w.r.t. the previous system state
-				// and calculate the earliest time a job with precedence constraints will become ready
+				// and calculate the earliest time a job with precedence constraints will become ready to dispatch
 				job_finish_times.reserve(from.job_finish_times.size() + 1);
 				added_j = false;
-				earliest_certain_successor_jobs_ready_time = Time_model::constants<Time>::infinity();
+				earliest_certain_successor_jobs_disptach = Time_model::constants<Time>::infinity();
 				for (auto ft : from.job_finish_times)
 				{
 					auto job = ft.first;
 					auto job_eft = ft.second.min();
-					auto job_lft = ft.second.max();
+					auto job_lft = ft.second.max(); 
 					// if there is a single core, then we know that 
 					// jobs that were disptached in the past cannot have 
 					// finished later than when our new job starts executing
@@ -177,10 +184,12 @@ namespace NP {
 						for (auto succ : successors_of[j])
 						{
 							successor_pending = true;
+							Time avail = core_avail[succ.first->get_min_parallelism()-1].max();
 							Time max_susp = succ.second.max();
-							earliest_certain_successor_jobs_ready_time = 
-								std::min(earliest_certain_successor_jobs_ready_time, 
-									std::max(succ.first->latest_arrival(), lft + max_susp));
+							earliest_certain_successor_jobs_disptach = 
+								std::min(earliest_certain_successor_jobs_disptach, 
+									std::max(avail,
+										std::max(succ.first->latest_arrival(), lft + max_susp)));
 						}
 						if (successor_pending)
 							job_finish_times.push_back(std::make_pair(j, finish_times));
@@ -193,10 +202,12 @@ namespace NP {
 						if (!scheduled_jobs.contains(to_job))
 						{
 							successor_pending = true;
+							Time avail = core_avail[succ.first->get_min_parallelism()-1].max();
 							Time max_susp = succ.second.max();
-							earliest_certain_successor_jobs_ready_time = 
-								std::min(earliest_certain_successor_jobs_ready_time, 
-									std::max(succ.first->latest_arrival(), job_lft + max_susp));
+							earliest_certain_successor_jobs_disptach = 
+								std::min(earliest_certain_successor_jobs_disptach,
+									std::max(avail,
+										std::max(succ.first->latest_arrival(), job_lft + max_susp)));
 						}
 					}
 					if (successor_pending)
@@ -209,10 +220,12 @@ namespace NP {
 					for (auto succ : successors_of[j])
 					{
 						successor_pending = true;
+						Time avail = core_avail[succ.first->get_min_parallelism()-1].max();
 						Time max_susp = succ.second.max();
-						earliest_certain_successor_jobs_ready_time = 
-							std::min(earliest_certain_successor_jobs_ready_time, 
-								std::max(succ.first->latest_arrival(), lft + max_susp));
+						earliest_certain_successor_jobs_disptach = 
+							std::min(earliest_certain_successor_jobs_disptach, 
+								std::max(avail, 
+									std::max(succ.first->latest_arrival(), lft + max_susp)));
 					}
 					if (successor_pending)
 						job_finish_times.push_back(std::make_pair(j, finish_times));
@@ -223,8 +236,8 @@ namespace NP {
 
 			// Return the core availability resulting from scheduling job j on ncores
 			// in the current state
-			void next_core_avail(Job_index j, const Job_precedence_set& predecessors,
-				Interval<Time> start_times, Interval<Time> finish_times, unsigned int ncores,
+			void next_core_avail(const Job_index j, const Job_precedence_set& predecessors,
+				const Interval<Time> start_times, const Interval<Time> finish_times, const unsigned int ncores,
 				CoreAvailability& result) const
 			{
 				int n_cores = core_avail.size();
@@ -338,9 +351,14 @@ namespace NP {
 				}
 			}
 
-			Time get_earliest_certain_successor_jobs_ready_time() const
+			Time next_certain_gang_source_job_disptach() const
 			{
-				return earliest_certain_successor_jobs_ready_time;
+				return earliest_certain_gang_source_job_disptach;
+			}
+
+			Time next_certain_successor_jobs_disptach() const
+			{
+				return earliest_certain_successor_jobs_disptach;
 			}
 
 			bool core_avail_overlap(const CoreAvailability& other) const
@@ -383,7 +401,7 @@ namespace NP {
 				if (!can_merge_with(other, useJobFinishTimes))
 					return false;
 
-				merge(other.core_avail, other.job_finish_times, other.certain_jobs, other.earliest_certain_successor_jobs_ready_time);
+				merge(other.core_avail, other.job_finish_times, other.certain_jobs, other.earliest_certain_successor_jobs_disptach);
 
 				DM("+++ merged " << other << " into " << *this << std::endl);
 				return true;
@@ -424,7 +442,7 @@ namespace NP {
 				widen_finish_times(jft);
 
 				// update certain ready time of jobs with predecessors
-				earliest_certain_successor_jobs_ready_time = std::max(earliest_certain_successor_jobs_ready_time, ecsj_ready_time);
+				earliest_certain_successor_jobs_disptach = std::max(earliest_certain_successor_jobs_disptach, ecsj_ready_time);
 
 				DM("+++ merged (cav,jft,cert_t) into " << *this << std::endl);
 			}
@@ -522,12 +540,15 @@ namespace NP {
 
 			typedef typename std::vector<Interval<Time>> CoreAvailability;
 			Time earliest_pending_release;
-			Time next_certain_successor_job_ready_time;
+			Time next_certain_successor_jobs_disptach;
 			Time next_certain_source_job_release;
+			Time next_certain_sequential_source_job_release;
+			Time next_certain_gang_source_job_disptach;
 
 			Job_set scheduled_jobs;
 			hash_value_t lookup_key;
 			Interval<Time> finish_time;
+			Time a_max;
 			unsigned int num_cpus;
 			unsigned int num_jobs_scheduled;
 
@@ -553,15 +574,19 @@ namespace NP {
 			Schedule_node(
 				unsigned int num_cores,
 				const Time next_earliest_release = 0,
-				const Time next_certain_source_job_release = Time_model::constants<Time>::infinity() // the next time a job without predecessor is certainly released
+				const Time next_certain_source_job_release = Time_model::constants<Time>::infinity(), // the next time a job without predecessor is certainly released
+				const Time next_certain_sequential_source_job_release = Time_model::constants<Time>::infinity() // the next time a job without predecessor that can execute on a single core is certainly released
 			)
 				: lookup_key{ 0 }
 				, num_cpus(num_cores)
 				, finish_time{ 0,0 }
+				, a_max{ 0 }
 				, num_jobs_scheduled(0)
 				, earliest_pending_release{ next_earliest_release }
-				, next_certain_successor_job_ready_time{ Time_model::constants<Time>::infinity() }
+				, next_certain_successor_jobs_disptach{ Time_model::constants<Time>::infinity() }
 				, next_certain_source_job_release{ next_certain_source_job_release }
+				, next_certain_sequential_source_job_release{ next_certain_sequential_source_job_release }
+				, next_certain_gang_source_job_disptach{ Time_model::constants<Time>::infinity() }
 			{
 			}
 
@@ -571,16 +596,20 @@ namespace NP {
 				const Job<Time>& j,
 				std::size_t idx,
 				const Time next_earliest_release,
-				const Time next_certain_source_job_release // the next time a job without predecessor is certainly released
+				const Time next_certain_source_job_release, // the next time a job without predecessor is certainly released
+				const Time next_certain_sequential_source_job_release // the next time a job without predecessor that can execute on a single core is certainly released
 			)
 				: scheduled_jobs{ from.scheduled_jobs, idx }
 				, lookup_key{ from.next_key(j) }
 				, num_cpus(from.num_cpus)
 				, num_jobs_scheduled(from.num_jobs_scheduled + 1)
 				, finish_time{ 0, Time_model::constants<Time>::infinity() }
+				, a_max{ Time_model::constants<Time>::infinity() }
 				, earliest_pending_release{ next_earliest_release }
 				, next_certain_source_job_release{ next_certain_source_job_release }
-				, next_certain_successor_job_ready_time{ Time_model::constants<Time>::infinity() }
+				, next_certain_successor_jobs_disptach{ Time_model::constants<Time>::infinity() }
+				, next_certain_sequential_source_job_release{ next_certain_sequential_source_job_release }
+				, next_certain_gang_source_job_disptach{ Time_model::constants<Time>::infinity() }
 			{
 			}
 
@@ -605,9 +634,16 @@ namespace NP {
 				return next_certain_source_job_release;
 			}
 
+			Time get_next_certain_sequential_source_job_release() const
+			{
+				return next_certain_sequential_source_job_release;
+			}
+
 			Time next_certain_job_ready_time() const
 			{
-				return std::min(next_certain_successor_job_ready_time, next_certain_source_job_release);
+				return std::min(next_certain_successor_jobs_disptach, 
+					std::min(next_certain_sequential_source_job_release,
+						next_certain_gang_source_job_disptach));
 			}
 
 			hash_value_t get_key() const
@@ -644,13 +680,18 @@ namespace NP {
 				return get_key() ^ j.get_key();
 			}
 
-			// RV: finish_range / finish_time contains information about the
+			//  finish_range / finish_time contains information about the
 			//     earliest and latest core availability for core 0.
 			//     whenever a state is changed (through merge) or added,
 			//     that interval should be adjusted.
 			const Interval<Time>& finish_range() const
 			{
 				return finish_time;
+			}
+
+			Time latest_core_availability() const
+			{
+				return a_max;
 			}
 
 			/*void update_finish_range(const Interval<Time>& update)
@@ -664,11 +705,15 @@ namespace NP {
 				Interval<Time> ft = s->core_availability();
 				if (states.empty()) {
 					finish_time = ft;
-					next_certain_successor_job_ready_time = s->get_earliest_certain_successor_jobs_ready_time();
+					a_max = s->core_availability(num_cpus).max();
+					next_certain_successor_jobs_disptach = s->next_certain_successor_jobs_disptach();
+					next_certain_gang_source_job_disptach = s->next_certain_gang_source_job_disptach();
 				}
 				else {
 					finish_time.widen(ft);
-					next_certain_successor_job_ready_time = std::max(next_certain_successor_job_ready_time, s->get_earliest_certain_successor_jobs_ready_time());
+					a_max = std::max(a_max, s->core_availability(num_cpus).max());
+					next_certain_successor_jobs_disptach = std::max(next_certain_successor_jobs_disptach, s->next_certain_successor_jobs_disptach());
+					next_certain_gang_source_job_disptach = std::max(next_certain_gang_source_job_disptach, s->next_certain_gang_source_job_disptach());
 				}
 				states.insert(s);
 			}
@@ -703,10 +748,10 @@ namespace NP {
 				return &states;
 			}
 
-			bool merge_states(const Schedule_state<Time>& s, bool useJobFinishTimes = false)
+			bool merge_states(const Schedule_state<Time>& s, bool useJobFinishTimes = false, int budget = 1)
 			{
 				// RV: instead of merging with only one state, try to merge with more states if possible.
-				int merge_budget = 1;
+				int merge_budget = budget;
 
 				State* last_state_merged;
 				bool result = false;
@@ -718,8 +763,10 @@ namespace NP {
 						{
 							// Update the node finish_time
 							finish_time.widen(s.core_availability());
+							a_max = std::max(a_max, s.core_availability(num_cpus).max());
 							//update the certain next job ready time
-							next_certain_successor_job_ready_time = std::max(next_certain_successor_job_ready_time, s.get_earliest_certain_successor_jobs_ready_time());
+							next_certain_successor_jobs_disptach = std::max(next_certain_successor_jobs_disptach, s.next_certain_successor_jobs_disptach());
+							next_certain_gang_source_job_disptach = std::max(next_certain_gang_source_job_disptach, s.next_certain_gang_source_job_disptach());
 
 							result = true;
 

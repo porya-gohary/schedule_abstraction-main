@@ -37,6 +37,12 @@ template<class T> class Interval {
 	{
 	}
 
+	Interval()
+	: a(0)
+	, b(0)
+	{
+	}
+
 	const T& from() const
 	{
 		return a;
