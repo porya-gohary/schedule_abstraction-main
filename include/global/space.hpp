@@ -1034,6 +1034,8 @@ namespace NP {
 				// If such a node already exists, we keep a reference to it
 				Node_ref next = nullptr;
 				DM("--- global:dispatch() " << n << ", " << j << ", " << t_wc_wos << ", " << t_high_wos << std::endl);
+
+				bool dispatched_one = false;
 				
 				const auto* n_states = n.get_states();
 				for (State* s : *n_states) 
@@ -1062,6 +1064,7 @@ namespace NP {
 						Interval<Time> st{ _st };
 
 						// yep, job j is a feasible successor in state s
+						dispatched_one = true;
 
 						// compute range of possible finish times
 						Interval<Time> ftimes = st + j.get_cost(p);
@@ -1140,7 +1143,7 @@ namespace NP {
 				if (!be_naive && next != nullptr)
 					check_for_deadline_misses(n, *next);
 
-				return true;
+				return dispatched_one;
 			}
 
 			void explore(const Node& n)
