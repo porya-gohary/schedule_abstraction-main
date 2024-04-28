@@ -64,12 +64,12 @@ const std::string ts3_edges =
 
 TEST_CASE("[global-prec] taskset-1") {
 	auto dag_in = std::istringstream(ts1_edges);
-	auto dag = NP::parse_dag_file(dag_in);
+	auto prec = NP::parse_precedence_file<dtime_t>(dag_in);
 
 	auto in = std::istringstream(ts1_jobs);
 	auto jobs = NP::parse_file<dtime_t>(in);
 
-	NP::Scheduling_problem<dtime_t> prob{jobs, dag};
+	NP::Scheduling_problem<dtime_t> prob{jobs, prec};
 	NP::Analysis_options opts;
 
 	prob.num_processors = 2;
@@ -102,12 +102,12 @@ TEST_CASE("[global-prec] taskset-1") {
 
 TEST_CASE("[global-prec] taskset-2") {
 	auto dag_in = std::istringstream(ts2_edges);
-	auto dag = NP::parse_dag_file(dag_in);
+	auto prec = NP::parse_precedence_file<dtime_t>(dag_in);
 
 	auto in = std::istringstream(ts2_jobs);
 	auto jobs = NP::parse_file<dtime_t>(in);
 
-	NP::Scheduling_problem<dtime_t> prob{jobs, dag};
+	NP::Scheduling_problem<dtime_t> prob{jobs, prec};
 	NP::Analysis_options opts;
 
 	prob.num_processors = 2;
@@ -147,12 +147,12 @@ TEST_CASE("[global-prec] taskset-2") {
 
 TEST_CASE("[global-prec] taskset-3") {
 	auto dag_in = std::istringstream(ts3_edges);
-	auto dag = NP::parse_dag_file(dag_in);
+	auto prec = NP::parse_precedence_file<dtime_t>(dag_in);
 
 	auto in = std::istringstream(ts3_jobs);
 	auto jobs = NP::parse_file<dtime_t>(in);
 
-	NP::Scheduling_problem<dtime_t> prob{jobs, dag};
+	NP::Scheduling_problem<dtime_t> prob{jobs, prec};
 	NP::Analysis_options opts;
 
 	prob.num_processors = 1;

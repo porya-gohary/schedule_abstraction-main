@@ -19,7 +19,7 @@ const std::string four_lines =
 TEST_CASE("[dense time] job parser") {
 	auto in = std::istringstream(one_line);
 
-	NP::Job<dense_t> j = NP::parse_job<dense_t>(in,0);
+	NP::Job<dtime_t> j = NP::parse_job<dtime_t>(in,0);
 
 	CHECK(j.get_job_id() == 6);
 	CHECK(j.get_priority() == 1);
@@ -29,13 +29,13 @@ TEST_CASE("[dense time] job parser") {
 TEST_CASE("[dense time] job parser exception") {
 	auto in = std::istringstream(bad_line);
 
-	REQUIRE_THROWS_AS(NP::parse_job<dense_t>(in,0), std::ios_base::failure);
+	REQUIRE_THROWS_AS(NP::parse_job<dtime_t>(in,0), std::ios_base::failure);
 }
 
 TEST_CASE("[dense time] file parser") {
 	auto in = std::istringstream(four_lines);
 
-	auto jobs = NP::parse_file<dense_t>(in);
+	auto jobs = NP::parse_file<dtime_t>(in);
 
 	CHECK(jobs.size() == 3);
 
@@ -80,24 +80,24 @@ TEST_CASE("[parser] JobID") {
 TEST_CASE("[parser] precedence constraint") {
 	auto in = std::istringstream(precedence_line);
 
-	auto c = NP::parse_precedence_constraint(in);
+	auto c = NP::parse_precedence_constraint<dtime_t>(in);
 
-	CHECK(c.first.job  == 2);
-	CHECK(c.first.task == 1);
-	CHECK(c.second.job  == 5);
-	CHECK(c.second.task == 3);
+	CHECK(c.get_fromID().job == 2);
+	CHECK(c.get_fromID().task == 1);
+	CHECK(c.get_toID().job  == 5);
+	CHECK(c.get_toID().task == 3);
 }
 
 TEST_CASE("[parser] too-short precedence constraint") {
 	auto in = std::istringstream(bad_precedence_line);
 
-	REQUIRE_THROWS_AS(NP::parse_precedence_constraint(in), std::ios_base::failure);
+	REQUIRE_THROWS_AS(NP::parse_precedence_constraint<dtime_t>(in), std::ios_base::failure);
 }
 
 TEST_CASE("[parser] invalid precedence constraint") {
 	auto in = std::istringstream(bad_precedence_line2);
 
-	REQUIRE_THROWS_AS(NP::parse_precedence_constraint(in), std::ios_base::failure);
+	REQUIRE_THROWS_AS(NP::parse_precedence_constraint<dtime_t>(in), std::ios_base::failure);
 }
 
 const std::string precedence_file =
@@ -109,33 +109,33 @@ const std::string precedence_file =
 TEST_CASE("[parser] precedence file") {
 	auto in = std::istringstream(precedence_file);
 
-	auto dag = NP::parse_dag_file(in);
+	auto prec = NP::parse_precedence_file<dtime_t>(in);
 
-	CHECK(dag.size() == 3);
-	CHECK(dag[0].first.task  == 1);
-	CHECK(dag[0].first.job   == 1);
-	CHECK(dag[0].second.task == 1);
-	CHECK(dag[0].second.job  == 2);
+	CHECK(prec.size() == 3);
+	CHECK(prec[0].get_fromID().task  == 1);
+	CHECK(prec[0].get_fromID().job   == 1);
+	CHECK(prec[0].get_toID().task == 1);
+	CHECK(prec[0].get_toID().job  == 2);
 
-	CHECK(dag[1].first.task  == 1);
-	CHECK(dag[1].first.job   == 1);
-	CHECK(dag[1].second.task == 2);
-	CHECK(dag[1].second.job  == 1);
+	CHECK(prec[1].get_fromID().task  == 1);
+	CHECK(prec[1].get_fromID().job   == 1);
+	CHECK(prec[1].get_toID().task == 2);
+	CHECK(prec[1].get_toID().job  == 1);
 
-	CHECK(dag[2].first.task  == 2);
-	CHECK(dag[2].first.job   == 1);
-	CHECK(dag[2].second.task == 3);
-	CHECK(dag[2].second.job  == 13);
+	CHECK(prec[2].get_fromID().task  == 2);
+	CHECK(prec[2].get_fromID().job   == 1);
+	CHECK(prec[2].get_toID().task == 3);
+	CHECK(prec[2].get_toID().job  == 13);
 }
 
 TEST_CASE("[parser] invalid precedence reference") {
 	auto dag_in = std::istringstream(precedence_file);
-	auto dag = NP::parse_dag_file(dag_in);
+	auto prec = NP::parse_precedence_file<dtime_t>(dag_in);
 
 	auto in = std::istringstream(four_lines);
-	auto jobs = NP::parse_file<dense_t>(in);
+	auto jobs = NP::parse_file<dtime_t>(in);
 
-	REQUIRE_THROWS_AS(NP::validate_prec_refs<dense_t>(dag, jobs), NP::InvalidJobReference);
+	REQUIRE_THROWS_AS(NP::validate_prec_cstrnts<dtime_t>(prec, jobs), NP::InvalidJobReference);
 }
 
 const std::string sequential_task_prec_file =
@@ -145,12 +145,12 @@ const std::string sequential_task_prec_file =
 
 TEST_CASE("[parser] valid precedence reference") {
 	auto dag_in = std::istringstream(sequential_task_prec_file);
-	auto dag = NP::parse_dag_file(dag_in);
+	auto prec = NP::parse_precedence_file<dtime_t>(dag_in);
 
 	auto in = std::istringstream(four_lines);
-	auto jobs = NP::parse_file<dense_t>(in);
+	auto jobs = NP::parse_file<dtime_t>(in);
 
-	NP::validate_prec_refs<dense_t>(dag, jobs);
+	NP::validate_prec_cstrnts<dtime_t>(prec, jobs);
 	// dummy check; real check is that previous line didn't throw an exception
 	CHECK(true);
 }

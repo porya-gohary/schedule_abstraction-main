@@ -85,8 +85,7 @@ struct Analysis_result {
 template<class Time, class Space>
 static Analysis_result analyze(
 	std::istream &in,
-	std::istream &dag_in,
-	std::istream &selfsuspending_in,
+	std::istream &prec_in,
 	std::istream &aborts_in,
 	std::istream &shaper_in)
 {
@@ -99,8 +98,7 @@ static Analysis_result analyze(
 	// Parse input files and create NP scheduling problem description
 	NP::Scheduling_problem<Time> problem{
 		NP::parse_file<Time>(in),
-		NP::parse_dag_file(dag_in),
-		NP::parse_suspending_file<Time>(selfsuspending_in),
+		NP::parse_precedence_file<Time>(prec_in),
 		NP::parse_abort_file<Time>(aborts_in),
 		NP::parse_tas_file<Time>(shaper_in),
 		num_processors};
@@ -112,7 +110,6 @@ static Analysis_result analyze(
 	opts.early_exit = !continue_after_dl_miss;
 	opts.num_buckets = problem.jobs.size();
 	opts.be_naive = want_naive;
-	opts.use_self_suspensions = want_selfsuspending ? (want_pathwise ? PATHWISE_SUSP : GENERAL_SUSP) : NOSUSP;
 	opts.use_supernodes = use_supernodes;
 	opts.c_ipg = c_ipg;
 
@@ -160,31 +157,30 @@ static Analysis_result analyze(
 
 static Analysis_result process_stream(
 	std::istream &in,
-	std::istream &dag_in,
-	std::istream &selfsuspending_in,
+	std::istream &prec_in,
 	std::istream &aborts_in,
 	std::istream &shaper_in)
 {
 	if (want_multiprocessor && want_dense)
-		return analyze<dense_t, NP::Global::State_space<dense_t>>(in, dag_in, selfsuspending_in, aborts_in, shaper_in);
+		return analyze<dense_t, NP::Global::State_space<dense_t>>(in, prec_in, aborts_in, shaper_in);
 	else if (want_multiprocessor && !want_dense)
-		return analyze<dtime_t, NP::Global::State_space<dtime_t>>(in, dag_in, selfsuspending_in, aborts_in, shaper_in);
+		return analyze<dtime_t, NP::Global::State_space<dtime_t>>(in, prec_in, aborts_in, shaper_in);
 	else if (want_dense && want_prm_iip)
-		return analyze<dense_t, NP::UniprocIIP::State_space<dense_t, NP::UniprocIIP::Precatious_RM_IIP<dense_t>>>(in, dag_in, selfsuspending_in, aborts_in, shaper_in);
+		return analyze<dense_t, NP::UniprocIIP::State_space<dense_t, NP::UniprocIIP::Precatious_RM_IIP<dense_t>>>(in, prec_in, aborts_in, shaper_in);
 	else if (want_dense && want_cw_iip)
-		return analyze<dense_t, NP::UniprocIIP::State_space<dense_t, NP::UniprocIIP::Critical_window_IIP<dense_t>>>(in, dag_in, selfsuspending_in, aborts_in, shaper_in);
+		return analyze<dense_t, NP::UniprocIIP::State_space<dense_t, NP::UniprocIIP::Critical_window_IIP<dense_t>>>(in, prec_in, aborts_in, shaper_in);
 	else if (want_dense && !want_prm_iip)
-		return analyze<dense_t, NP::Uniproc::State_space<dense_t>>(in, dag_in, selfsuspending_in, aborts_in, shaper_in);
+		return analyze<dense_t, NP::Uniproc::State_space<dense_t>>(in, prec_in, aborts_in, shaper_in);
 	else if (!want_dense && want_prm_iip)
-		return analyze<dtime_t, NP::UniprocIIP::State_space<dtime_t, NP::UniprocIIP::Precatious_RM_IIP<dtime_t>>>(in, dag_in, selfsuspending_in, aborts_in, shaper_in);
+		return analyze<dtime_t, NP::UniprocIIP::State_space<dtime_t, NP::UniprocIIP::Precatious_RM_IIP<dtime_t>>>(in, prec_in, aborts_in, shaper_in);
 	else if (!want_dense && want_cw_iip)
-		return analyze<dtime_t, NP::UniprocIIP::State_space<dtime_t, NP::UniprocIIP::Critical_window_IIP<dtime_t>>>(in, dag_in, selfsuspending_in, aborts_in, shaper_in);
+		return analyze<dtime_t, NP::UniprocIIP::State_space<dtime_t, NP::UniprocIIP::Critical_window_IIP<dtime_t>>>(in, prec_in, aborts_in, shaper_in);
 	else if (want_tsn && !want_dense)
-	        return analyze<dtime_t, NP::TSN::State_space<dtime_t>>(in, dag_in, selfsuspending_in, aborts_in, shaper_in);
+	        return analyze<dtime_t, NP::TSN::State_space<dtime_t>>(in, prec_in, aborts_in, shaper_in);
 	else if (want_tsn && want_dense)
-	        return analyze<dense_t, NP::TSN::State_space<dense_t>>(in, dag_in, selfsuspending_in, aborts_in, shaper_in);
+	        return analyze<dense_t, NP::TSN::State_space<dense_t>>(in, prec_in, aborts_in, shaper_in);
 	else
-		return analyze<dtime_t, NP::Uniproc::State_space<dtime_t>>(in, dag_in, selfsuspending_in, aborts_in, shaper_in);
+		return analyze<dtime_t, NP::Uniproc::State_space<dtime_t>>(in, prec_in, aborts_in, shaper_in);
 }
 
 static void process_file(const std::string& fname)
@@ -193,19 +189,14 @@ static void process_file(const std::string& fname)
 		Analysis_result result;
 
 		auto empty_dag_stream = std::istringstream("\n");
-		auto empty_selfsuspending_stream = std::istringstream("\n");
 		auto empty_aborts_stream = std::istringstream("\n");
 		auto empty_shaper_stream = std::istringstream("\n");
 		auto dag_stream = std::ifstream();
-		auto selfsuspending_stream = std::ifstream();
 		auto aborts_stream = std::ifstream();
 		auto shaper_stream = std::ifstream();
 
 		if (want_precedence)
 			dag_stream.open(precedence_file);
-
-		if (want_selfsuspending)
-			selfsuspending_stream.open(selfsuspending_file);
 
 		if (want_aborts)
 			aborts_stream.open(aborts_file);
@@ -217,10 +208,6 @@ static void process_file(const std::string& fname)
 			static_cast<std::istream&>(dag_stream) :
 			static_cast<std::istream&>(empty_dag_stream);
 
-		std::istream &selfsuspending_in = want_selfsuspending ?
-			static_cast<std::istream&>(selfsuspending_stream) :
-			static_cast<std::istream&>(empty_selfsuspending_stream);
-
 		std::istream &aborts_in = want_aborts ?
 			static_cast<std::istream&>(aborts_stream) :
 			static_cast<std::istream&>(empty_aborts_stream);
@@ -231,11 +218,11 @@ static void process_file(const std::string& fname)
 
 		if (fname == "-")
 		{
-			result = process_stream(std::cin, dag_in, selfsuspending_in, aborts_in, shaper_in);
+			result = process_stream(std::cin, dag_in, aborts_in, shaper_in);
 		}
 		else {
 			auto in = std::ifstream(fname, std::ios::in);
-			result = process_stream(in, dag_in, selfsuspending_in, aborts_in, shaper_in);
+			result = process_stream(in, dag_in, aborts_in, shaper_in);
 
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
 			if (want_dot_graph) {
@@ -293,8 +280,6 @@ static void process_file(const std::string& fname)
 		std::cerr << fname;
 		if (want_precedence)
 			std::cerr << " + " << precedence_file;
-		if (want_selfsuspending)
-			std::cerr << " + " << selfsuspending_file;
 		std::cerr <<  ": parse error" << std::endl;
 		exit(1);
 	} catch (NP::InvalidJobReference& ex) {
@@ -310,7 +295,7 @@ static void process_file(const std::string& fname)
 				  << " has an impossible abort time (abort before release)"
 				  << std::endl;
 		exit(4);
-	} catch (NP::InvalidSelfSuspendingParameter& ex) {
+	} catch (NP::InvalidPrecParameter& ex) {
 		std::cerr << selfsuspending_file << ": invalid self-suspending parameter: job "
 				  << ex.ref.job << " of task " << ex.ref.task
 				  << " has an invalid self-suspending time"

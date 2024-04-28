@@ -82,8 +82,7 @@ TEST_CASE("[TSN] Constant Guardband for TAS with no branching and IPG=0") {
 
 	Scheduling_problem<dtime_t> prob{
 		parse_file<dtime_t>(jobs_in),
-		parse_dag_file(dag_in),
-		parse_suspending_file<dtime_t>(suspension_in),
+		parse_precedence_file<dtime_t>(suspension_in),
 		parse_abort_file<dtime_t>(aborts_in),
 		parse_tas_file<dtime_t>(shaper_in),
 		1
@@ -117,8 +116,7 @@ TEST_CASE("[TSN] Constant Guardband for TAS with no branching and IPG=1") {
 
 	Scheduling_problem<dtime_t> prob{
 		parse_file<dtime_t>(jobs_in),
-		parse_dag_file(dag_in),
-		parse_suspending_file<dtime_t>(suspension_in),
+		parse_precedence_file<dtime_t>(suspension_in),
 		parse_abort_file<dtime_t>(aborts_in),
 		parse_tas_file<dtime_t>(shaper_in),
 		1
@@ -153,8 +151,7 @@ TEST_CASE("[TSN] Constant Guardband for TAS with branching and IPG=0") {
 
 	Scheduling_problem<dtime_t> prob{
 		parse_file<dtime_t>(jobs_in),
-		parse_dag_file(dag_in),
-		parse_suspending_file<dtime_t>(suspension_in),
+		parse_precedence_file<dtime_t>(suspension_in),
 		parse_abort_file<dtime_t>(aborts_in),
 		parse_tas_file<dtime_t>(shaper_in),
 		1
@@ -192,8 +189,7 @@ TEST_CASE("[TSN] Variable Guardband for TAS with no deadline miss and IPG=0") {
 
 	Scheduling_problem<dtime_t> prob{
 		parse_file<dtime_t>(jobs_in),
-		parse_dag_file(dag_in),
-		parse_suspending_file<dtime_t>(suspension_in),
+		parse_precedence_file<dtime_t>(suspension_in),
 		parse_abort_file<dtime_t>(aborts_in),
 		parse_tas_file<dtime_t>(shaper_in),
 		1
@@ -227,8 +223,7 @@ TEST_CASE("[TSN] Variable Guardband for TAS with deadline miss and IPG=0") {
 
 	Scheduling_problem<dtime_t> prob{
 		parse_file<dtime_t>(jobs_in),
-		parse_dag_file(dag_in),
-		parse_suspending_file<dtime_t>(suspension_in),
+		parse_precedence_file<dtime_t>(suspension_in),
 		parse_abort_file<dtime_t>(aborts_in),
 		parse_tas_file<dtime_t>(shaper_in),
 		1
@@ -276,8 +271,7 @@ TEST_CASE("[TSN] Higher Prioirty Open Gate deletion from Eligible Transmission I
 
 	Scheduling_problem<dtime_t> prob{
 		parse_file<dtime_t>(jobs_in),
-		parse_dag_file(dag_in),
-		parse_suspending_file<dtime_t>(suspension_in),
+		parse_precedence_file<dtime_t>(suspension_in),
 		parse_abort_file<dtime_t>(aborts_in),
 		parse_tas_file<dtime_t>(shaper_in),
 		1
@@ -325,8 +319,7 @@ TEST_CASE("[TSN] Check for Overlap Delete") {
 
 	Scheduling_problem<dtime_t> prob{
 		parse_file<dtime_t>(jobs_in),
-		parse_dag_file(dag_in),
-		parse_suspending_file<dtime_t>(suspension_in),
+		parse_precedence_file<dtime_t>(suspension_in),
 		parse_abort_file<dtime_t>(aborts_in),
 		parse_tas_file<dtime_t>(shaper_in),
 		1

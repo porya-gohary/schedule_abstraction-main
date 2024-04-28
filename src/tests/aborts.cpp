@@ -33,7 +33,7 @@ TEST_CASE("[uni] basic aborts") {
 
 	Scheduling_problem<dtime_t> prob{
 		parse_file<dtime_t>(jobs_in),
-		parse_dag_file(dag_in),
+		parse_precedence_file<dtime_t>(dag_in),
 		parse_abort_file<dtime_t>(aborts_in),
 		1
 	};
@@ -86,7 +86,7 @@ TEST_CASE("[uni] abort stops DL miss cascade") {
 	SUBCASE("with aborts") {
 		Scheduling_problem<dtime_t> prob{
 			parse_file<dtime_t>(jobs_in),
-			parse_dag_file(dag_in),
+			parse_precedence_file<dtime_t>(dag_in),
 			parse_abort_file<dtime_t>(aborts_in),
 			1
 		};

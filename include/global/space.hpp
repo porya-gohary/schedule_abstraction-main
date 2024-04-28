@@ -39,7 +39,7 @@ namespace NP {
 
 			typedef Scheduling_problem<Time> Problem;
 			typedef typename Scheduling_problem<Time>::Workload Workload;
-			typedef typename Scheduling_problem<Time>::Suspending_Tasks Suspending_Tasks;
+			typedef typename Scheduling_problem<Time>::Precedence_constraints Precedence_constraints;
 			typedef Schedule_state<Time> State;
 			typedef typename std::vector<Interval<Time>> CoreAvailability;
 
@@ -52,8 +52,8 @@ namespace NP {
 				// doesn't yet support exploration after deadline miss
 				assert(opts.early_exit);
 
-				auto s = State_space(prob.jobs, prob.dag, prob.sts, prob.num_processors, opts.timeout,
-					opts.max_depth, opts.num_buckets, opts.use_self_suspensions, opts.use_supernodes);
+				auto s = State_space(prob.jobs, prob.prec, prob.num_processors, opts.timeout,
+					opts.max_depth, opts.num_buckets, opts.use_supernodes);
 				s.be_naive = opts.be_naive;
 				s.cpu_time.start();
 				s.explore(); // ISSUE
@@ -316,18 +316,15 @@ namespace NP {
 #endif
 			Processor_clock cpu_time;
 			const double timeout;
-			unsigned int wants_self_suspensions;
 			const unsigned int num_cpus;
 			bool use_supernodes = true;
 
 			State_space(const Workload& jobs,
-				const Precedence_constraints& dag_edges,
-				const Suspending_Tasks& susps,
+				const Precedence_constraints& edges,
 				unsigned int num_cpus,
 				double max_cpu_time = 0,
 				unsigned int max_depth = 0,
 				std::size_t num_buckets = 1000,
-				unsigned int use_self_suspensions = NOSUSP,
 				bool use_supernodes = true)
 				: _jobs_by_win(Interval<Time>{0, max_deadline(jobs)},
 					max_deadline(jobs) / num_buckets)
@@ -356,24 +353,12 @@ namespace NP {
 				, _successors(jobs.size())
 				, predecessors_suspensions(_predecessors_suspensions)
 				, successors(_successors)
-				, wants_self_suspensions(use_self_suspensions)
 				, use_supernodes(use_supernodes)
 			{
-				for (auto e : dag_edges) {
-					const Job<Time>& from = lookup<Time>(jobs, e.first);
-					const Job<Time>& to = lookup<Time>(jobs, e.second);
-					_predecessors[to.get_job_index()].push_back(from.get_job_index());
-					_predecessors_suspensions[to.get_job_index()].push_back({ &from, {0,0} });
-					_successors[from.get_job_index()].push_back({ &to, {0,0} });
-				}
-
-				// RV: initialization of to_suspending_tasks and from_suspending_tasks.
-				//     Is st.get_toID() equal to index_of(to) ?
-				//     Is _predecessors[] related to to_suspending_tasks[] ? 
-				for (const Suspending_Task<Time>& st : susps) {
-					_predecessors_suspensions[st.get_toIndex()].push_back({ &jobs[st.get_fromIndex()], st.get_suspension() });
-					_predecessors[st.get_toIndex()].push_back(st.get_fromIndex());
-					_successors[st.get_fromIndex()].push_back({ &jobs[st.get_toIndex()], st.get_suspension() });
+				for (auto e : edges) {
+					_predecessors_suspensions[e.get_toIndex()].push_back({ &jobs[e.get_fromIndex()], e.get_suspension() });
+					_predecessors[e.get_toIndex()].push_back(e.get_fromIndex());
+					_successors[e.get_fromIndex()].push_back({ &jobs[e.get_toIndex()], e.get_suspension() });
 				}
 
 				for (const Job<Time>& j : jobs) {
@@ -1024,7 +1009,7 @@ namespace NP {
 						// If we have reached here, it means that we have found an existing node with the same 
 						// set of scheduled jobs than the new state resuting from scheduling job j in system state s.
 						// Thus, our new state can be added to that existing node.
-						if (other->merge_states(st, wants_self_suspensions == PATHWISE_SUSP))
+						if (other->merge_states(st, false))
 						{
 							delete& st;
 							return *other;
@@ -1129,7 +1114,7 @@ namespace NP {
 								st, ftimes, cav, next->get_scheduled_jobs(), successors, earliest_certain_gang_source_job_disptach(n, *s, j), p);
 
 							// try to merge the new state with existing states.
-							if (!(next->get_states()->empty()) && next->merge_states(new_s, wants_self_suspensions == PATHWISE_SUSP))
+							if (!(next->get_states()->empty()) && next->merge_states(new_s, false))
 								delete& new_s; // if we could merge no need to keep track of the new state anymore
 							else
 							{

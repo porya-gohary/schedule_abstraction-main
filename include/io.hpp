@@ -8,7 +8,6 @@
 #include "time.hpp"
 #include "jobs.hpp"
 #include "precedence.hpp"
-#include "selfsuspending.hpp"
 #include "aborts.hpp"
 #include "config.h"
 #include "tsn/shaper.hpp"
@@ -44,7 +43,7 @@ namespace NP {
 
 	inline bool more_fields_in_line(std::istream& in)
 	{
-		if(in.peek() == (int) '\n' || in.peek() == (int) '\r')
+		if (in.peek() == (int)'\n' || in.peek() == (int)'\r')
 			return false;
 		else
 			return true;
@@ -78,48 +77,12 @@ namespace NP {
 		return JobID(jid, tid);
 	}
 
-	//Functions that help parse precedence constraints files
-	inline Precedence_constraint parse_precedence_constraint(std::istream &in)
-	{
-		std::ios_base::iostate state_before = in.exceptions();
-		in.exceptions(std::istream::failbit | std::istream::badbit);
-
-		// first two columns
-		auto from = parse_job_id(in);
-
-		next_field(in);
-
-		// last two columns
-		auto to = parse_job_id(in);
-
-		in.exceptions(state_before);
-
-		return Precedence_constraint(from, to);
-	}
-
-	inline Precedence_constraints parse_dag_file(std::istream& in)
-	{
-		Precedence_constraints edges;
-
-		// skip column headers
-		next_line(in);
-
-		// parse all rows
-		while (more_data(in)) {
-			// each row contains one precedence constraint
-			edges.push_back(parse_precedence_constraint(in));
-			next_line(in);
-		}
-
-		return edges;
-	}
-
 	//Functions that help parse selfsuspending tasks file
 	template<class Time>
-	Suspending_Task<Time> parse_suspending_task(std::istream &in)
+	Precedence_constraint<Time> parse_precedence_constraint(std::istream &in)
 	{
 		unsigned long from_tid, from_jid, to_tid, to_jid;
-		Time sus_min, sus_max;
+		Time sus_min=0, sus_max=0;
 
 		std::ios_base::iostate state_before = in.exceptions();
 
@@ -133,33 +96,34 @@ namespace NP {
 		next_field(in);
 		in >> to_jid;
 		next_field(in);
-		in >> sus_min;
-		next_field(in);
-		in >> sus_max;
+		if (more_fields_in_line(in))
+		{
+			in >> sus_min;
+			next_field(in);
+			in >> sus_max;
+		}
 
 		in.exceptions(state_before);
 
-		return Suspending_Task<Time>{JobID{from_jid, from_tid},
-									 JobID{to_jid, to_tid},
-		                          	 Interval<Time>{sus_min, sus_max}};
+		return Precedence_constraint<Time>{JobID{from_jid, from_tid},
+											JobID{to_jid, to_tid},
+		                          			Interval<Time>{sus_min, sus_max}};
 	}
 
 	template<class Time>
-	std::vector<Suspending_Task<Time>> parse_suspending_file(std::istream& in)
+	std::vector<Precedence_constraint<Time>> parse_precedence_file(std::istream& in)
 	{
 		// skip column headers
 		next_line(in);
-
-		std::vector<Suspending_Task<Time>> suspending_tasks;
+		std::vector<Precedence_constraint<Time>> cstr;
 
 		// parse all rows
 		while (more_data(in)) {
 			// each row contains one self-suspending constraint
-			suspending_tasks.push_back(parse_suspending_task<Time>(in));
+			cstr.push_back(parse_precedence_constraint<Time>(in));
 			next_line(in);
 		}
-
-		return suspending_tasks;
+		return cstr;
 	}
 
 	//Functions that help parse the main job workload
@@ -244,8 +208,6 @@ namespace NP {
 		{
 			int interval_num = 0;
 			while(more_fields_in_line(in)) {
-
-				// next_field(in);
 				in >> gate_close;
 				next_field(in);
 				in >> gate_open;

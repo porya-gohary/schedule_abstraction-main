@@ -38,7 +38,7 @@ TEST_CASE("[prec] RTSS17-Fig1a") {
 
 	Scheduling_problem<dtime_t> prob{
 		parse_file<dtime_t>(in),
-		parse_dag_file(dag_in)};
+		parse_precedence_file<dtime_t>(dag_in)};
 
 	Analysis_options opts;
 
@@ -73,7 +73,7 @@ TEST_CASE("[prec] handle cycles gracefully") {
 
 	Scheduling_problem<dtime_t> prob{
 		parse_file<dtime_t>(in),
-		parse_dag_file(dag_in)};
+		parse_precedence_file<dtime_t>(dag_in)};
 
 	Analysis_options opts;
 	opts.early_exit = false;
@@ -113,7 +113,7 @@ TEST_CASE("[prec] handle analysis deadend gracefully") {
 
 	Scheduling_problem<dtime_t> prob{
 		parse_file<dtime_t>(in),
-		parse_dag_file(dag_in)};
+		parse_precedence_file<dtime_t>(dag_in)};
 
 	Analysis_options opts;
 	opts.early_exit = false;

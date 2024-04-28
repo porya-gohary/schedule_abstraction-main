@@ -37,7 +37,7 @@ namespace NP {
 			typedef Scheduling_problem<Time> Problem;
 			typedef typename Scheduling_problem<Time>::Workload Workload;
 			typedef typename Scheduling_problem<Time>::Abort_actions Abort_actions;
-			typedef typename Scheduling_problem<Time>::Suspending_Tasks Suspending_Tasks;
+			typedef typename Scheduling_problem<Time>::Precedence_constraints Precedence_constraints;
 			typedef Schedule_state<Time> State;
 			typedef Schedule_node<Time> Node;
 
@@ -51,9 +51,9 @@ namespace NP {
 				// this is a uniprocessor analysis
 				assert(prob.num_processors == 1);
 
-				auto s = State_space(prob.jobs, prob.dag, prob.sts, prob.aborts,
+				auto s = State_space(prob.jobs, prob.prec, prob.aborts,
 									 opts.timeout, opts.max_depth,
-									 opts.num_buckets, opts.early_exit, opts.use_self_suspensions, opts.use_supernodes);
+									 opts.num_buckets, opts.early_exit, opts.use_supernodes);
 				s.cpu_time.start();
 				if (opts.be_naive)
 					s.explore_naively();
@@ -292,7 +292,7 @@ namespace NP {
 			// from/_suspending_tasks: for each job, contains a list of successors and the suspension time until each successor becomes ready
 			// RV: the suspending_tasks_list might include Job_index, next to JobID.
 			//     the predecessors_of and successors_of might have the const protection.
-			typedef std::vector<const Suspending_Task<Time>*> Predecessors_list;
+			typedef std::vector<std::pair<Job_ref, Interval<Time>>> Predecessors_list;
 			typedef std::vector<std::pair<Job_ref, Interval<Time>>> Successors_list;
 			
 		public:
@@ -324,19 +324,16 @@ namespace NP {
 
 			bool early_exit;
 			bool observed_deadline_miss;
-			unsigned int want_self_suspensions;
 			bool use_supernodes;
 
 			// Constructor of the State_space class
 			State_space(const Workload& jobs,
 						const Precedence_constraints &dag_edges,
-						const Suspending_Tasks &susps,
 						const Abort_actions& aborts,
 						double max_cpu_time = 0,
 						unsigned int max_depth = 0,
 						std::size_t num_buckets = 1000,
 						bool early_exit = true,
-						unsigned int use_self_suspensions = 0,
 						bool use_supernodes = false)
 			: jobs(jobs)
 			, aborted(false)
@@ -361,20 +358,14 @@ namespace NP {
 			, predecessors_of(_predecessors_of)
 			, successors_of(_successors_of)
 			, early_exit(early_exit)
-			, want_self_suspensions(use_self_suspensions)
 			, observed_deadline_miss(false)
 			, abort_actions(jobs.size(), NULL)
 			, use_supernodes(use_supernodes)
 			{
 				for (auto e : dag_edges) {
-					const Job<Time>& from = lookup<Time>(jobs, e.first);
-					const Job<Time>& to   = lookup<Time>(jobs, e.second);
-					_job_precedence_sets[to.get_job_index()].push_back(from.get_job_index());
-				}
-				for (const Suspending_Task<Time>& st : susps) {
-					_predecessors_of[st.get_toIndex()].push_back(&st);
-					_job_precedence_sets[st.get_toIndex()].push_back(st.get_fromIndex());
-					_successors_of[st.get_fromIndex()].push_back({ &jobs[st.get_toIndex()], st.get_suspension() });
+					_predecessors_of[e.get_toIndex()].push_back({ &jobs[e.get_fromIndex()], e.get_suspension() });
+					_job_precedence_sets[e.get_toIndex()].push_back(e.get_fromIndex());
+					_successors_of[e.get_fromIndex()].push_back({ &jobs[e.get_toIndex()], e.get_suspension() });
 				}
 				for (const Job<Time>& j : jobs) {
 					if (_predecessors_of[j.get_job_index()].size()>0) {
@@ -750,7 +741,11 @@ namespace NP {
 			void make_initial_node()
 			{
 				// construct initial node
-				Node& n = new_node(jobs_by_earliest_arrival.begin()->first, jobs_by_latest_arrival_without_susp.begin()->first);
+				Time rmax = Time_model::constants<Time>::infinity();
+				if (!jobs_by_latest_arrival_without_susp.empty())
+					rmax = jobs_by_latest_arrival_without_susp.begin()->first;
+
+				Node& n = new_node(jobs_by_earliest_arrival.begin()->first, rmax);
 				State& s = new_state();
 				n.add_state(&s);
 			}
@@ -905,12 +900,10 @@ namespace NP {
 
 				for(auto e : predecessors_of[j.get_job_index()])
 				{
-					Interval<Time> rbounds = (want_self_suspensions == PATHWISE_SUSP) ?
-						s.get_pathwisejob_ft(e->get_fromIndex()) :
-						get_finish_times(jobs[e->get_fromIndex()]);
+					Interval<Time> rbounds = s.get_pathwisejob_ft(e.first->get_job_index());
 
-					if(seft <= (rbounds.from() + e->get_minsus()))
-						seft = rbounds.from() + e->get_minsus();
+					if(seft <= (rbounds.from() + e.second.min()))
+						seft = rbounds.from() + e.second.min();
 				}
 				return seft;
 			}
@@ -931,9 +924,7 @@ namespace NP {
 						slft = std::max(slft, avail_max);
 					else
 					{
-						Interval<Time> rbounds = (want_self_suspensions == PATHWISE_SUSP) ?
-							s.get_pathwisejob_ft(e->get_fromIndex()) :
-							get_finish_times(e->get_fromIndex());
+						Interval<Time> rbounds = s.get_pathwisejob_ft(e->get_fromIndex());
 
 						slft = std::max(slft, rbounds.until() + susp_max);
 					}
@@ -949,16 +940,14 @@ namespace NP {
 
 				for (auto e : predecessors_of[j.get_job_index()])
 				{
-					Time susp_max = e->get_maxsus();
+					Time susp_max = e.second.max();
 					// if there is no suspension, and the predecessor has been dispatched already,
 					// then the precedence constraint is certainly resolved when the processor become available
 					if (susp_max == 0)
 						slft = std::max(slft, avail_min);
 					else
 					{
-						Interval<Time> rbounds = (want_self_suspensions == PATHWISE_SUSP) ?
-							s.get_pathwisejob_ft(e->get_fromIndex()) :
-							get_finish_times(e->get_fromIndex());
+						Interval<Time> rbounds = s.get_pathwisejob_ft(e.first->get_job_index());
 
 						slft = std::max(slft, rbounds.until() + susp_max);
 					}
@@ -1160,7 +1149,7 @@ namespace NP {
 						// set of scheduled jobs than the new state resuting from scheduling job j in system state s.
 						// Thus, our new state can be added to that existing node.
 						auto match = it->second;
-						if (match->merge_states(st, want_self_suspensions == PATHWISE_SUSP))
+						if (match->merge_states(st, false))
 						{
 							delete& st;
 							num_states--;
@@ -1189,7 +1178,7 @@ namespace NP {
 				Interval<Time> start_times{ est, lst };
 				State& st = new_state(start_times, finish_range, s, j, match->get_scheduled_jobs());
 
-				if (match->merge_states(st, want_self_suspensions == PATHWISE_SUSP))
+				if (match->merge_states(st, false))
 				{
 					delete& st;
 					num_states--;

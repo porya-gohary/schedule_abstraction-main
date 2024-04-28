@@ -33,6 +33,7 @@ namespace NP {
 
 			typedef Scheduling_problem<Time> Problem;
 			typedef typename Scheduling_problem<Time>::Workload Workload;
+			typedef typename Scheduling_problem<Time>::Precedence_constraints Precedence_constraints;
 			typedef typename Scheduling_problem<Time>::Abort_actions Abort_actions;
 			typedef Schedule_state<Time> State;
 			typedef Schedule_node<Time> Node;
@@ -47,7 +48,7 @@ namespace NP {
 				// this is a uniprocessor analysis
 				assert(prob.num_processors == 1);
 
-				auto s = State_space(prob.jobs, prob.dag, prob.aborts,
+				auto s = State_space(prob.jobs, prob.prec, prob.aborts,
 				                     opts.timeout, opts.max_depth,
 				                     opts.num_buckets, opts.early_exit);
 				s.cpu_time.start();
@@ -294,8 +295,8 @@ namespace NP {
 					jobs_by_deadline.insert({j.get_deadline(), &j});
 				}
 				for (auto e : dag_edges) {
-					const Job<Time>& from = lookup<Time>(jobs, e.first);
-					const Job<Time>& to   = lookup<Time>(jobs, e.second);
+					const Job<Time>& from = lookup<Time>(jobs, e.get_fromID());
+					const Job<Time>& to   = lookup<Time>(jobs, e.get_toID());
 					job_precedence_sets[index_of(to)].push_back(index_of(from));
 				}
 				for (const Abort_action<Time>& a : aborts) {

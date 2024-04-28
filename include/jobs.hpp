@@ -148,11 +148,11 @@ namespace NP {
 		int get_next_parallelism(unsigned int ncores) const
 		{
 			assert(ncores < parallelism.max());
-			auto it = exec_time.find(ncores);
-			if (it == exec_time.end() or ++it == exec_time.end())
+			auto it = exec_time.upper_bound(ncores);
+			if (it == exec_time.end())
 				return -1;
 			else
-				return (++it)->first;
+				return it->first;
 
 		}
 
