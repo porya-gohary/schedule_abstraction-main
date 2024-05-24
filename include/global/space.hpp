@@ -469,7 +469,7 @@ namespace NP {
 							Node& next =
 								new_node(new_n, j, j.get_job_index(), 0, 0);
 							const CoreAvailability empty_cav = {};
-							State& next_s = new_state(*new_n.get_last_state(), j.get_job_index(), predecessors_of(j), frange, frange, empty_cav, new_n.get_scheduled_jobs(), successors);
+							State& next_s = new_state(*new_n.get_last_state(), j.get_job_index(), predecessors_of(j), frange, frange, empty_cav, new_n.get_scheduled_jobs(), successors, predecessors_suspensions);
 							next.add_state(&next_s);
 							num_states++;
 
@@ -840,7 +840,7 @@ namespace NP {
 				s.next_core_avail(j.get_job_index(), predecessors_of(j), start_times, finish_times, cav);
 				// create a new state resulting from scheduling j in state s.
 				State& st = new_state(s, j.get_job_index(), predecessors_of(j),
-					start_times, finish_times, cav, sched_jobs, successors);
+					start_times, finish_times, cav, sched_jobs, successors, predecessors_suspensions);
 
 				bool found_match = false;
 				hash_value_t key = n.next_key(j);
@@ -945,7 +945,7 @@ namespace NP {
 						s->next_core_avail(j.get_job_index(), predecessors_of(j), st, ftimes, cav);
 						// create a new state resulting from scheduling j in state s.
 						State& new_s = new_state(*s, j.get_job_index(), predecessors_of(j),
-							st, ftimes, cav, next->get_scheduled_jobs(), successors);
+							st, ftimes, cav, next->get_scheduled_jobs(), successors, predecessors_suspensions);
 
 						// try to merge the new state with existing states.
 						if (!(next->get_states()->empty()) && next->merge_states(new_s, wants_self_suspensions == PATHWISE_SUSP))
@@ -1070,7 +1070,11 @@ namespace NP {
 					Nodes& exploration_front = nodes();
 					n = exploration_front.size();
 #endif
-
+					if (n == 0)
+					{
+						aborted = true;
+						break;
+					}
 					// allocate node space for next depth
 					nodes_storage.emplace_back();
 

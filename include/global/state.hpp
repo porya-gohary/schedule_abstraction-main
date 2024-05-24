@@ -28,8 +28,9 @@ namespace NP {
 
 			typedef std::vector<std::pair<Job_index, Interval<Time>>> JobFinishTimes;
 			typedef std::vector<Interval<Time>> CoreAvailability;
-			typedef std::vector<std::pair<const Job<Time>*, Interval<Time>>> Successors_list;
-			typedef std::vector<Successors_list> Successors;
+			typedef std::vector<std::pair<const Job<Time>*, Interval<Time>>> Susp_list;
+			typedef std::vector<Susp_list> Successors;
+			typedef std::vector<Susp_list> Predecessors;
 
 			// system availability intervals
 			CoreAvailability core_avail;
@@ -83,7 +84,8 @@ namespace NP {
 				Interval<Time> finish_times,
 				const CoreAvailability& next_core_avail,
 				const Job_set& scheduled_jobs,
-				const Successors& successors_of)
+				const Successors& successors_of,
+				const Predecessors& predecessors_of)
 			{
 				auto est = start_times.min();
 				auto lst = start_times.max();
@@ -156,10 +158,33 @@ namespace NP {
 						for (auto succ : successors_of[j])
 						{
 							successor_pending = true;
-							Time max_susp = succ.second.max();
-							earliest_certain_successor_jobs_ready_time = 
-								std::min(earliest_certain_successor_jobs_ready_time, 
-									std::max(succ.first->latest_arrival(), lft + max_susp));
+							Time ready_time = succ.first->latest_arrival();
+							bool ready = true;
+							for (auto pred : predecessors_of[succ.first->get_job_index()])
+							{
+								Interval<Time> ftimes(0,0);
+								auto from_job = pred.first->get_job_index();
+								if (from_job == j)
+								{
+									Time susp_max = pred.second.max();
+									ready_time = std::max(ready_time, lft + susp_max);
+								}
+								else if (scheduled_jobs.contains(from_job) && from.get_finish_times(from_job, ftimes))
+								{
+									Time susp_max = pred.second.max();
+									ready_time = std::max(ready_time, ftimes.max() + susp_max);
+								}
+								else
+								{
+									ready = false;
+									break;
+								}
+							}
+							if (ready)
+							{
+								earliest_certain_successor_jobs_ready_time =
+									std::min(earliest_certain_successor_jobs_ready_time, ready_time);
+							}
 						}
 						if (successor_pending)
 							job_finish_times.push_back(std::make_pair(j, finish_times));
@@ -172,10 +197,28 @@ namespace NP {
 						if (!scheduled_jobs.contains(to_job))
 						{
 							successor_pending = true;
-							Time max_susp = succ.second.max();
-							earliest_certain_successor_jobs_ready_time = 
-								std::min(earliest_certain_successor_jobs_ready_time, 
-									std::max(succ.first->latest_arrival(), job_lft + max_susp));
+							Time ready_time = succ.first->latest_arrival();
+							bool ready = true;
+							for (auto pred : predecessors_of[to_job])
+							{
+								auto from_job = pred.first->get_job_index();
+								Interval<Time> ftimes(0,0);
+								if (scheduled_jobs.contains(from_job) && from.get_finish_times(from_job, ftimes))
+								{
+									Time susp_max = pred.second.max();
+									ready_time = std::max(ready_time, ftimes.max() + susp_max);
+								}
+								else
+								{
+									ready = false;
+									break;
+								}
+							}
+							if (ready)
+							{
+								earliest_certain_successor_jobs_ready_time =
+									std::min(earliest_certain_successor_jobs_ready_time, ready_time);
+							}
 						}
 					}
 					if (successor_pending)
@@ -188,10 +231,33 @@ namespace NP {
 					for (auto succ : successors_of[j])
 					{
 						successor_pending = true;
-						Time max_susp = succ.second.max();
-						earliest_certain_successor_jobs_ready_time = 
-							std::min(earliest_certain_successor_jobs_ready_time, 
-								std::max(succ.first->latest_arrival(), lft + max_susp));
+						Time ready_time = succ.first->latest_arrival();
+						bool ready = true;
+						for (auto pred : predecessors_of[succ.first->get_job_index()])
+						{
+							auto from_job = pred.first->get_job_index();
+							Interval<Time> ftimes(0,0);
+							if(from_job == j)
+							{
+								Time susp_max = pred.second.max();
+								ready_time = std::max(ready_time, lft + susp_max);
+							}
+							else if (scheduled_jobs.contains(from_job) && from.get_finish_times(from_job, ftimes))
+							{
+								Time susp_max = pred.second.max();
+								ready_time = std::max(ready_time, ftimes.max() + susp_max);
+							}
+							else
+							{
+								ready = false;
+								break;
+							}
+						}
+						if (ready)
+						{
+							earliest_certain_successor_jobs_ready_time =
+								std::min(earliest_certain_successor_jobs_ready_time, ready_time);
+						}
 					}
 					if (successor_pending)
 						job_finish_times.push_back(std::make_pair(j, finish_times));
