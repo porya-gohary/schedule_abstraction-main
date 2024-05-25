@@ -37,7 +37,7 @@ namespace NP {
 			CoreAvailability core_avail;
 
 			// keeps track of the earliest time a job with at least one predecessor is certainly ready and certainly has enough free cores to start executing
-			Time earliest_certain_successor_jobs_disptach;
+			Time earliest_certain_successor_job_disptach;
 
 			// keeps track of the earliest time a gang source job (a job with no predecessor that requires more than one core to execute) 
 			// is certainly arrived and certainly has enough free cores to start executing
@@ -91,7 +91,7 @@ namespace NP {
 			Schedule_state(const unsigned int num_processors, const Time next_certain_gang_source_job_disptach)
 				: core_avail{ num_processors, Interval<Time>(Time(0), Time(0)) }
 				, certain_jobs{}
-				, earliest_certain_successor_jobs_disptach{ Time_model::constants<Time>::infinity() }
+				, earliest_certain_successor_job_disptach{ Time_model::constants<Time>::infinity() }
 				, earliest_certain_gang_source_job_disptach{ next_certain_gang_source_job_disptach }
 			{
 				assert(core_avail.size() > 0);
@@ -165,7 +165,7 @@ namespace NP {
 				// and calculate the earliest time a job with precedence constraints will become ready to dispatch
 				job_finish_times.reserve(from.job_finish_times.size() + 1);
 				added_j = false;
-				earliest_certain_successor_jobs_disptach = Time_model::constants<Time>::infinity();
+				earliest_certain_successor_job_disptach = Time_model::constants<Time>::infinity();
 				for (auto ft : from.job_finish_times)
 				{
 					auto job = ft.first;
@@ -211,8 +211,8 @@ namespace NP {
 							}
 							if (ready)
 							{
-								earliest_certain_successor_jobs_disptach =
-									std::min(earliest_certain_successor_jobs_disptach, ready_time);
+								earliest_certain_successor_job_disptach =
+									std::min(earliest_certain_successor_job_disptach, ready_time);
 							}
 						}
 						if (successor_pending)
@@ -246,8 +246,8 @@ namespace NP {
 							}
 							if (ready)
 							{
-								earliest_certain_successor_jobs_disptach =
-									std::min(earliest_certain_successor_jobs_disptach, ready_time);
+								earliest_certain_successor_job_disptach =
+									std::min(earliest_certain_successor_job_disptach, ready_time);
 							}
 						}
 					}
@@ -286,8 +286,8 @@ namespace NP {
 						}
 						if (ready)
 						{
-							earliest_certain_successor_jobs_disptach =
-								std::min(earliest_certain_successor_jobs_disptach, ready_time);
+							earliest_certain_successor_job_disptach =
+								std::min(earliest_certain_successor_job_disptach, ready_time);
 						}
 					}
 					if (successor_pending)
@@ -421,7 +421,7 @@ namespace NP {
 
 			Time next_certain_successor_jobs_disptach() const
 			{
-				return earliest_certain_successor_jobs_disptach;
+				return earliest_certain_successor_job_disptach;
 			}
 
 			bool core_avail_overlap(const CoreAvailability& other) const
@@ -464,7 +464,7 @@ namespace NP {
 				if (!can_merge_with(other, useJobFinishTimes))
 					return false;
 
-				merge(other.core_avail, other.job_finish_times, other.certain_jobs, other.earliest_certain_successor_jobs_disptach);
+				merge(other.core_avail, other.job_finish_times, other.certain_jobs, other.earliest_certain_successor_job_disptach);
 
 				DM("+++ merged " << other << " into " << *this << std::endl);
 				return true;
@@ -505,7 +505,7 @@ namespace NP {
 				widen_finish_times(jft);
 
 				// update certain ready time of jobs with predecessors
-				earliest_certain_successor_jobs_disptach = std::max(earliest_certain_successor_jobs_disptach, ecsj_ready_time);
+				earliest_certain_successor_job_disptach = std::max(earliest_certain_successor_job_disptach, ecsj_ready_time);
 
 				DM("+++ merged (cav,jft,cert_t) into " << *this << std::endl);
 			}

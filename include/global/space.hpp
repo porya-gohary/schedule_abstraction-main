@@ -736,7 +736,7 @@ namespace NP {
 			// Find next time by which a gang source job (i.e., 
 			// a job without predecessors that cannot execute on a single core) 
 			// of higher priority than the reference_job
-			// is certainly released in any state in the node 'n'. 
+			// is certainly released in state 's' of node 'n'. 
 			Time next_certain_higher_priority_gang_source_job_ready_time(
 				const Node& n,
 				const State& s,
@@ -769,7 +769,7 @@ namespace NP {
 						if (j.get_min_parallelism() > ncores)
 						{
 							// max {rj_max,Amax(sjmin)}
-							when = std::min(when, std::max(j.latest_arrival(), s.core_availability(ncores).max()));
+							when = std::min(when, std::max(j.latest_arrival(), s.core_availability(j.get_min_parallelism()).max()));
 							// no break as other jobs may require less cores to be available and thus be ready earlier
 						}
 						else
