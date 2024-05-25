@@ -468,7 +468,7 @@ namespace NP {
 							Node& next =
 								new_node(new_n, j, j.get_job_index(), 0, 0, 0);
 							const CoreAvailability empty_cav = {};
-							State& next_s = new_state(*new_n.get_last_state(), j.get_job_index(), predecessors_of(j), frange, frange, empty_cav, new_n.get_scheduled_jobs(), successors, 0, pmin);
+							State& next_s = new_state(*new_n.get_last_state(), j.get_job_index(), predecessors_of(j), frange, frange, empty_cav, new_n.get_scheduled_jobs(), successors, predecessors_suspensions, 0, pmin);
 							next.add_state(&next_s);
 							num_states++;
 
@@ -994,7 +994,7 @@ namespace NP {
 				s.next_core_avail(j.get_job_index(), predecessors_of(j), start_times, finish_times, ncores, cav);
 				// create a new state resulting from scheduling j in state s.
 				State& st = new_state(s, j.get_job_index(), predecessors_of(j),
-					start_times, finish_times, cav, sched_jobs, successors, earliest_certain_gang_source_job_disptach(n, s, j), ncores);
+					start_times, finish_times, cav, sched_jobs, successors, predecessors_suspensions, earliest_certain_gang_source_job_disptach(n, s, j), ncores);
 
 				bool found_match = false;
 				hash_value_t key = n.next_key(j);
@@ -1114,7 +1114,7 @@ namespace NP {
 							s->next_core_avail(j.get_job_index(), predecessors_of(j), st, ftimes, p, cav);
 							// create a new state resulting from scheduling j in state s on p cores.
 							State& new_s = new_state(*s, j.get_job_index(), predecessors_of(j),
-								st, ftimes, cav, next->get_scheduled_jobs(), successors, earliest_certain_gang_source_job_disptach(n, *s, j), p);
+								st, ftimes, cav, next->get_scheduled_jobs(), successors, predecessors_suspensions, earliest_certain_gang_source_job_disptach(n, *s, j), p);
 
 							// try to merge the new state with existing states.
 							if (!(next->get_states()->empty()) && next->merge_states(new_s, false))
@@ -1240,7 +1240,11 @@ namespace NP {
 					Nodes& exploration_front = nodes();
 					n = exploration_front.size();
 #endif
-
+					if (n == 0)
+					{
+						aborted = true;
+						break;
+					}
 					// allocate node space for next depth
 					nodes_storage.emplace_back();
 

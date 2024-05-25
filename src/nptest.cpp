@@ -409,13 +409,13 @@ int main(int argc, char** argv)
 	//all the options that could have been entered above are processed below and appropriate variables
 	// are assigned their respective values.
 
-	const std::string& time_model = options.get("time_model");
+	const std::string& time_model = (std::string) options.get("time_model");
 	want_dense = time_model == "dense";
 	#if want_dense == true
 	#define want_dense
 	#endif
 
-	const std::string& iip = options.get("iip");
+	const std::string& iip = (std::string) options.get("iip");
 	want_prm_iip = iip == "P-RM";
 	want_cw_iip = iip == "CW";
 
@@ -459,7 +459,7 @@ int main(int argc, char** argv)
 		          << std::endl;
 	}
 	selfsuspending_file = (const std::string&) options.get("selfsuspending_file");
-	const std::string& sstype = options.get("sstype");
+	const std::string& sstype = (std::string) options.get("sstype");
 	want_pathwise = options.is_set_by_user("sstype");
 
 	want_aborts = options.is_set_by_user("abort_file");
