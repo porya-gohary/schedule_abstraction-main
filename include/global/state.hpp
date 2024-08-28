@@ -62,28 +62,8 @@ namespace NP {
 			// imprecise set of certainly running jobs, on how many cores they run, and when they should finish
 			std::vector<Running_job> certain_jobs;
 
-			// job_finish_times holds the finish times of all the jobs that still have unscheduled successor
+			// job_finish_times holds the finish times of all the jobs that still have an unscheduled successor
 			JobFinishTimes job_finish_times;
-
-			// Find the offset in the JobFinishTimes vector where the index j should be located.
-			int jft_find(const Job_index j) const
-			{
-				int start = 0;
-				int end = job_finish_times.size();
-				while (start < end) {
-					int mid = (start + end) / 2;
-					if (job_finish_times[mid].first == j)
-						return mid;
-					else if (job_finish_times[mid].first < j)
-						start = mid + 1;  // mid is too small, mid+1 might fit.
-					else
-						end = mid;
-				}
-				return start;
-			}
-
-			// no accidental copies
-			Schedule_state(const Schedule_state& origin) = delete;
 
 		public:
 
@@ -97,14 +77,13 @@ namespace NP {
 				assert(core_avail.size() > 0);
 			}
 
-			// transition: new state by scheduling a job in an existing state
+			// transition: new state by scheduling a job 'j' in an existing state 'from'
 			Schedule_state(
 				const Schedule_state& from,
 				Job_index j,
 				const Job_precedence_set& predecessors,
 				Interval<Time> start_times,
 				Interval<Time> finish_times,
-				const CoreAvailability& next_core_avail,
 				const Job_set& scheduled_jobs,
 				const Successors& successors_of,
 				const Predecessors& predecessors_of,
@@ -112,280 +91,18 @@ namespace NP {
 				unsigned int ncores = 1)
 				: earliest_certain_gang_source_job_disptach(next_certain_gang_source_job_disptach)
 			{
-				auto est = start_times.min();
-				auto lst = start_times.max();
-				auto eft = finish_times.min();
-				auto lft = finish_times.max();
-
-				DM("est: " << est << std::endl
-					<< "lst: " << lst << std::endl
-					<< "eft: " << eft << std::endl
-					<< "lft: " << lft << std::endl);
-
-				int n_prec = 0;
-
 				// update the set of certainly running jobs
-				// keep them sorted to simplify merging
-				bool added_j = false;
-				for (const auto& rj : from.certain_jobs) 
-				{
-					auto running_job = rj.idx;
-					if (contains(predecessors, running_job)) 
-					{
-						n_prec+= rj.parallelism.min(); // keep track of the number of predecessors of j that are certainly running
-					}
-					else if (lst <= rj.finish_time.min())
-					{
-						if (!added_j && running_job > j) 
-						{
-							// right place to add j
-							Parallelism p(ncores, ncores);
-							certain_jobs.emplace_back(j, p, finish_times);
-							added_j = true;
-						}
-						certain_jobs.emplace_back(rj);
-					}
-				}
-				// if we didn't add it yet, add it at the back
-				if (!added_j)
-				{
-					Parallelism p(ncores, ncores);
-					certain_jobs.emplace_back(j, p, finish_times);
-				}
+				update_certainly_running_jobs(from, j, start_times, finish_times, ncores, predecessors);
 
-				// calculate the new core availability intervals
-				if (!next_core_avail.empty())
-					core_avail = next_core_avail;
-				else
-					from.next_core_avail(j, predecessors, start_times, finish_times, core_avail);
+				// calculate the cores availability intervals resulting from dispatching job j on ncores in state 'from'
+				update_core_avail(from, j, predecessors, start_times, finish_times, ncores);
 
 				assert(core_avail.size() > 0);
 
-				// update the list of finish times of jobs with successors w.r.t. the previous system state
-				// and calculate the earliest time a job with precedence constraints will become ready to dispatch
-				job_finish_times.reserve(from.job_finish_times.size() + 1);
-				added_j = false;
-				earliest_certain_successor_job_disptach = Time_model::constants<Time>::infinity();
-				for (auto ft : from.job_finish_times)
-				{
-					auto job = ft.first;
-					auto job_eft = ft.second.min();
-					auto job_lft = ft.second.max(); 
-					// if there is a single core, then we know that 
-					// jobs that were disptached in the past cannot have 
-					// finished later than when our new job starts executing
-					if (core_avail.size() == 1)
-					{
-						if (job_lft > lst)
-							job_lft = lst;
-					}
-
-					if (!added_j && job > j)
-					{
-						bool successor_pending = false;
-						for (auto succ : successors_of[j])
-						{
-							successor_pending = true;
-							Time avail = core_avail[succ.first->get_min_parallelism()-1].max();
-							Time ready_time = std::max(avail, succ.first->latest_arrival());
-							bool ready = true;
-							for (auto pred : predecessors_of[succ.first->get_job_index()])
-							{
-								Interval<Time> ftimes(0,0);
-								auto from_job = pred.first->get_job_index();
-								if (from_job == j)
-								{
-									Time susp_max = pred.second.max();
-									ready_time = std::max(ready_time, lft + susp_max);
-								}
-								else if (scheduled_jobs.contains(from_job) && from.get_finish_times(from_job, ftimes))
-								{
-									Time susp_max = pred.second.max();
-									ready_time = std::max(ready_time, ftimes.max() + susp_max);
-								}
-								else
-								{
-									ready = false;
-									break;
-								}
-							}
-							if (ready)
-							{
-								earliest_certain_successor_job_disptach =
-									std::min(earliest_certain_successor_job_disptach, ready_time);
-							}
-						}
-						if (successor_pending)
-							job_finish_times.push_back(std::make_pair(j, finish_times));
-						added_j = true;
-					}
-
-					bool successor_pending = false;
-					for (auto succ : successors_of[job]) {
-						auto to_job = succ.first->get_job_index();
-						if (!scheduled_jobs.contains(to_job))
-						{
-							successor_pending = true;
-							Time avail = core_avail[succ.first->get_min_parallelism()-1].max();
-							Time ready_time = std::max(avail, succ.first->latest_arrival());
-							bool ready = true;
-							for (auto pred : predecessors_of[to_job])
-							{
-								auto from_job = pred.first->get_job_index();
-								Interval<Time> ftimes(0,0);
-								if (scheduled_jobs.contains(from_job) && from.get_finish_times(from_job, ftimes))
-								{
-									Time susp_max = pred.second.max();
-									ready_time = std::max(ready_time, ftimes.max() + susp_max);
-								}
-								else
-								{
-									ready = false;
-									break;
-								}
-							}
-							if (ready)
-							{
-								earliest_certain_successor_job_disptach =
-									std::min(earliest_certain_successor_job_disptach, ready_time);
-							}
-						}
-					}
-					if (successor_pending)
-						job_finish_times.push_back(std::make_pair(job, std::make_pair(job_eft, job_lft)));
-				}
-
-				if (!added_j)
-				{
-					bool successor_pending = false;
-					for (auto succ : successors_of[j])
-					{
-						successor_pending = true;
-						Time avail = core_avail[succ.first->get_min_parallelism()-1].max();
-						Time ready_time = std::max(avail, succ.first->latest_arrival());
-						bool ready = true;
-						for (auto pred : predecessors_of[succ.first->get_job_index()])
-						{
-							auto from_job = pred.first->get_job_index();
-							Interval<Time> ftimes(0,0);
-							if(from_job == j)
-							{
-								Time susp_max = pred.second.max();
-								ready_time = std::max(ready_time, lft + susp_max);
-							}
-							else if (scheduled_jobs.contains(from_job) && from.get_finish_times(from_job, ftimes))
-							{
-								Time susp_max = pred.second.max();
-								ready_time = std::max(ready_time, ftimes.max() + susp_max);
-							}
-							else
-							{
-								ready = false;
-								break;
-							}
-						}
-						if (ready)
-						{
-							earliest_certain_successor_job_disptach =
-								std::min(earliest_certain_successor_job_disptach, ready_time);
-						}
-					}
-					if (successor_pending)
-						job_finish_times.push_back(std::make_pair(j, finish_times));
-				}
+				// save the job finish time of every job with a successor that is not executed yet in the current state
+				update_job_finish_times(from, j, start_times, finish_times, successors_of, predecessors_of, scheduled_jobs);
 
 				DM("*** new state: constructed " << *this << std::endl);
-			}
-
-			// Return the core availability resulting from scheduling job j on ncores
-			// in the current state
-			void next_core_avail(const Job_index j, const Job_precedence_set& predecessors,
-				const Interval<Time> start_times, const Interval<Time> finish_times, const unsigned int ncores,
-				CoreAvailability& result) const
-			{
-				int n_cores = core_avail.size();
-				auto est = start_times.min();
-				auto lst = start_times.max();
-				auto eft = finish_times.min();
-				auto lft = finish_times.max();
-
-				DM("est: " << est << std::endl
-					<< "lst: " << lst << std::endl
-					<< "eft: " << eft << std::endl
-					<< "lft: " << lft << std::endl);
-
-				int n_prec = 0;
-
-				// Compute the number of cores certainly used by active predecessors.
-				// certain_jobs is sorted. If predecessors is sorted, some improvement is possible.
-				for (const auto& rj : certain_jobs) {
-					if (contains(predecessors, rj.idx)) {
-						n_prec+=rj.parallelism.min();
-					}
-				}
-
-				// compute the cores availability intervals
-				std::vector<Time> ca, pa;
-				ca.reserve(n_cores);
-				pa.reserve(n_cores);
-
-				// Keep pa and ca sorted, by adding the value at the correct place.
-				bool eft_added_to_pa = false;
-				bool lft_added_to_ca = false;
-
-				// note, we must skip the first ncores elements in from.core_avail
-				if (n_prec > ncores) {
-					// if there are n_prec predecessors running, n_prec cores must be available when j starts
-					for (int i = ncores; i < n_prec; i++) {
-						pa.push_back(est); // TODO: GN: check whether we can replace by est all the time since predecessors must possibly be finished by est to let j start
-						ca.push_back(std::min(lst, std::max(est, core_avail[i].max())));
-					}
-				}
-				else {
-					n_prec = ncores;
-				}
-				for (int i = n_prec; i < core_avail.size(); i++) {
-					if (!eft_added_to_pa && eft < core_avail[i].min()) 
-					{
-						// add the finish time of j ncores times since it runs on ncores
-						for(int p=0; p<ncores; p++)
-							pa.push_back(eft);
-						eft_added_to_pa = true;
-					}
-					pa.push_back(std::max(est, core_avail[i].min()));
-					if (!lft_added_to_ca && lft < core_avail[i].max()) {
-						// add the finish time of j ncores times since it runs on ncores
-						for (int p = 0; p < ncores; p++)
-							ca.push_back(lft);
-						lft_added_to_ca = true;
-					}
-					ca.push_back(std::max(est, core_avail[i].max()));
-				}
-				if (!eft_added_to_pa) {
-					// add the finish time of j ncores times since it runs on ncores
-					for (int p = 0; p < ncores; p++)
-						pa.push_back(eft);
-				}
-				if (!lft_added_to_ca) {
-					// add the finish time of j ncores times since it runs on ncores
-					for (int p = 0; p < ncores; p++)
-						ca.push_back(lft);
-				}
-
-				for (int i = 0; i < core_avail.size(); i++) 
-				{
-					DM(i << " -> " << pa[i] << ":" << ca[i] << std::endl);
-					result.emplace_back(pa[i], ca[i]);
-				}
-			}
-
-			// Return the core availability resulting from scheduling job j 
-			// in the current state
-			void next_core_avail(Job_index j, const Job_precedence_set& predecessors,
-				Interval<Time> start_times, Interval<Time> finish_times,
-				CoreAvailability& result) const
-			{
-				next_core_avail(j, predecessors, start_times, finish_times, 1, result);
 			}
 
 			Interval<Time> core_availability(unsigned long p = 1) const
@@ -433,6 +150,7 @@ namespace NP {
 				return true;
 			}
 
+			// check if 'other' state can merge with this state
 			bool can_merge_with(const Schedule_state<Time>& other, bool useJobFinishTimes = false) const
 			{
 				if (core_avail_overlap(other.core_avail))
@@ -459,6 +177,7 @@ namespace NP {
 					return false;
 			}
 
+			// first check if 'other' state can merge with this state, then, if yes, merge 'other' with this state.
 			bool try_to_merge(const Schedule_state<Time>& other, bool useJobFinishTimes = false)
 			{
 				if (!can_merge_with(other, useJobFinishTimes))
@@ -544,6 +263,265 @@ namespace NP {
 			}
 
 		private:
+			// update the list of jobs that are certainly running in the current system state
+			void update_certainly_running_jobs(const Schedule_state& from, 
+				Job_index j, Interval<Time> start_times, 
+				Interval<Time> finish_times, unsigned int ncores,
+				const Job_precedence_set& predecessors)
+			{
+				Time lst = start_times.max();
+				int n_prec = 0;
+
+				// update the set of certainly running jobs
+				// keep them sorted to simplify merging
+				bool added_j = false;
+				for (const auto& rj : from.certain_jobs)
+				{
+					auto running_job = rj.idx;
+					if (contains(predecessors, running_job))
+					{
+						n_prec += rj.parallelism.min(); // keep track of the number of predecessors of j that are certainly running
+					}
+					else if (lst <= rj.finish_time.min())
+					{
+						if (!added_j && running_job > j)
+						{
+							// right place to add j
+							Parallelism p(ncores, ncores);
+							certain_jobs.emplace_back(j, p, finish_times);
+							added_j = true;
+						}
+						certain_jobs.emplace_back(rj);
+					}
+				}
+				// if we didn't add it yet, add it at the back
+				if (!added_j)
+				{
+					Parallelism p(ncores, ncores);
+					certain_jobs.emplace_back(j, p, finish_times);
+				}
+			}
+
+			// update the core availability resulting from scheduling job j on m cores in state 'from'
+			void update_core_avail(const Schedule_state& from, const Job_index j, const Job_precedence_set& predecessors,
+				const Interval<Time> start_times, const Interval<Time> finish_times, const unsigned int m)
+			{
+				int n_cores = from.core_avail.size();
+				core_avail.reserve(n_cores);
+
+				auto est = start_times.min();
+				auto lst = start_times.max();
+				auto eft = finish_times.min();
+				auto lft = finish_times.max();
+
+				int n_prec = 0;
+
+				// Compute the number of cores certainly used by active predecessors.
+				// certain_jobs is sorted. If predecessors is sorted, some improvement is possible.
+				for (const auto& rj : certain_jobs) {
+					if (contains(predecessors, rj.idx)) {
+						n_prec += rj.parallelism.min();
+					}
+				}
+
+				// compute the cores availability intervals
+				std::vector<Time> ca, pa;
+				ca.reserve(n_cores);
+				pa.reserve(n_cores);
+
+				// Keep pa and ca sorted, by adding the value at the correct place.
+				bool eft_added_to_pa = false;
+				bool lft_added_to_ca = false;
+
+				// note, we must skip the first ncores elements in from.core_avail
+				if (n_prec > m) {
+					// if there are n_prec predecessors running, n_prec cores must be available when j starts
+					for (int i = m; i < n_prec; i++) {
+						pa.push_back(est); // TODO: GN: check whether we can replace by est all the time since predecessors must possibly be finished by est to let j start
+						ca.push_back(std::min(lst, std::max(est, from.core_avail[i].max())));
+					}
+				}
+				else {
+					n_prec = m;
+				}
+				for (int i = n_prec; i < from.core_avail.size(); i++) {
+					if (!eft_added_to_pa && eft < from.core_avail[i].min())
+					{
+						// add the finish time of j ncores times since it runs on ncores
+						for (int p = 0; p < m; p++)
+							pa.push_back(eft);
+						eft_added_to_pa = true;
+					}
+					pa.push_back(std::max(est, from.core_avail[i].min()));
+					if (!lft_added_to_ca && lft < from.core_avail[i].max()) {
+						// add the finish time of j ncores times since it runs on ncores
+						for (int p = 0; p < m; p++)
+							ca.push_back(lft);
+						lft_added_to_ca = true;
+					}
+					ca.push_back(std::max(est, from.core_avail[i].max()));
+				}
+				if (!eft_added_to_pa) {
+					// add the finish time of j ncores times since it runs on ncores
+					for (int p = 0; p < m; p++)
+						pa.push_back(eft);
+				}
+				if (!lft_added_to_ca) {
+					// add the finish time of j ncores times since it runs on ncores
+					for (int p = 0; p < m; p++)
+						ca.push_back(lft);
+				}
+
+				for (int i = 0; i < from.core_avail.size(); i++)
+				{
+					DM(i << " -> " << pa[i] << ":" << ca[i] << std::endl);
+					core_avail.emplace_back(pa[i], ca[i]);
+				}
+			}
+
+			// update the list of finish times of jobs with successors w.r.t. the previous system state
+			// and calculate the earliest time a job with precedence constraints will become ready to dispatch
+			void update_job_finish_times(const Schedule_state& from,
+				Job_index j, Interval<Time> start_times,
+				Interval<Time> finish_times, 
+				const Successors& successors_of,
+				const Predecessors& predecessors_of,
+				const Job_set& scheduled_jobs)
+			{
+				Time lst = start_times.max();
+				Time lft = finish_times.max();
+
+				job_finish_times.reserve(from.job_finish_times.size() + 1);
+				bool added_j = false;
+				earliest_certain_successor_job_disptach = Time_model::constants<Time>::infinity();
+				for (const auto& ft : from.job_finish_times)
+				{
+					auto job = ft.first;
+					auto job_eft = ft.second.min();
+					auto job_lft = ft.second.max();
+					// if there is a single core, then we know that 
+					// jobs that were disptached in the past cannot have 
+					// finished later than when our new job starts executing
+					if (core_avail.size() == 1)
+					{
+						if (job_lft > lst)
+							job_lft = lst;
+					}
+
+					if (!added_j && job > j)
+					{
+						bool successor_pending = false;
+						for (const auto& succ : successors_of[j])
+						{
+							successor_pending = true;
+							Time avail = core_avail[succ.first->get_min_parallelism() - 1].max();
+							Time ready_time = std::max(avail, succ.first->latest_arrival());
+							bool ready = true;
+							for (const auto& pred : predecessors_of[succ.first->get_job_index()])
+							{
+								Interval<Time> ftimes(0, 0);
+								auto from_job = pred.first->get_job_index();
+								if (from_job == j)
+								{
+									Time susp_max = pred.second.max();
+									ready_time = std::max(ready_time, lft + susp_max);
+								}
+								else if (scheduled_jobs.contains(from_job) && from.get_finish_times(from_job, ftimes))
+								{
+									Time susp_max = pred.second.max();
+									ready_time = std::max(ready_time, ftimes.max() + susp_max);
+								}
+								else
+								{
+									ready = false;
+									break;
+								}
+							}
+							if (ready)
+							{
+								earliest_certain_successor_job_disptach =
+									std::min(earliest_certain_successor_job_disptach, ready_time);
+							}
+						}
+						if (successor_pending)
+							job_finish_times.push_back(std::make_pair(j, finish_times));
+						added_j = true;
+					}
+
+					bool successor_pending = false;
+					for (const auto& succ : successors_of[job]) {
+						auto to_job = succ.first->get_job_index();
+						if (!scheduled_jobs.contains(to_job))
+						{
+							successor_pending = true;
+							Time avail = core_avail[succ.first->get_min_parallelism() - 1].max();
+							Time ready_time = std::max(avail, succ.first->latest_arrival());
+							bool ready = true;
+							for (const auto& pred : predecessors_of[to_job])
+							{
+								auto from_job = pred.first->get_job_index();
+								Interval<Time> ftimes(0, 0);
+								if (scheduled_jobs.contains(from_job) && from.get_finish_times(from_job, ftimes))
+								{
+									Time susp_max = pred.second.max();
+									ready_time = std::max(ready_time, ftimes.max() + susp_max);
+								}
+								else
+								{
+									ready = false;
+									break;
+								}
+							}
+							if (ready)
+							{
+								earliest_certain_successor_job_disptach =
+									std::min(earliest_certain_successor_job_disptach, ready_time);
+							}
+						}
+					}
+					if (successor_pending)
+						job_finish_times.push_back(std::make_pair(job, std::make_pair(job_eft, job_lft)));
+				}
+
+				if (!added_j)
+				{
+					bool successor_pending = false;
+					for (const auto& succ : successors_of[j])
+					{
+						successor_pending = true;
+						Time avail = core_avail[succ.first->get_min_parallelism() - 1].max();
+						Time ready_time = std::max(avail, succ.first->latest_arrival());
+						bool ready = true;
+						for (const auto& pred : predecessors_of[succ.first->get_job_index()])
+						{
+							auto from_job = pred.first->get_job_index();
+							Interval<Time> ftimes(0, 0);
+							if (from_job == j)
+							{
+								Time susp_max = pred.second.max();
+								ready_time = std::max(ready_time, lft + susp_max);
+							}
+							else if (scheduled_jobs.contains(from_job) && from.get_finish_times(from_job, ftimes))
+							{
+								Time susp_max = pred.second.max();
+								ready_time = std::max(ready_time, ftimes.max() + susp_max);
+							}
+							else
+							{
+								ready = false;
+								break;
+							}
+						}
+						if (ready)
+						{
+							earliest_certain_successor_job_disptach =
+								std::min(earliest_certain_successor_job_disptach, ready_time);
+						}
+					}
+					if (successor_pending)
+						job_finish_times.push_back(std::make_pair(j, finish_times));
+				}
+			}
 
 			// Check whether the job_finish_times overlap.
 			bool check_finish_times_overlap(const JobFinishTimes& from_pwj) const
@@ -595,6 +573,26 @@ namespace NP {
 						state_it++;
 				}
 			}
+
+			// Find the offset in the JobFinishTimes vector where the index j should be located.
+			int jft_find(const Job_index j) const
+			{
+				int start = 0;
+				int end = job_finish_times.size();
+				while (start < end) {
+					int mid = (start + end) / 2;
+					if (job_finish_times[mid].first == j)
+						return mid;
+					else if (job_finish_times[mid].first < j)
+						start = mid + 1;  // mid is too small, mid+1 might fit.
+					else
+						end = mid;
+				}
+				return start;
+			}
+
+			// no accidental copies
+			Schedule_state(const Schedule_state& origin) = delete;
 		};
 
 		template<class Time> class Schedule_node
@@ -653,7 +651,7 @@ namespace NP {
 			{
 			}
 
-			// transition: new node by scheduling a job in an existing node
+			// transition: new node by scheduling a job 'j' in an existing node 'from'
 			Schedule_node(
 				const Schedule_node& from,
 				const Job<Time>& j,
@@ -757,11 +755,6 @@ namespace NP {
 				return a_max;
 			}
 
-			/*void update_finish_range(const Interval<Time>& update)
-			{
-				finish_time.widen(update);
-			}*/
-
 			void add_state(State* s)
 			{
 				// Update finish_time
@@ -811,9 +804,13 @@ namespace NP {
 				return &states;
 			}
 
+			// try to merge state 's' with up to 'budget' states already recorded in this node. 
+			// The option 'useJobFinishTimes' controls whether or not the job finish time intervals of jobs 
+			// with pending successors must overlap to allow two states to merge. Setting it to true should 
+			// increase accurracy of the analysis but increases runtime significantly.
 			bool merge_states(const Schedule_state<Time>& s, bool useJobFinishTimes = false, int budget = 1)
 			{
-				// RV: instead of merging with only one state, try to merge with more states if possible.
+				// try to merge with up to 'budget' states if possible.
 				int merge_budget = budget;
 
 				State* last_state_merged;
@@ -834,7 +831,6 @@ namespace NP {
 							result = true;
 
 							// Try to merge with a few more states.
-							// std::cerr << "Merged with " << merge_budget << " of " << states.size() << " states left.\n";
 							merge_budget--;
 							if (merge_budget == 0)
 								break;

@@ -5,7 +5,7 @@
 
 #include "problem.hpp"
 #include "io.hpp"
-#include "uni/space.hpp"
+#include "global/space.hpp"
 
 
 using namespace NP;
@@ -41,7 +41,7 @@ TEST_CASE("[uni] basic aborts") {
 	Analysis_options opts;
 	opts.early_exit = false;
 
-	auto space = Uniproc::State_space<dtime_t>::explore(prob, opts);
+	auto space = Global::State_space<dtime_t>::explore(prob, opts);
 	CHECK_FALSE(space.is_schedulable());
 
 	CHECK(space.get_finish_times(prob.jobs[1]).min() == 37);
@@ -70,7 +70,7 @@ TEST_CASE("[uni] abort stops DL miss cascade") {
 	SUBCASE("without aborts") {
 		Scheduling_problem<dtime_t> prob{parse_file<dtime_t>(jobs_in)};
 
-		auto space = Uniproc::State_space<dtime_t>::explore(prob, opts);
+		auto space = Global::State_space<dtime_t>::explore(prob, opts);
 		CHECK_FALSE(space.is_schedulable());
 
 		CHECK(space.get_finish_times(prob.jobs[0]).min() == 6);
@@ -91,7 +91,7 @@ TEST_CASE("[uni] abort stops DL miss cascade") {
 			1
 		};
 
-		auto space = Uniproc::State_space<dtime_t>::explore(prob, opts);
+		auto space = Global::State_space<dtime_t>::explore(prob, opts);
 		CHECK(space.is_schedulable());
 
 		CHECK(space.get_finish_times(prob.jobs[0]).min() == 6);

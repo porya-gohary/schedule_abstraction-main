@@ -4,7 +4,6 @@
 #include <sstream>
 
 #include "io.hpp"
-#include "uni/space.hpp"
 #include "global/space.hpp"
 
 using namespace NP;
@@ -47,19 +46,19 @@ TEST_CASE("[susp] Uniproc Supernode Self-Suspensions") {
 	Analysis_options opts;
 
 	opts.be_naive = true;
-	auto gen_nspace = Uniproc::State_space<dtime_t>::explore(prob, opts);
+	auto gen_nspace = Global::State_space<dtime_t>::explore(prob, opts);
 	CHECK(gen_nspace.is_schedulable());
 
 	opts.be_naive = false;
-	auto gen_space = Uniproc::State_space<dtime_t>::explore(prob, opts);
+	auto gen_space = Global::State_space<dtime_t>::explore(prob, opts);
 	CHECK(gen_space.is_schedulable());
 
 	opts.be_naive = true;
-	auto pw_nspace = Uniproc::State_space<dtime_t>::explore(prob, opts);
+	auto pw_nspace = Global::State_space<dtime_t>::explore(prob, opts);
 	CHECK(pw_nspace.is_schedulable());
 
 	opts.be_naive = false;
-	auto pw_space = Uniproc::State_space<dtime_t>::explore(prob, opts);
+	auto pw_space = Global::State_space<dtime_t>::explore(prob, opts);
 	CHECK(pw_space.is_schedulable());
 
 	for (const Job<dtime_t>& j : prob.jobs) {
@@ -116,19 +115,19 @@ TEST_CASE("[susp] Uniproc Supernode Self-Suspensions Multiset Anomaly") {
 	Analysis_options opts;
 
 	opts.be_naive = true;
-	auto gen_nspace = Uniproc::State_space<dtime_t>::explore(prob, opts);
+	auto gen_nspace = Global::State_space<dtime_t>::explore(prob, opts);
 	CHECK(!(gen_nspace.is_schedulable()));
 
 	opts.be_naive = false;
-	auto gen_space = Uniproc::State_space<dtime_t>::explore(prob, opts);
+	auto gen_space = Global::State_space<dtime_t>::explore(prob, opts);
 	CHECK(!(gen_space.is_schedulable()));
 
 	opts.be_naive = true;
-	auto pw_nspace = Uniproc::State_space<dtime_t>::explore(prob, opts);
+	auto pw_nspace = Global::State_space<dtime_t>::explore(prob, opts);
 	CHECK(!(pw_nspace.is_schedulable()));
 
 	opts.be_naive = false;
-	auto pw_space = Uniproc::State_space<dtime_t>::explore(prob, opts);
+	auto pw_space = Global::State_space<dtime_t>::explore(prob, opts);
 	CHECK(!(pw_space.is_schedulable()));
 
 }
@@ -173,10 +172,10 @@ TEST_CASE("[susp] General Pathwise Uniprocessor Difference") {
 		parse_precedence_file<dtime_t>(susp_dag_in)};
 
 	Analysis_options opts;
-	auto gen_nspace = Uniproc::State_space<dtime_t>::explore(prob, opts);
+	auto gen_nspace = Global::State_space<dtime_t>::explore(prob, opts);
 	CHECK(!(gen_nspace.is_schedulable()));
 
-	auto pw_nspace = Uniproc::State_space<dtime_t>::explore(prob, opts);
+	auto pw_nspace = Global::State_space<dtime_t>::explore(prob, opts);
 	CHECK(pw_nspace.is_schedulable());
 }
 
@@ -190,7 +189,7 @@ TEST_CASE("[susp] Uniproc Global Schedulability Check (sn_susp)") {
 
 	Analysis_options opts;
 
-	auto uspace = Uniproc::State_space<dtime_t>::explore(prob, opts);
+	auto uspace = Global::State_space<dtime_t>::explore(prob, opts);
 	CHECK(uspace.is_schedulable());
 
 	prob.num_processors = 1;
@@ -215,7 +214,7 @@ TEST_CASE("[susp] Uniproc Global Schedulability Check (g_pw_diff)") {
 
 	Analysis_options opts;
 
-	auto uspace = Uniproc::State_space<dtime_t>::explore(prob, opts);
+	auto uspace = Global::State_space<dtime_t>::explore(prob, opts);
 	CHECK(uspace.is_schedulable());
 
 	prob.num_processors = 1;
@@ -240,7 +239,7 @@ TEST_CASE("[susp] Uniproc Global Schedulability Check (anomaly)") {
 
 	Analysis_options opts;
 
-	auto uspace = Uniproc::State_space<dtime_t>::explore(prob, opts);
+	auto uspace = Global::State_space<dtime_t>::explore(prob, opts);
 	CHECK(!(uspace.is_schedulable()));
 
 	prob.num_processors = 1;

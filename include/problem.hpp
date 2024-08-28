@@ -4,7 +4,6 @@
 #include "jobs.hpp"
 #include "precedence.hpp"
 #include "aborts.hpp"
-#include "tsn/shaper.hpp"
 
 namespace NP {
 
@@ -15,7 +14,6 @@ namespace NP {
 		typedef typename Job<Time>::Job_set Workload;
 		typedef typename std::vector<Abort_action<Time>> Abort_actions;
 		typedef typename std::vector<Precedence_constraint<Time>> Precedence_constraints;
-		typedef typename Time_Aware_Shaper<Time>::TAS_set TAS_queues;
 
 		// ** Description of the workload:
 		// (1) a set of jobs or packets if for TSN
@@ -24,8 +22,6 @@ namespace NP {
 		Precedence_constraints prec;
 		// (3) abort actions for (some of) the jobs
 		Abort_actions aborts;
-		// (4) shaper file for Time-aware shapers if for TSN
-		TAS_queues tasQueues;
 
 		// ** Platform model:
 		// on how many (identical) processors are the jobs being
@@ -55,23 +51,6 @@ namespace NP {
 			assert(num_processors > 0);
 			validate_prec_cstrnts<Time>(this->prec, jobs);
 			validate_abort_refs<Time>(aborts, jobs);
-		}
-
-		// Full Constructor with abort actions and shaper files
-		Scheduling_problem(Workload jobs, Precedence_constraints prec,
-		                   Abort_actions aborts,
-				   TAS_queues tasQueues,
-		                   unsigned int num_processors)
-		: num_processors(num_processors)
-		, jobs(jobs)
-		, prec(prec)
-		, aborts(aborts)
-		, tasQueues(tasQueues)
-		{
-			assert(num_processors > 0);
-			validate_prec_cstrnts<Time>(this->prec, jobs);
-			validate_abort_refs<Time>(aborts, jobs);
-			validate_tas_refs<Time>(tasQueues, jobs);
 		}
 
 		// Convenience constructor: no DAG, no abort actions
@@ -104,26 +83,15 @@ namespace NP {
 		// baseline).
 		bool be_naive;
 
-		// Implementation-specific: how large should the lookup table
-		// of the main workload index be?
-		std::size_t num_buckets;
-
 		// If using supernodes
 		bool use_supernodes;
-
-		// What should be the value of the interpacket gap in the case that
-		// the SAG is used to analyse packets that are transmitted through
-		// a time-sensitiv network
-		int c_ipg;
 
 		Analysis_options()
 		: timeout(0)
 		, max_depth(0)
 		, early_exit(true)
-		, num_buckets(1000)
 		, be_naive(false)
 		, use_supernodes(true)
-		, c_ipg(0)
 		{
 		}
 	};

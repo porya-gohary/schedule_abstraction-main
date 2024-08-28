@@ -394,7 +394,6 @@ TEST_CASE("[global] explore across bucket boundaries") {
 
 	NP::Scheduling_problem<dtime_t> prob{jobs};
 	NP::Analysis_options opts;
-	opts.num_buckets = 2;
 
 	opts.be_naive = true;
 	auto nspace = NP::Global::State_space<dtime_t>::explore(prob, opts);

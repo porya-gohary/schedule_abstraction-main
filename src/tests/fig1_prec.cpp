@@ -4,7 +4,7 @@
 #include <sstream>
 
 #include "io.hpp"
-#include "uni/space.hpp"
+#include "global/space.hpp"
 
 using namespace NP;
 
@@ -43,11 +43,11 @@ TEST_CASE("[prec] RTSS17-Fig1a") {
 	Analysis_options opts;
 
 	opts.be_naive = true;
-	auto nspace = Uniproc::State_space<dtime_t>::explore(prob, opts);
+	auto nspace = Global::State_space<dtime_t>::explore(prob, opts);
 	CHECK(nspace.is_schedulable());
 
 	opts.be_naive = false;
-	auto space = Uniproc::State_space<dtime_t>::explore(prob, opts);
+	auto space = Global::State_space<dtime_t>::explore(prob, opts);
 	CHECK(space.is_schedulable());
 
 	for (const Job<dtime_t>& j : prob.jobs) {
@@ -79,11 +79,11 @@ TEST_CASE("[prec] handle cycles gracefully") {
 	opts.early_exit = false;
 
 	opts.be_naive = true;
-	auto nspace = Uniproc::State_space<dtime_t>::explore(prob, opts);
+	auto nspace = Global::State_space<dtime_t>::explore(prob, opts);
 	CHECK_FALSE(nspace.is_schedulable());
 
 	opts.be_naive = false;
-	auto space = Uniproc::State_space<dtime_t>::explore(prob, opts);
+	auto space = Global::State_space<dtime_t>::explore(prob, opts);
 	CHECK_FALSE(space.is_schedulable());
 }
 
@@ -119,11 +119,11 @@ TEST_CASE("[prec] handle analysis deadend gracefully") {
 	opts.early_exit = false;
 
 	opts.be_naive = true;
-	auto nspace = Uniproc::State_space<dtime_t>::explore(prob, opts);
+	auto nspace = Global::State_space<dtime_t>::explore(prob, opts);
 	CHECK_FALSE(nspace.is_schedulable());
 
 	opts.be_naive = false;
-	auto space = Uniproc::State_space<dtime_t>::explore(prob, opts);
+	auto space = Global::State_space<dtime_t>::explore(prob, opts);
 	CHECK_FALSE(space.is_schedulable());
 }
 

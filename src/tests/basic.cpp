@@ -6,8 +6,7 @@
 
 #include "index_set.hpp"
 #include "jobs.hpp"
-#include "uni/space.hpp"
-#include "uni_iip/space.hpp"
+#include "global/space.hpp"
 
 using namespace NP;
 
@@ -56,32 +55,13 @@ TEST_CASE("Job hashes work") {
 }
 
 
-TEST_CASE("Interval LUT") {
-
-	Interval_lookup_table<dtime_t, Job<dtime_t>, &Job<dtime_t>::scheduling_window> lut(Interval<dtime_t>(0, 60), 10);
-
-	Job<dtime_t> j1{10, Interval<dtime_t>(0, 0), Interval<dtime_t>(3, 13), 60, 60, 0};
-
-	lut.insert(j1);
-
-	int count = 0;
-	for (auto j : lut.lookup(30))
-		count++;
-
-	CHECK(count == 1);
-}
-
 
 TEST_CASE("state space") {
 
-	NP::Uniproc::Schedule_node<dtime_t> n0{0,0};
+	NP::Global::Schedule_node<dtime_t> n0{0,0};
 
 	CHECK(n0.finish_range().from() == 0);
 	CHECK(n0.finish_range().until() == 0);
-
-	auto h = std::hash<Uniproc::Schedule_node<dtime_t>>{};
-
-	CHECK(h(n0) == 0);
 
 	Job<dtime_t> j1{10, Interval<dtime_t>(0, 0), Interval<dtime_t>(3, 13), 60, 60, 0};
 

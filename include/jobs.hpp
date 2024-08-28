@@ -135,7 +135,7 @@ namespace NP {
 				return cost->second.max();
 		}
 
-		const Interval<Time>& get_cost(unsigned int ncores = 1) const
+		Interval<Time> get_cost(unsigned int ncores = 1) const
 		{
 			assert(ncores >= parallelism.min() && ncores <= parallelism.max());
 			auto cost = exec_time.find(ncores);

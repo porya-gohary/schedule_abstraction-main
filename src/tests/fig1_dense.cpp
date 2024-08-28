@@ -3,7 +3,7 @@
 #include <iostream>
 
 
-#include "uni/space.hpp"
+#include "global/space.hpp"
 
 using namespace NP;
 
@@ -15,7 +15,7 @@ inline Interval<dense_t> D(dense_t a, dense_t b)
 }
 
 TEST_CASE("[dense time] Example in Figure 1(a,b)") {
-	Uniproc::State_space<dense_t>::Workload jobs{
+	Global::State_space<dense_t>::Workload jobs{
 		// high-frequency task
 		Job<dense_t>{1, D( 0,  0), D(1, 2), 10, 10, 0, 0},
 		Job<dense_t>{2, D(10, 10), D(1, 2), 20, 20, 1, 1},
@@ -33,19 +33,19 @@ TEST_CASE("[dense time] Example in Figure 1(a,b)") {
 	};
 
 	SUBCASE("Naive exploration") {
-		auto space = Uniproc::State_space<dense_t>::explore_naively(jobs);
+		auto space = Global::State_space<dense_t>::explore_naively(jobs);
 		CHECK(!space.is_schedulable());
 	}
 
 	SUBCASE("Exploration with state-merging") {
-		auto space = Uniproc::State_space<dense_t>::explore(jobs);
+		auto space = Global::State_space<dense_t>::explore(jobs);
 		CHECK(!space.is_schedulable());
 	}
 }
 
 
 TEST_CASE("[dense time] Example in Figure 1(c)") {
-	Uniproc::State_space<dense_t>::Workload jobs{
+	Global::State_space<dense_t>::Workload jobs{
 		// high-frequency task
 		Job<dense_t>{1, D( 0,  0), D(1, 2), 10, 1, 0, 0},
 		Job<dense_t>{2, D(10, 10), D(1, 2), 20, 2, 1, 1},
@@ -62,10 +62,10 @@ TEST_CASE("[dense time] Example in Figure 1(c)") {
 		Job<dense_t>{8, D(30, 30), D(7, 7), 60, 9, 8, 8},
 	};
 
-	auto nspace = Uniproc::State_space<dense_t>::explore_naively(jobs);
+	auto nspace = Global::State_space<dense_t>::explore_naively(jobs);
 	CHECK(nspace.is_schedulable());
 
-	auto space = Uniproc::State_space<dense_t>::explore(jobs);
+	auto space = Global::State_space<dense_t>::explore(jobs);
 	CHECK(space.is_schedulable());
 
 	for (const Job<dense_t>& j : jobs) {

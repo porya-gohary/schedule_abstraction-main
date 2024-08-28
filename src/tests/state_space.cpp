@@ -2,21 +2,21 @@
 
 #include <iostream>
 
-#include "uni/space.hpp"
+#include "global/space.hpp"
 
 using namespace NP;
 
 static const auto inf = Time_model::constants<dtime_t>::infinity();
 
 TEST_CASE("[NP state space] Find all next jobs") {
-	Uniproc::State_space<dtime_t>::Workload jobs{
+	Global::State_space<dtime_t>::Workload jobs{
 		Job<dtime_t>{1, Interval<dtime_t>( 0,  0), Interval<dtime_t>(3, 8), 100, 1, 0, 0},
 		Job<dtime_t>{2, Interval<dtime_t>( 7,  7), Interval<dtime_t>(5, 5),  100, 2, 1, 1},
 		Job<dtime_t>{3, Interval<dtime_t>(10, 10), Interval<dtime_t>(1, 11),  100, 3, 2, 2},
 	};
 
 	SUBCASE("Naive exploration") {
-		auto space = Uniproc::State_space<dtime_t>::explore_naively(jobs);
+		auto space = Global::State_space<dtime_t>::explore_naively(jobs);
 		CHECK(space.is_schedulable());
 
 		CHECK(space.get_finish_times(jobs[0]).from()  == 3);
@@ -30,7 +30,7 @@ TEST_CASE("[NP state space] Find all next jobs") {
 	}
 
 	SUBCASE("Exploration with merging") {
-		auto space = Uniproc::State_space<dtime_t>::explore(jobs);
+		auto space = Global::State_space<dtime_t>::explore(jobs);
 		CHECK(space.is_schedulable());
 
 		CHECK(space.get_finish_times(jobs[0]).from()  == 3);
@@ -46,13 +46,13 @@ TEST_CASE("[NP state space] Find all next jobs") {
 }
 
 TEST_CASE("[NP state space] Consider large enough interval") {
-	Uniproc::State_space<dtime_t>::Workload jobs{
+	Global::State_space<dtime_t>::Workload jobs{
 		Job<dtime_t>{1, Interval<dtime_t>( 0,  0), Interval<dtime_t>(3, 10),  100, 3, 0, 0},
 		Job<dtime_t>{2, Interval<dtime_t>( 7,  7),  Interval<dtime_t>(5, 5),  100, 2, 1, 1},
 		Job<dtime_t>{3, Interval<dtime_t>(10, 10),  Interval<dtime_t>(5, 5),  100, 1, 2, 2},
 	};
 
-	auto nspace = Uniproc::State_space<dtime_t>::explore_naively(jobs);
+	auto nspace = Global::State_space<dtime_t>::explore_naively(jobs);
 	CHECK(nspace.is_schedulable());
 
 	CHECK(nspace.get_finish_times(jobs[0]).from()  ==  3);
@@ -64,7 +64,7 @@ TEST_CASE("[NP state space] Consider large enough interval") {
 	CHECK(nspace.get_finish_times(jobs[2]).from()  == 15);
 	CHECK(nspace.get_finish_times(jobs[2]).until() == 19);
 
-	auto space = Uniproc::State_space<dtime_t>::explore_naively(jobs);
+	auto space = Global::State_space<dtime_t>::explore_naively(jobs);
 	CHECK(space.is_schedulable());
 
 	CHECK(space.get_finish_times(jobs[0]).from()  ==  3);
@@ -80,12 +80,12 @@ TEST_CASE("[NP state space] Consider large enough interval") {
 
 
 TEST_CASE("[NP state space] Respect priorities") {
-	Uniproc::State_space<dtime_t>::Workload jobs{
+	Global::State_space<dtime_t>::Workload jobs{
 		Job<dtime_t>{1, Interval<dtime_t>( 0,  0), Interval<dtime_t>(3, 10),  100, 2, 0, 0},
 		Job<dtime_t>{2, Interval<dtime_t>( 0,  0),  Interval<dtime_t>(5, 5),  100, 1, 1, 1},
 	};
 
-	auto nspace = Uniproc::State_space<dtime_t>::explore_naively(jobs);
+	auto nspace = Global::State_space<dtime_t>::explore_naively(jobs);
 	CHECK(nspace.is_schedulable());
 
 	CHECK(nspace.get_finish_times(jobs[0]).from()  ==  8);
@@ -94,7 +94,7 @@ TEST_CASE("[NP state space] Respect priorities") {
 	CHECK(nspace.get_finish_times(jobs[1]).from()  ==  5);
 	CHECK(nspace.get_finish_times(jobs[1]).until() ==  5);
 
-	auto space = Uniproc::State_space<dtime_t>::explore(jobs);
+	auto space = Global::State_space<dtime_t>::explore(jobs);
 	CHECK(space.is_schedulable());
 
 	CHECK(space.get_finish_times(jobs[0]).from()  ==  8);
@@ -105,12 +105,12 @@ TEST_CASE("[NP state space] Respect priorities") {
 }
 
 TEST_CASE("[NP state space] Respect jitter") {
-	Uniproc::State_space<dtime_t>::Workload jobs{
+	Global::State_space<dtime_t>::Workload jobs{
 		Job<dtime_t>{1, Interval<dtime_t>( 0,  1), Interval<dtime_t>(3, 10),  100, 2, 0, 0},
 		Job<dtime_t>{2, Interval<dtime_t>( 0,  1),  Interval<dtime_t>(5, 5),  100, 1, 1, 1},
 	};
 
-	auto nspace = Uniproc::State_space<dtime_t>::explore_naively(jobs);
+	auto nspace = Global::State_space<dtime_t>::explore_naively(jobs);
 	CHECK(nspace.is_schedulable());
 
 	CHECK(nspace.get_finish_times(jobs[0]).from()  ==  3);
@@ -119,7 +119,7 @@ TEST_CASE("[NP state space] Respect jitter") {
 	CHECK(nspace.get_finish_times(jobs[1]).from()  ==  5);
 	CHECK(nspace.get_finish_times(jobs[1]).until() == 15);
 
-	auto space = Uniproc::State_space<dtime_t>::explore(jobs);
+	auto space = Global::State_space<dtime_t>::explore(jobs);
 	CHECK(space.is_schedulable());
 
 	CHECK(space.get_finish_times(jobs[0]).from()  ==  3);
@@ -130,13 +130,13 @@ TEST_CASE("[NP state space] Respect jitter") {
 }
 
 TEST_CASE("[NP state space] Be eager") {
-	Uniproc::State_space<dtime_t>::Workload jobs{
+	Global::State_space<dtime_t>::Workload jobs{
 		Job<dtime_t>{1, Interval<dtime_t>( 0,  0),  Interval<dtime_t>(1,  5),  100, 2, 0, 0},
 		Job<dtime_t>{2, Interval<dtime_t>( 0,  0),  Interval<dtime_t>(1, 20),  100, 3, 1, 1},
 		Job<dtime_t>{3, Interval<dtime_t>(10, 10),  Interval<dtime_t>(5,  5),  100, 1, 2, 2},
 	};
 
-	auto nspace = Uniproc::State_space<dtime_t>::explore_naively(jobs);
+	auto nspace = Global::State_space<dtime_t>::explore_naively(jobs);
 	CHECK(nspace.is_schedulable());
 
 	CHECK(nspace.get_finish_times(jobs[0]).from()  ==  1);
@@ -148,7 +148,7 @@ TEST_CASE("[NP state space] Be eager") {
 	CHECK(nspace.get_finish_times(jobs[2]).from()  ==  15);
 	CHECK(nspace.get_finish_times(jobs[2]).until() ==  30);
 
-	auto space = Uniproc::State_space<dtime_t>::explore(jobs);
+	auto space = Global::State_space<dtime_t>::explore(jobs);
 	CHECK(space.is_schedulable());
 
 	CHECK(space.get_finish_times(jobs[0]).from()  ==  1);
@@ -163,13 +163,13 @@ TEST_CASE("[NP state space] Be eager") {
 
 
 TEST_CASE("[NP state space] Be eager, with short deadline") {
-	Uniproc::State_space<dtime_t>::Workload jobs{
+	Global::State_space<dtime_t>::Workload jobs{
 		Job<dtime_t>{1, Interval<dtime_t>( 0,  0),  Interval<dtime_t>(1,  5),  100, 2, 0, 0},
 		Job<dtime_t>{2, Interval<dtime_t>( 9,  9),  Interval<dtime_t>(1, 15),   25, 3, 1, 1},
 		Job<dtime_t>{3, Interval<dtime_t>(30, 30),  Interval<dtime_t>(5,  5),  100, 1, 2, 2},
 	};
 
-	auto nspace = Uniproc::State_space<dtime_t>::explore_naively(jobs);
+	auto nspace = Global::State_space<dtime_t>::explore_naively(jobs);
 	CHECK(nspace.is_schedulable());
 
 	CHECK(nspace.get_finish_times(jobs[0]).from()  ==  1);
@@ -181,7 +181,7 @@ TEST_CASE("[NP state space] Be eager, with short deadline") {
 	CHECK(nspace.get_finish_times(jobs[2]).from()  ==  35);
 	CHECK(nspace.get_finish_times(jobs[2]).until() ==  35);
 
-	auto space = Uniproc::State_space<dtime_t>::explore(jobs);
+	auto space = Global::State_space<dtime_t>::explore(jobs);
 	CHECK(space.is_schedulable());
 
 	CHECK(space.get_finish_times(jobs[0]).from()  ==  1);
@@ -196,13 +196,13 @@ TEST_CASE("[NP state space] Be eager, with short deadline") {
 
 
 TEST_CASE("[NP state space] Treat equal-priority jobs correctly") {
-	Uniproc::State_space<dtime_t>::Workload jobs{
+	Global::State_space<dtime_t>::Workload jobs{
 		Job<dtime_t>{1, Interval<dtime_t>(    0,    10),  Interval<dtime_t>( 2,    50),  2000, 1, 0, 0},
 		Job<dtime_t>{2, Interval<dtime_t>(    0,    10),  Interval<dtime_t>(50,  1200),  5000, 2, 1, 1},
 		Job<dtime_t>{3, Interval<dtime_t>( 1000,  1010),  Interval<dtime_t>( 2,    50),  3000, 1, 2, 2},
 	};
 
-	auto nspace = Uniproc::State_space<dtime_t>::explore_naively(jobs);
+	auto nspace = Global::State_space<dtime_t>::explore_naively(jobs);
 	CHECK(nspace.is_schedulable());
 
 	CHECK(nspace.get_finish_times(jobs[0]).from()  ==  2);
@@ -214,7 +214,7 @@ TEST_CASE("[NP state space] Treat equal-priority jobs correctly") {
 	CHECK(nspace.get_finish_times(jobs[2]).from()  ==  1002);
 	CHECK(nspace.get_finish_times(jobs[2]).until() ==  1310);
 
-	auto space = Uniproc::State_space<dtime_t>::explore(jobs);
+	auto space = Global::State_space<dtime_t>::explore(jobs);
 	CHECK(space.is_schedulable());
 
 	CHECK(nspace.get_finish_times(jobs[0]).from()  ==  2);
@@ -228,12 +228,12 @@ TEST_CASE("[NP state space] Treat equal-priority jobs correctly") {
 }
 
 TEST_CASE("[NP state space] Equal-priority simultaneous arrivals") {
-	Uniproc::State_space<dtime_t>::Workload jobs{
+	Global::State_space<dtime_t>::Workload jobs{
 		Job<dtime_t>{1, Interval<dtime_t>(    0,    10),  Interval<dtime_t>(  2,    50),  2000, 2000, 0, 0},
 		Job<dtime_t>{2, Interval<dtime_t>(    0,    10),  Interval<dtime_t>(100,   150),  2000, 2000, 1, 1},
 	};
 
-	auto nspace = Uniproc::State_space<dtime_t>::explore_naively(jobs);
+	auto nspace = Global::State_space<dtime_t>::explore_naively(jobs);
 	CHECK(nspace.is_schedulable());
 
 	CHECK(nspace.get_finish_times(jobs[0]).from()  ==  2);
@@ -242,7 +242,7 @@ TEST_CASE("[NP state space] Equal-priority simultaneous arrivals") {
 	CHECK(nspace.get_finish_times(jobs[1]).from()  ==  100);
 	CHECK(nspace.get_finish_times(jobs[1]).until() ==  10 + 50 + 150);
 
-	auto space = Uniproc::State_space<dtime_t>::explore(jobs);
+	auto space = Global::State_space<dtime_t>::explore(jobs);
 	CHECK(space.is_schedulable());
 
 	CHECK(nspace.get_finish_times(jobs[0]).from()  ==  2);
@@ -253,7 +253,7 @@ TEST_CASE("[NP state space] Equal-priority simultaneous arrivals") {
 }
 
 TEST_CASE("[NP state space] don't skip over deadline-missing jobs") {
-	Uniproc::State_space<dtime_t>::Workload jobs{
+	Global::State_space<dtime_t>::Workload jobs{
 		Job<dtime_t>{1, Interval<dtime_t>(  100,   100),  Interval<dtime_t>(   2,    50),   200, 1, 0, 0},
 		Job<dtime_t>{2, Interval<dtime_t>(    0,     0),  Interval<dtime_t>(1200,  1200),  5000, 2, 1, 1},
 		Job<dtime_t>{3, Interval<dtime_t>(  200,   250),  Interval<dtime_t>( 2,    50),    6000, 3, 2, 2},
@@ -262,7 +262,7 @@ TEST_CASE("[NP state space] don't skip over deadline-missing jobs") {
 	};
 
 	SUBCASE("Naive exploration") {
-		auto nspace = Uniproc::State_space<dtime_t>::explore_naively(jobs);
+		auto nspace = Global::State_space<dtime_t>::explore_naively(jobs);
 		CHECK(!nspace.is_schedulable());
 
 		CHECK(nspace.number_of_edges() == 2);
@@ -271,7 +271,7 @@ TEST_CASE("[NP state space] don't skip over deadline-missing jobs") {
 	}
 
 	SUBCASE("Exploration with state-merging") {
-		auto space = Uniproc::State_space<dtime_t>::explore(jobs);
+		auto space = Global::State_space<dtime_t>::explore(jobs);
 		CHECK(!space.is_schedulable());
 
 		CHECK(space.number_of_edges() == 2);
@@ -284,7 +284,7 @@ TEST_CASE("[NP state space] don't skip over deadline-missing jobs") {
 		Analysis_options opts;
 		opts.early_exit = false;
 
-		auto space = Uniproc::State_space<dtime_t>::explore(prob, opts);
+		auto space = Global::State_space<dtime_t>::explore(prob, opts);
 		CHECK(!space.is_schedulable());
 
 		CHECK(space.number_of_edges() == 5);
@@ -315,7 +315,7 @@ TEST_CASE("[NP state space] don't skip over deadline-missing jobs") {
 }
 
 TEST_CASE("[NP state space] explore all branches with deadline-missing jobs") {
-	Uniproc::State_space<dtime_t>::Workload jobs{
+	Global::State_space<dtime_t>::Workload jobs{
 		Job<dtime_t>{1, Interval<dtime_t>(  100,   100),  Interval<dtime_t>(   2,    50),   200, 1, 0, 0},
 		Job<dtime_t>{2, Interval<dtime_t>(    0,   150),  Interval<dtime_t>(1200,  1200),  5000, 2, 1, 1},
 		Job<dtime_t>{3, Interval<dtime_t>(  200,   250),  Interval<dtime_t>( 2,    50),    6000, 3, 2, 2},
@@ -326,7 +326,7 @@ TEST_CASE("[NP state space] explore all branches with deadline-missing jobs") {
 	Analysis_options opts;
 	opts.early_exit = false;
 
-	auto space = Uniproc::State_space<dtime_t>::explore(prob, opts);
+	auto space = Global::State_space<dtime_t>::explore(prob, opts);
 	CHECK(!space.is_schedulable());
 
 	CHECK(space.number_of_edges() ==  7);
@@ -356,7 +356,7 @@ TEST_CASE("[NP state space] explore all branches with deadline-missing jobs") {
 }
 
 TEST_CASE("[NP state space] explore across bucket boundaries") {
-	Uniproc::State_space<dtime_t>::Workload jobs{
+	Global::State_space<dtime_t>::Workload jobs{
 		Job<dtime_t>{1, Interval<dtime_t>(  100,   100),  Interval<dtime_t>(  50,   50),  10000, 1, 0, 0},
 		Job<dtime_t>{2, Interval<dtime_t>( 3000,  3000),  Interval<dtime_t>(4000, 4000),  10000, 2, 1, 1},
 		Job<dtime_t>{3, Interval<dtime_t>( 6000,  6000),  Interval<dtime_t>(   2,    2),  10000, 3, 2, 2},
@@ -364,17 +364,16 @@ TEST_CASE("[NP state space] explore across bucket boundaries") {
 
 	Scheduling_problem<dtime_t> prob{jobs};
 	Analysis_options opts;
-	opts.num_buckets = 2;
 
 
 	opts.be_naive = true;
-	auto nspace = Uniproc::State_space<dtime_t>::explore(prob, opts);
+	auto nspace = Global::State_space<dtime_t>::explore(prob, opts);
 	CHECK(nspace.is_schedulable());
 
 	CHECK(nspace.number_of_edges() == 3);
 
 	opts.be_naive = false;
-	auto space = Uniproc::State_space<dtime_t>::explore(prob, opts);
+	auto space = Global::State_space<dtime_t>::explore(prob, opts);
 	CHECK(space.is_schedulable());
 
 	CHECK(space.number_of_edges() == 3);
@@ -385,17 +384,17 @@ TEST_CASE("[NP state space] start times satisfy work-conserving property")
     Job<dtime_t> j0{0, Interval<dtime_t>( 0,  0), Interval<dtime_t>(2, 2), 10, 2, 0, 0};
     Job<dtime_t> j1{1, Interval<dtime_t>(0, 8), Interval<dtime_t>(2, 2), 10, 1, 1, 1};
 
-    Uniproc::State_space<dtime_t>::Workload jobs{j0, j1};
+	Global::State_space<dtime_t>::Workload jobs{j0, j1};
 
     SUBCASE("naive exploration") {
-        auto space = Uniproc::State_space<dtime_t>::explore_naively(jobs);
+        auto space = Global::State_space<dtime_t>::explore_naively(jobs);
         CHECK(space.is_schedulable());
         CHECK(space.get_finish_times(j0) == Interval<dtime_t>(2, 4));
         CHECK(space.get_finish_times(j1) == Interval<dtime_t>(2, 10));
     }
 
     SUBCASE("exploration with state-merging") {
-        auto space = Uniproc::State_space<dtime_t>::explore(jobs);
+        auto space = Global::State_space<dtime_t>::explore(jobs);
         CHECK(space.is_schedulable());
         CHECK(space.get_finish_times(j0) == Interval<dtime_t>(2, 4));
         CHECK(space.get_finish_times(j1) == Interval<dtime_t>(2, 10));

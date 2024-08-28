@@ -3,14 +3,14 @@
 #include <iostream>
 
 
-#include "uni/space.hpp"
+#include "global/space.hpp"
 
 using namespace NP;
 
 static const auto inf = Time_model::constants<dtime_t>::infinity();
 
 TEST_CASE("Example in Figure 1(a,b)") {
-	Uniproc::State_space<dtime_t>::Workload jobs{
+	Global::State_space<dtime_t>::Workload jobs{
 		// high-frequency task
 		Job<dtime_t>{1, Interval<dtime_t>( 0,  0), Interval<dtime_t>(1, 2), 10, 10, 0, 0},
 		Job<dtime_t>{2, Interval<dtime_t>(10, 10), Interval<dtime_t>(1, 2), 20, 20, 1, 1},
@@ -28,7 +28,7 @@ TEST_CASE("Example in Figure 1(a,b)") {
 	};
 
 	SUBCASE("Naive exploration") {
-		auto space = Uniproc::State_space<dtime_t>::explore_naively(jobs);
+		auto space = Global::State_space<dtime_t>::explore_naively(jobs);
 		CHECK(!space.is_schedulable());
 
 		// make sure we saw the right deadline miss
@@ -38,7 +38,7 @@ TEST_CASE("Example in Figure 1(a,b)") {
 	}
 
 	SUBCASE("Exploration with state-merging") {
-		auto space = Uniproc::State_space<dtime_t>::explore(jobs);
+		auto space = Global::State_space<dtime_t>::explore(jobs);
 		CHECK(!space.is_schedulable());
 
 		// make sure we saw the right deadline miss
@@ -52,7 +52,7 @@ TEST_CASE("Example in Figure 1(a,b)") {
 		Scheduling_problem<dtime_t> prob{jobs};
 		Analysis_options opts;
 		opts.early_exit = false;
-		auto space = Uniproc::State_space<dtime_t>::explore(prob, opts);
+		auto space = Global::State_space<dtime_t>::explore(prob, opts);
 		CHECK(!space.is_schedulable());
 
 		// make sure the analysis continued after the deadline miss
@@ -76,7 +76,7 @@ TEST_CASE("Example in Figure 1(a,b)") {
 
 
 TEST_CASE("Example in Figure 1(c)") {
-	Uniproc::State_space<dtime_t>::Workload jobs{
+	Global::State_space<dtime_t>::Workload jobs{
 		// high-frequency task
 		Job<dtime_t>{1, Interval<dtime_t>( 0,  0), Interval<dtime_t>(1, 2), 10, 1, 0, 0},
 		Job<dtime_t>{2, Interval<dtime_t>(10, 10), Interval<dtime_t>(1, 2), 20, 2, 1, 1},
@@ -93,10 +93,10 @@ TEST_CASE("Example in Figure 1(c)") {
 		Job<dtime_t>{8, Interval<dtime_t>(30, 30), Interval<dtime_t>(7, 7), 60, 9, 8, 8},
 	};
 
-	auto nspace = Uniproc::State_space<dtime_t>::explore_naively(jobs);
+	auto nspace = Global::State_space<dtime_t>::explore_naively(jobs);
 	CHECK(nspace.is_schedulable());
 
-	auto space = Uniproc::State_space<dtime_t>::explore(jobs);
+	auto space = Global::State_space<dtime_t>::explore(jobs);
 	CHECK(space.is_schedulable());
 
 	for (const Job<dtime_t>& j : jobs) {
