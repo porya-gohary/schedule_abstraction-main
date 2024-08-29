@@ -1184,6 +1184,7 @@ namespace NP {
 								// note that the accessor should be pointing on something at this point
 								next = &(new_node_at(acc, n, j, j.get_job_index(), earliest_possible_job_release(n, j), earliest_certain_source_job_release(n, j), earliest_certain_sequential_source_job_release(n, j)));
 							}
+							assert(!acc.empty());
 #else
 							// If be_naive, a new node and a new state should be created for each new job dispatch.
 							if (be_naive)
@@ -1210,7 +1211,6 @@ namespace NP {
 									next = &(new_node(n, j, j.get_job_index(), earliest_possible_job_release(n, j), earliest_certain_source_job_release(n, j), earliest_certain_sequential_source_job_release(n, j)));
 							}
 #endif
-							assert(!acc.empty());
 							// next should always exist at this point, possibly without states in it
 							// create a new state resulting from scheduling j in state s on p cores and try to merge it with an existing state in node 'next'.							
 							new_or_merge_state(*next, *s, j.get_job_index(), predecessors_of(j),
