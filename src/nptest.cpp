@@ -106,7 +106,7 @@ static Analysis_result analyze(
 	auto graph = std::ostringstream();
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
 	if (want_dot_graph)
-		graph << space;
+		graph << *space;
 #endif
 
 	auto rta = std::ostringstream();
@@ -114,7 +114,7 @@ static Analysis_result analyze(
 	if (want_rta_file) {
 		rta << "Task ID, Job ID, BCCT, WCCT, BCRT, WCRT" << std::endl;
 		for (const auto& j : problem.jobs) {
-			Interval<Time> finish = space.get_finish_times(j);
+			Interval<Time> finish = space->get_finish_times(j);
 			rta << j.get_task_id() << ", "
 			    << j.get_job_id() << ", "
 			    << finish.from() << ", "
@@ -127,18 +127,20 @@ static Analysis_result analyze(
 		}
 	}
 
-	return {
-		space.is_schedulable(),
-		space.was_timed_out(),
-		space.number_of_nodes(),
-		space.number_of_states(),
-		space.number_of_edges(),
-		space.max_exploration_front_width(),
+	Analysis_result results = Analysis_result{
+		space->is_schedulable(),
+		space->was_timed_out(),
+		space->number_of_nodes(),
+		space->number_of_states(),
+		space->number_of_edges(),
+		space->max_exploration_front_width(),
 		(unsigned long)(problem.jobs.size()),
-		space.get_cpu_time(),
+		space->get_cpu_time(),
 		graph.str(),
 		rta.str()
 	};
+	delete space;
+	return results;
 }
 
 static Analysis_result process_stream(

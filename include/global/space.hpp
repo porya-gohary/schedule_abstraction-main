@@ -1,16 +1,16 @@
 #ifndef GLOBAL_SPACE_H
 #define GLOBAL_SPACE_H
 
-#include <unordered_map>
-#include <map>
-#include <vector>
+#include <algorithm>
 #include <deque>
 #include <forward_list>
-#include <algorithm>
+#include <map>
+#include <unordered_map>
+#include <vector>
 
+#include <cassert>
 #include <iostream>
 #include <ostream>
-#include <cassert>
 
 #include "config.h"
 
@@ -18,6 +18,7 @@
 #include "tbb/concurrent_hash_map.h"
 #include "tbb/enumerable_thread_specific.h"
 #include "tbb/parallel_for.h"
+#include <atomic>
 #endif
 
 #include "problem.hpp"
@@ -45,25 +46,25 @@ namespace NP {
 
 			typedef Schedule_node<Time> Node;
 
-			static State_space explore(
+			static State_space* explore(
 				const Problem& prob,
 				const Analysis_options& opts)
 			{
 				// doesn't yet support exploration after deadline miss
 				assert(opts.early_exit);
 
-				auto s = State_space(prob.jobs, prob.prec, prob.num_processors, opts.timeout,
+				State_space* s = new State_space(prob.jobs, prob.prec, prob.num_processors, opts.timeout,
 					opts.max_depth, opts.use_supernodes);
-				s.be_naive = opts.be_naive;
-				s.cpu_time.start();
-				s.explore();
-				s.cpu_time.stop();
+				s->be_naive = opts.be_naive;
+				s->cpu_time.start();
+				s->explore();
+				s->cpu_time.stop();
 				return s;
 
 			}
 
 			// convenience interface for tests
-			static State_space explore_naively(
+			static State_space* explore_naively(
 				const Workload& jobs,
 				unsigned int num_cpus=1)
 			{
@@ -74,7 +75,7 @@ namespace NP {
 			}
 
 			// convenience interface for tests
-			static State_space explore(
+			static State_space* explore(
 				const Workload& jobs,
 				unsigned int num_cpus=1)
 			{
@@ -288,13 +289,16 @@ namespace NP {
 
 			Nodes_storage nodes_storage;
 
-			//Nodes nodes;
-			//States states;
 			Nodes_map nodes_by_key;
+			
+#ifdef CONFIG_PARALLEL
+			std::atomic_ulong num_nodes, num_states, num_edges;
+#else
+			unsigned long num_nodes, num_states, width, num_edges;
+#endif
 			// updated only by main thread
-			unsigned long num_nodes, num_states, width;
-			unsigned long current_job_count;
-			unsigned long num_edges;
+			unsigned long current_job_count, width;
+			
 
 
 #ifdef CONFIG_PARALLEL
@@ -646,8 +650,9 @@ namespace NP {
 					auto pred_idx = pred.first->get_job_index();
 					auto pred_susp = pred.second;
 					Interval<Time> ft{ 0, 0 };
-					if (!s.get_finish_times(pred_idx, ft))
-						ft = get_finish_times(jobs[pred_idx]);
+					//if (!s.get_finish_times(pred_idx, ft))
+					//	ft = get_finish_times(jobs[pred_idx]);
+					s.get_finish_times(pred_idx, ft);
 					r.lower_bound(ft.min() + pred_susp.min());
 					r.extend_to(ft.max() + pred_susp.max());
 				}
@@ -691,8 +696,9 @@ namespace NP {
 					else
 					{
 						Interval<Time> ft{ 0, 0 };
-						if (!s.get_finish_times(pred_idx, ft))
-							ft = get_finish_times(jobs[pred_idx]);
+						//if (!s.get_finish_times(pred_idx, ft))
+						//	ft = get_finish_times(jobs[pred_idx]);
+						s.get_finish_times(pred_idx, ft);
 						r.lower_bound(ft.min() + pred_susp.min());
 						r.extend_to(ft.max() + pred_susp.max());
 					}
@@ -1093,12 +1099,14 @@ namespace NP {
 
 				bool dispatched_one = false;
 				
+				// loop over all states in the node n
 				const auto* n_states = n.get_states();
 				for (State* s : *n_states) 
 				{
 #ifdef CONFIG_PARALLEL
 					Nodes_map_accessor acc;
 #endif
+					// check for all possible parallelism levels of the moldable gang job j (if j is not gang or not moldable than min_paralellism = max_parallelism).
 					for (unsigned int p = j.get_max_parallelism(); p >= j.get_min_parallelism(); p--)
 					{
 						// Calculate t_wc and t_high
@@ -1140,12 +1148,12 @@ namespace NP {
 #ifdef CONFIG_PARALLEL
 							// if we do not have a pointer to a node with the same set of scheduled job yet,
 							// try to find an existing node with the same set of scheduled jobs. Otherwise, create one.
-							if (next == nullptr)
+							if (next == nullptr || acc.empty())
 							{
 								auto next_key = n.next_key(j);
 								Job_set new_sched_jobs{ n.get_scheduled_jobs(), j.get_job_index() };
 
-								while (next == nullptr) {
+								while (next == nullptr || acc.empty()) {
 									// check if key exists
 									if (nodes_by_key.find(acc, next_key)) {
 										// If be_naive, a new node and a new state should be created for each new job dispatch.
@@ -1202,7 +1210,7 @@ namespace NP {
 									next = &(new_node(n, j, j.get_job_index(), earliest_possible_job_release(n, j), earliest_certain_source_job_release(n, j), earliest_certain_sequential_source_job_release(n, j)));
 							}
 #endif
-
+							assert(!acc.empty());
 							// next should always exist at this point, possibly without states in it
 							// create a new state resulting from scheduling j in state s on p cores and try to merge it with an existing state in node 'next'.							
 							new_or_merge_state(*next, *s, j.get_job_index(), predecessors_of(j),
@@ -1352,15 +1360,6 @@ namespace NP {
 
 					current_job_count++;
 
-#ifdef CONFIG_PARALLEL
-					// propagate any updates to the response-time estimates
-					for (auto& r : partial_rta) {
-						for (int i = 0; i < r.size(); ++i) {
-							update_finish_times(rta, i, r[i].rt);
-						}
-					}
-#endif
-
 #ifndef CONFIG_COLLECT_SCHEDULE_GRAPH
 					// If we don't need to collect all nodes, we can remove
 					// all those that we are done with, which saves a lot of
@@ -1376,6 +1375,16 @@ namespace NP {
 #endif
 
 				}
+
+#ifdef CONFIG_PARALLEL
+				// propagate any updates to the response-time estimates
+				for (auto& r : partial_rta) {
+					for (int i = 0; i < r.size(); ++i) {
+						if(r[i].valid)
+							update_finish_times(rta, i, r[i].rt);
+					}
+				}
+#endif
 
 
 #ifndef CONFIG_COLLECT_SCHEDULE_GRAPH

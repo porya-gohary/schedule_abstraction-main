@@ -1,17 +1,17 @@
 #ifndef GLOBAL_STATE_HPP
 #define GLOBAL_STATE_HPP
+#include <algorithm>
+#include <cassert>
 #include <iostream>
 #include <ostream>
-#include <cassert>
-#include <algorithm>
 
 #include <set>
 
-#include "util.hpp"
+#include "cache.hpp"
 #include "index_set.hpp"
 #include "jobs.hpp"
-#include "cache.hpp"
 #include "statistics.hpp"
+#include "util.hpp"
 
 namespace NP {
 
@@ -127,6 +127,7 @@ namespace NP {
 					return true;
 				}
 				else {
+					ftimes = Interval<Time>{0, Time_model::constants<Time>::infinity()};
 					return false;
 				}
 			}
@@ -203,9 +204,11 @@ namespace NP {
 
 				// walk both sorted job lists to see if we find matches
 				auto it = certain_jobs.begin();
+				auto it_end = certain_jobs.end();
 				auto jt = cert_j.begin();
-				while (it != certain_jobs.end() &&
-					jt != cert_j.end()) {
+				auto jt_end = cert_j.end();
+				while (it != it_end &&
+					jt != jt_end) {
 					if (it->idx == jt->idx) {
 						// same job
 						new_cj.emplace_back(it->idx, it->parallelism | jt->parallelism, it->finish_time | jt->finish_time);
