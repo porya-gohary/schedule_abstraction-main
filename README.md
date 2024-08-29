@@ -1,9 +1,10 @@
 # NP Schedulability Test
 
-This repository contains the implementations of schedulability tests for **sets of non-preemptive jobs** with **precedence constraints** scheduled on either **uniprocessors** or **globally scheduled identical multiprocessors**. The analyses are described in the following papers:
+This repository contains the implementations of schedulability tests for **sets of non-preemptive jobs** with **precedence constraints** and **self-suspension deays** scheduled on either **uniprocessors** or **globally scheduled identical multiprocessors**. The analyses are described in the following papers:
 
 - M. Nasri and B. Brandenburg, “[An Exact and Sustainable Analysis of Non-Preemptive Scheduling](https://people.mpi-sws.org/~bbb/papers/pdf/rtss17.pdf)”, *Proceedings of the 38th IEEE Real-Time Systems Symposium (RTSS 2017)*, pp. 12–23, December 2017.
 - M. Nasri, G. Nelissen, and B. Brandenburg, “[Response-Time Analysis of Limited-Preemptive Parallel DAG Tasks under Global Scheduling](http://drops.dagstuhl.de/opus/volltexte/2019/10758/pdf/LIPIcs-ECRTS-2019-21.pdf)”, *Proceedings of the 31st Euromicro Conference on Real-Time Systems (ECRTS 2019)*, pp. 21:1–21:23, July 2019.
+- S. Srinivasan, M. Gunzel, and G. Nelissen, “[Response-Time Analysis of for Limited-Preemptive Self-Suspending and Event-Driven Delay-Induced Tasks]”, *Proceedings of the 45th IEEE Real-Time Systems Symposium (RTSS 2024)*, to appear.
 
 An [earlier version of this tool](https://github.com/brandenburg/np-schedulability-analysis/releases/tag/ECRTS18-last) (i.e., up to tag [`ECRTS18-last`](https://github.com/brandenburg/np-schedulability-analysis/releases/tag/ECRTS18-last)) implemented the analysis for independent jobs on globally scheduled multiprocessors presented at ECRTS'18.
 
@@ -12,32 +13,38 @@ An [earlier version of this tool](https://github.com/brandenburg/np-schedulabili
 *Proceedings of the 30th Euromicro Conference on Real-Time Systems (ECRTS 2018)*, pp. 9:1–9:23, July 2018.
 
 
-The uniprocessor analysis (Nasri & Brandenburg, 2017) is exact (in the absence of precedence constraints); the multiprocessor analyses (Nasri et al., 2018, 2019) are not. 
+The uniprocessor analysis (Nasri & Brandenburg, 2017) is exact (in the absence of precedence constraints); the multiprocessor analyses (Nasri et al., 2018, 2019)(Srinivasa et al, 2024) are not. 
 
 ## Dependencies
 
-- A modern C++ compiler supporting the **C++14 standard**. Recent versions of `clang` and `g++` on Linux and macOS are known to work. 
+- A modern C++ compiler supporting the **C++14 standard**. Recent versions `MSVC` on windows and of `clang` and `g++` on Linux and macOS are known to work. 
 
 - The [CMake](https://cmake.org) build system.
 
-- A POSIX OS. Linux and macOS are both known to work.
-
-- The [Intel Thread Building Blocks (TBB)](https://www.threadingbuildingblocks.org) library and parallel runtime. 
+- The [Intel oneAPI Threading Building Blocks (oneTBB)](https://www.threadingbuildingblocks.org) library and parallel runtime. 
 
 - The [jemalloc](http://jemalloc.net) scalable memory allocator. Alternatively, the TBB allocator can be used instead; see build options below.
 
+- The [yaml-cpp](https://github.com/jbeder/yaml-cpp) library.
+
 ## Build Instructions
 
-These instructions assume a Linux or macOS host.
+For Windows, we recommend to load and build the project in Visual Studio. The rest of the instructions assume a Linux or macOS host.
+
+If `yaml-cpp` is not installed on your system, its submodule should be pulled by running the following command:
+```bash
+git submodule update --init --recursive
+```
 
 To compile the tool, first generate an appropriate `Makefile` with `cmake` and then use it to actually build the source tree.
-
-	# (1) enter the build directory
-	cd build
-	# (2) generate the Makefile
-	cmake ..
-	# (3) build everything
-	make -j
+```bash
+ # (1) enter the build directory
+ cd build
+ # (2) generate the Makefile
+ cmake ..
+ # (3) build everything
+ make -j
+```
 
 The last step yields two binaries:
 
@@ -199,15 +206,6 @@ examples/abort.jobs.csv,  0,  4,  5,  4,  0,  0.000088,  1760.000000,  0,  1
 
 Without the job abort action specified in [examples/abort.actions.csv](examples/abort.actions.csv), the workload can indeed miss deadlines and is thus unschedulable.
 
-### Self Suspending Tasks
-
-To run the analysis for self-suspending tasks, provide the DAG structure along with the minimum and maximum suspension times in a seperate CSV file via the `--selfsuspending` option. For example:
-
-```
-$ build/nptest examples/susp_jobs.csv --selfsuspending examples/susp_dag.csv
-examples/susp_jobs.csv,  1,  2,  3,  3,  2,  0,  0.000066,  3.226562,  0,  1
-```
-
 ## Output Format
 
 The output is provided in CSV format and consists of the following columns:
@@ -247,7 +245,7 @@ Note that the analysis by default aborts after finding the first deadline miss, 
 
 In case of questions, please contact [Geoffrey Nelissen](https://www.tue.nl/en/research/researchers/geoffrey-nelissen/), the current maintainer of the project.
 
-Patches and feedback welcome — please send a pull request or open a ticket. 
+Patches and feedback welcome — please send a pull request or open a ticket. 
 
 ## License 
 
@@ -256,6 +254,6 @@ The code is released under a 3-clause BSD license.
 
 ## Credits
 
-The software was originally developed by [Björn Brandenburg](https://people.mpi-sws.org/~bbb/). Joan Marcè and Sayra Ranjha contributed analysis improvements. It is now being maintained by [Geoffrey Nelissen](https://www.tue.nl/en/research/researchers/geoffrey-nelissen/).
+The software was originally developed by [Björn Brandenburg](https://people.mpi-sws.org/~bbb/). Joan Marcè i Igual, Sayra Ranjha, Srinidhi Srinivasan, Pourya Gohari and Richard Verhoeven contributed analysis improvements. It is now being maintained by [Geoffrey Nelissen](https://www.tue.nl/en/research/researchers/geoffrey-nelissen/).
 
-When using this software in academic work, please cite the papers listed at the top of this file. 
+When using this software in academic work, please cite the papers listed at the top of this file.  

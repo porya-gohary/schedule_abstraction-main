@@ -294,7 +294,7 @@ namespace NP {
 #ifdef CONFIG_PARALLEL
 			std::atomic_ulong num_nodes, num_states, num_edges;
 #else
-			unsigned long num_nodes, num_states, width, num_edges;
+			unsigned long num_nodes, num_states, num_edges;
 #endif
 			// updated only by main thread
 			unsigned long current_job_count, width;
