@@ -19,7 +19,7 @@ const std::string four_lines =
 TEST_CASE("[dense time] job parser") {
 	auto in = std::istringstream(one_line);
 
-	NP::Job<dtime_t> j = NP::parse_job<dtime_t>(in,0);
+	NP::Job<dense_t> j = NP::parse_job<dense_t>(in,0);
 
 	CHECK(j.get_job_id() == 6);
 	CHECK(j.get_priority() == 1);
@@ -29,13 +29,13 @@ TEST_CASE("[dense time] job parser") {
 TEST_CASE("[dense time] job parser exception") {
 	auto in = std::istringstream(bad_line);
 
-	REQUIRE_THROWS_AS(NP::parse_job<dtime_t>(in,0), std::ios_base::failure);
+	REQUIRE_THROWS_AS(NP::parse_job<dense_t>(in,0), std::ios_base::failure);
 }
 
 TEST_CASE("[dense time] file parser") {
 	auto in = std::istringstream(four_lines);
 
-	auto jobs = NP::parse_file<dtime_t>(in);
+	auto jobs = NP::parse_file<dense_t>(in);
 
 	CHECK(jobs.size() == 3);
 
@@ -130,12 +130,12 @@ TEST_CASE("[parser] precedence file") {
 
 TEST_CASE("[parser] invalid precedence reference") {
 	auto dag_in = std::istringstream(precedence_file);
-	auto prec = NP::parse_precedence_file<dtime_t>(dag_in);
+	auto prec = NP::parse_precedence_file<dense_t>(dag_in);
 
 	auto in = std::istringstream(four_lines);
-	auto jobs = NP::parse_file<dtime_t>(in);
+	auto jobs = NP::parse_file<dense_t>(in);
 
-	REQUIRE_THROWS_AS(NP::validate_prec_cstrnts<dtime_t>(prec, jobs), NP::InvalidJobReference);
+	REQUIRE_THROWS_AS(NP::validate_prec_cstrnts<dense_t>(prec, jobs), NP::InvalidJobReference);
 }
 
 const std::string sequential_task_prec_file =
@@ -145,12 +145,12 @@ const std::string sequential_task_prec_file =
 
 TEST_CASE("[parser] valid precedence reference") {
 	auto dag_in = std::istringstream(sequential_task_prec_file);
-	auto prec = NP::parse_precedence_file<dtime_t>(dag_in);
+	auto prec = NP::parse_precedence_file<dense_t>(dag_in);
 
 	auto in = std::istringstream(four_lines);
-	auto jobs = NP::parse_file<dtime_t>(in);
+	auto jobs = NP::parse_file<dense_t>(in);
 
-	NP::validate_prec_cstrnts<dtime_t>(prec, jobs);
+	NP::validate_prec_cstrnts<dense_t>(prec, jobs);
 	// dummy check; real check is that previous line didn't throw an exception
 	CHECK(true);
 }

@@ -42,7 +42,7 @@ namespace NP {
 
 	inline bool more_fields_in_line(std::istream& in)
 	{
-		if (in.peek() == (int)'\n' || in.peek() == (int)'\r')
+		if (!in.good() || in.peek() == (int)'\n' || in.peek() == (int)'\r')
 			return false;
 		else
 			return true;
@@ -50,9 +50,7 @@ namespace NP {
 
 	inline void next_field(std::istream& in)
 	{
-	  // RV: The added while will consume any sequence of spaces and separators.
-	  //     Empty fields are not possible.
-		while(in.peek() == ',' || in.peek()==' ')
+	  	while(in.good() && (in.peek() == ',' || in.peek()==' '))
 		{
 			// eat up any trailing spaces
 			skip_all(in, ' ');
