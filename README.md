@@ -23,6 +23,8 @@ The uniprocessor analysis (Nasri & Brandenburg, 2017) is exact (in the absence o
 
 - The [Intel oneAPI Threading Building Blocks (oneTBB)](https://www.threadingbuildingblocks.org) library and parallel runtime. 
 
+- The [Intel oneAPI Threading Building Blocks (oneTBB)](https://www.threadingbuildingblocks.org) library and parallel runtime. 
+
 - The [jemalloc](http://jemalloc.net) scalable memory allocator. Alternatively, the TBB allocator can be used instead; see build options below.
 
 - The [yaml-cpp](https://github.com/jbeder/yaml-cpp) library.

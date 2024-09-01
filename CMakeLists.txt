@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.8.0)
 
-project(NP_schedulabiliy_test VERSION 2.2.0 LANGUAGES CXX)
+project(NP_schedulabiliy_test VERSION 3.0.0 LANGUAGES CXX)
 
 include_directories(include)
 include_directories(lib/include)
@@ -47,7 +47,7 @@ endif ()
 ###########################################################################
 # this is a fix for possible problems with cmake in windows 11 and visual studio 2022
 # Option to enable/disable finding yaml-cpp
-option(USE_YAML_CPP_PACKAGE "Use yaml-cpp" OFF)
+option(USE_YAML_CPP_PACKAGE "Use yaml-cpp" ON)
 
 # Check if yaml-cpp is installed as a system library and
 # cache the result of find_package

@@ -77,7 +77,8 @@ template<class Time, class Space>
 static Analysis_result analyze(
 	std::istream &in,
 	std::istream &prec_in,
-	std::istream &aborts_in)
+	std::istream &aborts_in,
+    bool &is_yaml)
 {
 #ifdef CONFIG_PARALLEL
 	oneapi::tbb::task_arena arena(num_worker_threads ? num_worker_threads : oneapi::tbb::info::default_concurrency());
@@ -85,9 +86,13 @@ static Analysis_result analyze(
 
 
 	// Parse input files and create NP scheduling problem description
+    typename NP::Job<Time>::Job_set jobs = is_yaml ? NP::parse_yaml_job_file<Time>(in) : NP::parse_csv_job_file<Time>(in);
+	// Parse precedence constraints
+	std::vector<NP::Precedence_constraint<Time>> edges = is_yaml ? NP::parse_yaml_dag_file<Time>(prec_in) : NP::parse_precedence_file<Time>(prec_in);
+
 	NP::Scheduling_problem<Time> problem{
-		NP::parse_file<Time>(in),
-		NP::parse_precedence_file<Time>(prec_in),
+        jobs,
+		edges,
 		NP::parse_abort_file<Time>(aborts_in),
 		num_processors};
 
@@ -146,16 +151,17 @@ static Analysis_result analyze(
 static Analysis_result process_stream(
 	std::istream &in,
 	std::istream &prec_in,
-	std::istream &aborts_in)
+	std::istream &aborts_in,
+    bool is_yaml)
 {
 	if (want_multiprocessor && want_dense)
-		return analyze<dense_t, NP::Global::State_space<dense_t>>(in, prec_in, aborts_in);
+		return analyze<dense_t, NP::Global::State_space<dense_t>>(in, prec_in, aborts_in, is_yaml);
 	else if (want_multiprocessor && !want_dense)
-		return analyze<dtime_t, NP::Global::State_space<dtime_t>>(in, prec_in, aborts_in);
+		return analyze<dtime_t, NP::Global::State_space<dtime_t>>(in, prec_in, aborts_in, is_yaml);
 	else if (want_dense)
-		return analyze<dense_t, NP::Global::State_space<dense_t>>(in, prec_in, aborts_in);
+		return analyze<dense_t, NP::Global::State_space<dense_t>>(in, prec_in, aborts_in, is_yaml);
 	else
-		return analyze<dtime_t, NP::Global::State_space<dtime_t>>(in, prec_in, aborts_in);
+		return analyze<dtime_t, NP::Global::State_space<dtime_t>>(in, prec_in, aborts_in, is_yaml);
 }
 
 static void process_file(const std::string& fname)
@@ -184,17 +190,24 @@ static void process_file(const std::string& fname)
 
 		if (fname == "-")
 		{
-			result = process_stream(std::cin, dag_in, aborts_in);
+			result = process_stream(std::cin, dag_in, aborts_in, false);
 		}
 		else {
+            // check the extension of the file
+            std::string ext = fname.substr(fname.find_last_of(".") + 1);
+            bool is_yaml = false;
+            if (ext == "yaml" || ext == "yml") {
+                is_yaml = true;
+            }
+
 			auto in = std::ifstream(fname, std::ios::in);
-			result = process_stream(in, dag_in, aborts_in);
+			result = process_stream(in, dag_in, aborts_in, is_yaml);
 
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
 			if (want_dot_graph) {
 				DM("\nDot graph being made\n");
 				std::string dot_name = fname;
-				auto p = dot_name.find(".csv");
+				auto p = is_yaml ? dot_name.find(".yaml") : dot_name.find(".csv");
 				if (p != std::string::npos) {
 					dot_name.replace(p, std::string::npos, ".dot");
 					auto out  = std::ofstream(dot_name,  std::ios::out);
@@ -205,7 +218,7 @@ static void process_file(const std::string& fname)
 #endif
 			if (want_rta_file) {
 				std::string rta_name = fname;
-				auto p = rta_name.find(".csv");
+				auto p = is_yaml ? rta_name.find(".yaml") : rta_name.find(".csv");
 				if (p != std::string::npos) {
 					rta_name.replace(p, std::string::npos, ".rta.csv");
 					auto out  = std::ofstream(rta_name,  std::ios::out);
@@ -215,8 +228,7 @@ static void process_file(const std::string& fname)
 			}
 		}
 
-// rusage does not work under Windows
-#ifdef _WIN32
+#ifdef _WIN32 // rusage does not work under Windows
 		long mem_used = 0;
 #else
 		struct rusage u;
@@ -224,6 +236,7 @@ static void process_file(const std::string& fname)
 		if (getrusage(RUSAGE_SELF, &u) == 0)
 			mem_used = u.ru_maxrss;
 #endif
+
 		std::cout << fname;
 
 		if (max_depth && max_depth < result.number_of_jobs)
@@ -365,9 +378,6 @@ int main(int argc, char** argv)
 
 	const std::string& time_model = (std::string) options.get("time_model");
 	want_dense = time_model == "dense";
-	#if want_dense == true
-	#define want_dense
-	#endif
 
 	want_naive = options.get("naive");
 

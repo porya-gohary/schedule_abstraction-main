@@ -6,9 +6,10 @@
 #include <memory>
 #include <vector>
 #include <limits>
-#include <ciso646>
-
 #include "time.hpp"
+#ifdef _WIN32
+#include <ciso646>
+#endif
 
 template<class T> class Interval {
 	T a, b;
