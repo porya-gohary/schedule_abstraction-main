@@ -68,7 +68,7 @@ const std::string fig1a_jobs_file =
 
 TEST_CASE("[global] RTSS17-Fig-1a") {
 	auto in = std::istringstream(fig1a_jobs_file);
-	auto jobs = NP::parse_file<dtime_t>(in);
+	auto jobs = NP::parse_csv_job_file<dtime_t>(in);
 
 	auto num_cpus = 2;
 
@@ -108,7 +108,7 @@ const std::string global_fig1_file =
 
 TEST_CASE("[global] ECRTS18-Fig-1") {
 	auto in = std::istringstream(global_fig1_file);
-	auto jobs = NP::parse_file<dtime_t>(in);
+	auto jobs = NP::parse_csv_job_file<dtime_t>(in);
 
 	auto num_cpus = 2;
 
@@ -133,6 +133,11 @@ TEST_CASE("[global] Find all next jobs") {
 		NP::Job<dtime_t>{2, Interval<dtime_t>( 7,  7), Interval<dtime_t>(5, 5),  100, 2, 1, 1},
 		NP::Job<dtime_t>{3, Interval<dtime_t>(10, 10), Interval<dtime_t>(1, 11),  100, 3, 2, 2},
 	};
+
+	NP::Scheduling_problem<dtime_t> prob{jobs};
+	NP::Analysis_options opts;
+
+	prob.num_processors = 1;
 
 	SUBCASE("Naive exploration") {
 		auto space = NP::Global::State_space<dtime_t>::explore_naively(jobs, 1);
@@ -174,7 +179,7 @@ TEST_CASE("[global] Consider large enough interval") {
 	};
 
 	auto nspace = NP::Global::State_space<dtime_t>::explore_naively(jobs, 1);
-	CHECK(nspace->is_schedulable()); // ISSUE
+	CHECK(nspace->is_schedulable());
 
 	CHECK(nspace->get_finish_times(jobs[0]).from()  ==  3);
 	CHECK(nspace->get_finish_times(jobs[0]).until() == 10);

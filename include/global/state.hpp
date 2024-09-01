@@ -7,6 +7,7 @@
 
 #include <set>
 
+#include "config.h"
 #include "cache.hpp"
 #include "index_set.hpp"
 #include "jobs.hpp"
@@ -53,7 +54,7 @@ namespace NP {
 					Parallelism parallelism,
 					Interval<Time> finish_time
 				)
-				:	idx(idx),
+					: idx(idx),
 					parallelism(parallelism),
 					finish_time(finish_time)
 				{}
@@ -110,7 +111,7 @@ namespace NP {
 				assert(core_avail.size() > 0);
 				assert(core_avail.size() >= p);
 				assert(p > 0);
-				return core_avail[p-1];
+				return core_avail[p - 1];
 			}
 
 			Time earliest_finish_time() const
@@ -127,7 +128,7 @@ namespace NP {
 					return true;
 				}
 				else {
-					ftimes = Interval<Time>{0, Time_model::constants<Time>::infinity()};
+					ftimes = Interval<Time>{ 0, Time_model::constants<Time>::infinity() };
 					return false;
 				}
 			}
@@ -191,7 +192,7 @@ namespace NP {
 			}
 
 			void merge(
-				const CoreAvailability& cav, 
+				const CoreAvailability& cav,
 				const JobFinishTimes& jft,
 				const std::vector<Running_job>& cert_j,
 				Time ecsj_ready_time)
@@ -267,8 +268,8 @@ namespace NP {
 
 		private:
 			// update the list of jobs that are certainly running in the current system state
-			void update_certainly_running_jobs(const Schedule_state& from, 
-				Job_index j, Interval<Time> start_times, 
+			void update_certainly_running_jobs(const Schedule_state& from,
+				Job_index j, Interval<Time> start_times,
 				Interval<Time> finish_times, unsigned int ncores,
 				const Job_precedence_set& predecessors)
 			{
@@ -386,7 +387,7 @@ namespace NP {
 			// and calculate the earliest time a job with precedence constraints will become ready to dispatch
 			void update_job_finish_times(const Schedule_state& from,
 				Job_index j, Interval<Time> start_times,
-				Interval<Time> finish_times, 
+				Interval<Time> finish_times,
 				const Successors& successors_of,
 				const Predecessors& predecessors_of,
 				const Job_set& scheduled_jobs)
@@ -705,7 +706,7 @@ namespace NP {
 
 			Time next_certain_job_ready_time() const
 			{
-				return std::min(next_certain_successor_jobs_disptach, 
+				return std::min(next_certain_successor_jobs_disptach,
 					std::min(next_certain_sequential_source_job_release,
 						next_certain_gang_source_job_disptach));
 			}
@@ -854,7 +855,7 @@ namespace NP {
 							merge_budget--;
 							if (merge_budget == 0)
 								break;
-							
+
 							last_state_merged = state;
 						}
 					}

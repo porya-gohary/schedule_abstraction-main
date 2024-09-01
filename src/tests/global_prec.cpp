@@ -67,7 +67,7 @@ TEST_CASE("[global-prec] taskset-1") {
 	auto prec = NP::parse_precedence_file<dtime_t>(dag_in);
 
 	auto in = std::istringstream(ts1_jobs);
-	auto jobs = NP::parse_file<dtime_t>(in);
+	auto jobs = NP::parse_csv_job_file<dtime_t>(in);
 
 	NP::Scheduling_problem<dtime_t> prob{jobs, prec};
 	NP::Analysis_options opts;
@@ -110,7 +110,7 @@ TEST_CASE("[global-prec] taskset-2") {
 	auto prec = NP::parse_precedence_file<dtime_t>(dag_in);
 
 	auto in = std::istringstream(ts2_jobs);
-	auto jobs = NP::parse_file<dtime_t>(in);
+	auto jobs = NP::parse_csv_job_file<dtime_t>(in);
 
 	NP::Scheduling_problem<dtime_t> prob{jobs, prec};
 	NP::Analysis_options opts;
@@ -160,7 +160,7 @@ TEST_CASE("[global-prec] taskset-3") {
 	auto prec = NP::parse_precedence_file<dtime_t>(dag_in);
 
 	auto in = std::istringstream(ts3_jobs);
-	auto jobs = NP::parse_file<dtime_t>(in);
+	auto jobs = NP::parse_csv_job_file<dtime_t>(in);
 
 	NP::Scheduling_problem<dtime_t> prob{jobs, prec};
 	NP::Analysis_options opts;

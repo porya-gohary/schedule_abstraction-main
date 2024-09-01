@@ -40,7 +40,7 @@ TEST_CASE("[susp] Uniproc Supernode Self-Suspensions") {
 	auto aborts_in = std::istringstream("\n");
 
 	Scheduling_problem<dtime_t> prob{
-		parse_file<dtime_t>(in),
+		parse_csv_job_file<dtime_t>(in),
 		parse_precedence_file<dtime_t>(susp_dag_in)};
 
 	Analysis_options opts;
@@ -197,7 +197,7 @@ TEST_CASE("[susp] Uniproc Global Schedulability Check (sn_susp)") {
 	auto in = std::istringstream(uniproc_sn_susp_jobs_file);
 
 	Scheduling_problem<dtime_t> prob{
-		parse_file<dtime_t>(in),
+		parse_csv_job_file<dtime_t>(in),
 		parse_precedence_file<dtime_t>(susp_dag_in)};
 
 	Analysis_options opts;
@@ -212,7 +212,6 @@ TEST_CASE("[susp] Uniproc Global Schedulability Check (sn_susp)") {
 	CHECK(gspace->is_schedulable());
 
 	for (const Job<dtime_t>& j : prob.jobs) {
-		CDM("Job " << j << " " << uspace->get_finish_times(j) << " " << gspace->get_finish_times(j) << "\n");
 		CHECK(uspace->get_finish_times(j) == gspace->get_finish_times(j)); 
 	}
 	delete uspace;
@@ -224,7 +223,7 @@ TEST_CASE("[susp] Uniproc Global Schedulability Check (g_pw_diff)") {
 	auto in = std::istringstream(uniproc_sn_susp_jobs_g_pw_diff_file);
 
 	Scheduling_problem<dtime_t> prob{
-		parse_file<dtime_t>(in),
+		parse_csv_job_file<dtime_t>(in),
 		parse_precedence_file<dtime_t>(susp_dag_in)};
 
 	Analysis_options opts;
@@ -239,7 +238,6 @@ TEST_CASE("[susp] Uniproc Global Schedulability Check (g_pw_diff)") {
 	CHECK(gspace->is_schedulable());
 
 	for (const Job<dtime_t>& j : prob.jobs) {
-		CDM("Job " << j << " " << uspace->get_finish_times(j) << " " << gspace->get_finish_times(j) << "\n");
 		CHECK(uspace->get_finish_times(j) == gspace->get_finish_times(j)); 
 	}
 	delete uspace;

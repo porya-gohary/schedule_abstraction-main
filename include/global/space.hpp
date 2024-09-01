@@ -66,7 +66,7 @@ namespace NP {
 			// convenience interface for tests
 			static State_space* explore_naively(
 				const Workload& jobs,
-				unsigned int num_cpus=1)
+				unsigned int num_cpus = 1)
 			{
 				Problem p{ jobs, num_cpus };
 				Analysis_options o;
@@ -77,7 +77,7 @@ namespace NP {
 			// convenience interface for tests
 			static State_space* explore(
 				const Workload& jobs,
-				unsigned int num_cpus=1)
+				unsigned int num_cpus = 1)
 			{
 				Problem p{ jobs, num_cpus };
 				Analysis_options o;
@@ -290,7 +290,7 @@ namespace NP {
 			Nodes_storage nodes_storage;
 
 			Nodes_map nodes_by_key;
-			
+
 #ifdef CONFIG_PARALLEL
 			std::atomic_ulong num_nodes, num_states, num_edges;
 #else
@@ -298,7 +298,7 @@ namespace NP {
 #endif
 			// updated only by main thread
 			unsigned long current_job_count, width;
-			
+
 
 
 #ifdef CONFIG_PARALLEL
@@ -484,7 +484,7 @@ namespace NP {
 				if (!sequential_source_jobs_by_latest_arrival.empty())
 					next_certain_seq_release = sequential_source_jobs_by_latest_arrival.begin()->first;
 
-				Time next_certain_gang_release = Time_model::constants<Time>::infinity(); 
+				Time next_certain_gang_release = Time_model::constants<Time>::infinity();
 				if (!gang_source_jobs_by_latest_arrival.empty())
 					next_certain_gang_release = gang_source_jobs_by_latest_arrival.begin()->first;
 
@@ -509,8 +509,8 @@ namespace NP {
 			Node_ref alloc_node(Args&&... args)
 			{
 				nodes().emplace_back(std::forward<Args>(args)...);
-				Node_ref n = &(*(--nodes().end()));  
-				
+				Node_ref n = &(*(--nodes().end()));
+
 				// make sure we didn't screw up...
 				auto njobs = n->number_of_scheduled_jobs();
 				assert(
@@ -544,7 +544,7 @@ namespace NP {
 					num_states++;
 				}
 			}
-			
+
 
 #ifdef CONFIG_PARALLEL
 			//warning  "Parallel code is not updated for supernodes."
@@ -645,7 +645,7 @@ namespace NP {
 			Interval<Time> ready_times(const State& s, const Job<Time>& j) const
 			{
 				Interval<Time> r = j.arrival_window();
-				for (const auto& pred : predecessors_suspensions[j.get_job_index()]) 
+				for (const auto& pred : predecessors_suspensions[j.get_job_index()])
 				{
 					auto pred_idx = pred.first->get_job_index();
 					auto pred_susp = pred.second;
@@ -678,7 +678,7 @@ namespace NP {
 					r.extend_to(s.core_availability(j.get_min_parallelism()).max());
 				}
 
-				for (const auto& pred : predecessors_suspensions[j.get_job_index()]) 
+				for (const auto& pred : predecessors_suspensions[j.get_job_index()])
 				{
 					auto pred_idx = pred.first->get_job_index();
 					// skip if part of disregard
@@ -713,7 +713,7 @@ namespace NP {
 
 			Time latest_ready_time(
 				const State& s, Time earliest_ref_ready,
-				const Job<Time>& j_hp, const Job<Time>& j_ref, 
+				const Job<Time>& j_hp, const Job<Time>& j_ref,
 				const unsigned int ncores = 1) const
 			{
 				auto rt = ready_times(s, j_hp, predecessors_of(j_ref), ncores);
@@ -750,7 +750,7 @@ namespace NP {
 						break; // yep, nothing can lower 'when' at this point
 
 					// j is not relevant if it is already scheduled or not of higher priority
-					if (ready(n, j) && j.higher_priority_than(reference_job)) 
+					if (ready(n, j) && j.higher_priority_than(reference_job))
 					{
 						when = j.latest_arrival();
 						// Jobs are ordered by latest_arrival, so next jobs are later. 
@@ -806,7 +806,7 @@ namespace NP {
 							// jobs are ordered in non-decreasing latest arrival order, 
 							// => nothing tested after can be ready earlier than j
 							// => we break
-							break; 
+							break;
 						}
 					}
 				}
@@ -830,7 +830,7 @@ namespace NP {
 				// a job of any priority is released
 				Time t_earliest = n.earliest_job_release();
 				for (auto it = successor_jobs_by_latest_arrival.lower_bound(t_earliest);
-					it != successor_jobs_by_latest_arrival.end(); it++) 
+					it != successor_jobs_by_latest_arrival.end(); it++)
 				{
 					const Job<Time>& j = *(it->second);
 
@@ -839,7 +839,7 @@ namespace NP {
 						break; // yep, nothing can lower 'when' at this point
 
 					// j is not relevant if it is already scheduled or not of higher priority
-					if (ready(n, j)	&& j.higher_priority_than(reference_job)) {
+					if (ready(n, j) && j.higher_priority_than(reference_job)) {
 						// does it beat what we've already seen?
 						when = std::min(when,
 							latest_ready_time(s, ready_min, j, reference_job, ncores));
@@ -871,10 +871,10 @@ namespace NP {
 			// NOTE: we don't use Interval<Time> here because the
 			//       Interval c'tor sorts its arguments.
 			std::pair<Time, Time> start_times(
-				const State& s, const Job<Time>& j, const Time t_wc, const Time t_high, 
+				const State& s, const Job<Time>& j, const Time t_wc, const Time t_high,
 				const Time t_avail, const unsigned int ncores = 1) const
 			{
-				auto rt = earliest_ready_time(s, j); 
+				auto rt = earliest_ready_time(s, j);
 				auto at = s.core_availability(ncores).min();
 				Time est = std::max(rt, at);
 
@@ -898,7 +898,7 @@ namespace NP {
 				DM("      - looking for earliest possible job release starting from: "
 					<< n.earliest_job_release() << std::endl);
 
-				for(auto it = jobs_by_earliest_arrival.lower_bound(n.earliest_job_release());
+				for (auto it = jobs_by_earliest_arrival.lower_bound(n.earliest_job_release());
 					it != jobs_by_earliest_arrival.end(); 	it++)
 				{
 					const Job<Time>& j = *(it->second);
@@ -949,8 +949,8 @@ namespace NP {
 			// Find the earliest possible certain job release of all source jobs (i.e., without predecessors) 
 			// in a node except for the ignored job
 			Time earliest_certain_source_job_release(
-				const Node & n,
-				const Job<Time>&ignored_job)
+				const Node& n,
+				const Job<Time>& ignored_job)
 			{
 				DM("      - looking for earliest certain source job release starting from: "
 					<< n.get_next_certain_source_job_release() << std::endl);
@@ -1003,8 +1003,8 @@ namespace NP {
 
 					DM("         * found it: " << jp->latest_arrival() << std::endl);
 					// it's incomplete and not ignored 
-					rmax = std::min(rmax, 
-						std::max(jp->latest_arrival(), 
+					rmax = std::min(rmax,
+						std::max(jp->latest_arrival(),
 							s.core_availability(jp->get_min_parallelism()).max()));
 				}
 
@@ -1013,7 +1013,7 @@ namespace NP {
 			}
 
 			// Create a new state st, try to merge st in an existing node. If the merge is unsuccessful, create a new node and add st
-			Node& dispatch_wo_supernodes(const Node& n, const State& s, const Job<Time>& j, 
+			Node& dispatch_wo_supernodes(const Node& n, const State& s, const Job<Time>& j,
 				const Interval<Time> start_times, const Interval<Time> finish_times, const unsigned int ncores)
 			{
 				// update the set of scheduled jobs
@@ -1047,7 +1047,7 @@ namespace NP {
 							}
 						}
 					}
-					else if (nodes_by_key.insert(acc, key)) 
+					else if (nodes_by_key.insert(acc, key))
 						break;
 
 					// if we raced with concurrent creation, try again
@@ -1060,9 +1060,9 @@ namespace NP {
 					earliest_certain_sequential_source_job_release(n, j));
 #else
 				const auto pair_it = nodes_by_key.find(key);
-				if (pair_it != nodes_by_key.end()) 
+				if (pair_it != nodes_by_key.end())
 				{
-					for (Node_ref other : pair_it->second) 
+					for (Node_ref other : pair_it->second)
 					{
 						if (other->get_scheduled_jobs() != sched_jobs)
 							continue;
@@ -1078,19 +1078,19 @@ namespace NP {
 					}
 				}
 
-				Node& next_node = new_node(n, j, j.get_job_index(), 
-					earliest_possible_job_release(n, j), 
+				Node& next_node = new_node(n, j, j.get_job_index(),
+					earliest_possible_job_release(n, j),
 					earliest_certain_source_job_release(n, j),
 					earliest_certain_sequential_source_job_release(n, j));
 #endif
-				
-				next_node.add_state(&st);	
+
+				next_node.add_state(&st);
 				num_states++;
 				return next_node;
 			}
 
 			bool dispatch(const Node& n, const Job<Time>& j, Time t_wc_wos, Time t_high_wos)
-			{				
+			{
 				// All states in node 'n' for which the job 'j' is eligible will 
 				// be added to that same node. 
 				// If such a node already exists, we keep a reference to it
@@ -1098,10 +1098,10 @@ namespace NP {
 				DM("--- global:dispatch() " << n << ", " << j << ", " << t_wc_wos << ", " << t_high_wos << std::endl);
 
 				bool dispatched_one = false;
-				
+
 				// loop over all states in the node n
 				const auto* n_states = n.get_states();
-				for (State* s : *n_states) 
+				for (State* s : *n_states)
 				{
 #ifdef CONFIG_PARALLEL
 					Nodes_map_accessor acc;
@@ -1124,7 +1124,7 @@ namespace NP {
 							t_avail = s->core_availability(j.get_next_parallelism(p)).max();
 
 						DM("=== t_high = " << t_high << ", t_wc = " << t_wc << std::endl);
-						auto _st = start_times(*s, j, t_wc, t_high, t_avail, p);  
+						auto _st = start_times(*s, j, t_wc, t_high, t_avail, p);
 						if (_st.first > t_wc || _st.first >= t_high || _st.first >= t_avail)
 							continue; // nope, not next job that can be dispatched in state s, try the next state.
 
@@ -1241,7 +1241,7 @@ namespace NP {
 				bool found_one = false;
 
 				DM("---- global:explore(node)" << n.finish_range() << std::endl);
-				
+
 				// (0) define the window of interest
 				auto t_min = n.earliest_job_release();
 				// latest time some unfinished job is certainly ready
@@ -1261,7 +1261,7 @@ namespace NP {
 				//check all jobs that may be eligible to be dispatched next
 				for (auto it = jobs_by_earliest_arrival.lower_bound(t_min);
 					it != jobs_by_earliest_arrival.end();
-					it++) 
+					it++)
 				{
 					const Job<Time>& j = *it->second;
 					DM(j << " (" << index_of(j) << ")" << std::endl);
@@ -1276,8 +1276,8 @@ namespace NP {
 					// Since this job is released in the future, it better
 					// be incomplete...
 					assert(unfinished(n, j));
-					
-					Time t_high_wos = next_certain_higher_priority_seq_source_job_release(n, j, upbnd_t_wc+1);
+
+					Time t_high_wos = next_certain_higher_priority_seq_source_job_release(n, j, upbnd_t_wc + 1);
 					// if there is a higher priority job that is certainly ready before job j is released at the earliest, 
 					// then j will never be the next job dispached by the scheduler
 					if (t_high_wos <= j.earliest_arrival())
@@ -1380,7 +1380,7 @@ namespace NP {
 				// propagate any updates to the response-time estimates
 				for (auto& r : partial_rta) {
 					for (int i = 0; i < r.size(); ++i) {
-						if(r[i].valid)
+						if (r[i].valid)
 							update_finish_times(rta, i, r[i].rt);
 					}
 				}
@@ -1437,10 +1437,10 @@ namespace NP {
 						{
 							out << "[";
 							s->print_vertex_label(out, space.jobs);
-								//<< s->earliest_finish_time()
-								//<< ", "
-								//<< s->latest_finish_time()
-								out << "]\\n";
+							//<< s->earliest_finish_time()
+							//<< ", "
+							//<< s->latest_finish_time()
+							out << "]\\n";
 						}
 						out << "}"
 							<< "\\nER=";
@@ -1484,10 +1484,10 @@ namespace NP {
 				return out;
 					}
 #endif
-		};
+				};
 
-	}
-}
+			}
+		}
 
 namespace std
 {

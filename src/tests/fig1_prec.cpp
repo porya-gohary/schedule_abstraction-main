@@ -37,7 +37,7 @@ TEST_CASE("[prec] RTSS17-Fig1a") {
 	auto in = std::istringstream(fig1a_jobs_file);
 
 	Scheduling_problem<dtime_t> prob{
-		parse_file<dtime_t>(in),
+		parse_csv_job_file<dtime_t>(in),
 		parse_precedence_file<dtime_t>(dag_in)};
 
 	Analysis_options opts;
@@ -75,7 +75,7 @@ TEST_CASE("[prec] handle cycles gracefully") {
 	auto in = std::istringstream(fig1a_jobs_file);
 
 	Scheduling_problem<dtime_t> prob{
-		parse_file<dtime_t>(in),
+		parse_csv_job_file<dtime_t>(in),
 		parse_precedence_file<dtime_t>(dag_in)};
 
 	Analysis_options opts;
@@ -118,7 +118,7 @@ TEST_CASE("[prec] handle analysis deadend gracefully") {
 	auto in = std::istringstream(deadend_jobs_file);
 
 	Scheduling_problem<dtime_t> prob{
-		parse_file<dtime_t>(in),
+		parse_csv_job_file<dtime_t>(in),
 		parse_precedence_file<dtime_t>(dag_in)};
 
 	Analysis_options opts;
