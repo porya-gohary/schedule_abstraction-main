@@ -88,7 +88,7 @@ namespace NP {
 			Time dl, Priority prio,
 			Job_index idx,
 			unsigned long tid = 0)
-			: arrival(arr), parallelism({ 1, 1 }),
+			: arrival(arr), parallelism(Interval<unsigned int>{ 1, 1 }),
 			deadline(dl), priority(prio), id(id, tid), index(idx)
 		{
 			exec_time.emplace(1, cost);
@@ -258,7 +258,7 @@ namespace NP {
 			stream << "Job{" << j.id.task << ", " << j.id.job << ", " << j.arrival << ", ";
 			for (auto i : j.exec_time)
 				stream << i << ", ";
-			stream << j.deadline << ", " << j.priority "}";
+			stream << j.deadline << ", " << j.priority << "}";
 			return stream;
 		}
 
