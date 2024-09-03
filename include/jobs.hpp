@@ -88,7 +88,7 @@ namespace NP {
 			Time dl, Priority prio,
 			Job_index idx,
 			unsigned long tid = 0)
-			: arrival(arr), parallelism({ 1, 1 }),
+			: arrival(arr), parallelism(Interval<unsigned int>{ 1, 1 }),
 			deadline(dl), priority(prio), id(id, tid), index(idx)
 		{
 			exec_time.emplace(1, cost);

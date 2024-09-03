@@ -273,6 +273,8 @@ namespace NP {
 				Interval<Time> finish_times, unsigned int ncores,
 				const Job_precedence_set& predecessors)
 			{
+				certain_jobs.reserve(from.certain_jobs.size() + 1);
+
 				Time lst = start_times.max();
 				int n_prec = 0;
 
@@ -329,10 +331,10 @@ namespace NP {
 				}
 
 				// compute the cores availability intervals
-				std::vector<Time> ca, pa;
-				ca.reserve(n_cores);
-				pa.reserve(n_cores);
-
+				Time* ca = new Time[n_cores];
+				Time* pa = new Time[n_cores];
+				unsigned int ca_idx = 0, pa_idx = 0;
+				
 				// Keep pa and ca sorted, by adding the value at the correct place.
 				bool eft_added_to_pa = false;
 				bool lft_added_to_ca = false;
@@ -341,8 +343,8 @@ namespace NP {
 				if (n_prec > m) {
 					// if there are n_prec predecessors running, n_prec cores must be available when j starts
 					for (int i = m; i < n_prec; i++) {
-						pa.push_back(est); // TODO: GN: check whether we can replace by est all the time since predecessors must possibly be finished by est to let j start
-						ca.push_back(std::min(lst, std::max(est, from.core_avail[i].max())));
+						pa[pa_idx] = est; pa_idx++; //pa.push_back(est); // TODO: GN: check whether we can replace by est all the time since predecessors must possibly be finished by est to let j start
+						ca[ca_idx] = std::min(lst, std::max(est, from.core_avail[i].max())); ca_idx++; //ca.push_back(std::min(lst, std::max(est, from.core_avail[i].max())));
 					}
 				}
 				else {
@@ -352,28 +354,32 @@ namespace NP {
 					if (!eft_added_to_pa && eft < from.core_avail[i].min())
 					{
 						// add the finish time of j ncores times since it runs on ncores
-						for (int p = 0; p < m; p++)
-							pa.push_back(eft);
+						for (int p = 0; p < m; p++) {
+							pa[pa_idx] = eft; pa_idx++; //pa.push_back(eft);
+						}
 						eft_added_to_pa = true;
 					}
-					pa.push_back(std::max(est, from.core_avail[i].min()));
+					pa[pa_idx] = std::max(est, from.core_avail[i].min()); pa_idx++; //pa.push_back(std::max(est, from.core_avail[i].min()));
 					if (!lft_added_to_ca && lft < from.core_avail[i].max()) {
 						// add the finish time of j ncores times since it runs on ncores
-						for (int p = 0; p < m; p++)
-							ca.push_back(lft);
+						for (int p = 0; p < m; p++) {
+							ca[ca_idx] = lft; ca_idx++; //ca.push_back(lft);
+						}
 						lft_added_to_ca = true;
 					}
-					ca.push_back(std::max(est, from.core_avail[i].max()));
+					ca[ca_idx] = std::max(est, from.core_avail[i].max()); ca_idx++; //ca.push_back(std::max(est, from.core_avail[i].max()));
 				}
 				if (!eft_added_to_pa) {
 					// add the finish time of j ncores times since it runs on ncores
-					for (int p = 0; p < m; p++)
-						pa.push_back(eft);
+					for (int p = 0; p < m; p++) {
+						pa[pa_idx] = eft; pa_idx++; //pa.push_back(eft);
+					}
 				}
 				if (!lft_added_to_ca) {
 					// add the finish time of j ncores times since it runs on ncores
-					for (int p = 0; p < m; p++)
-						ca.push_back(lft);
+					for (int p = 0; p < m; p++) {
+						ca[ca_idx] = lft; ca_idx++; //ca.push_back(lft);
+					}
 				}
 
 				for (int i = 0; i < from.core_avail.size(); i++)
@@ -381,6 +387,8 @@ namespace NP {
 					DM(i << " -> " << pa[i] << ":" << ca[i] << std::endl);
 					core_avail.emplace_back(pa[i], ca[i]);
 				}
+				delete[] pa;
+				delete[] ca;
 			}
 
 			// update the list of finish times of jobs with successors w.r.t. the previous system state

@@ -37,10 +37,6 @@ static bool want_dense;
 static bool want_precedence = false;
 static std::string precedence_file;
 
-static bool want_selfsuspending = false;
-static bool want_pathwise = false;
-static std::string selfsuspending_file;
-
 static bool want_aborts = false;
 static std::string aborts_file;
 
@@ -275,7 +271,7 @@ static void process_file(const std::string& fname)
 				  << std::endl;
 		exit(4);
 	} catch (NP::InvalidPrecParameter& ex) {
-		std::cerr << selfsuspending_file << ": invalid self-suspending parameter: job "
+		std::cerr << precedence_file << ": invalid self-suspending parameter: job "
 				  << ex.ref.job << " of task " << ex.ref.task
 				  << " has an invalid self-suspending time"
 				  << std::endl;
@@ -328,14 +324,6 @@ int main(int argc, char** argv)
 	parser.add_option("-p", "--precedence").dest("precedence_file")
 	      .help("name of the file that contains the job set's precedence DAG")
 	      .set_default("");
-
-	parser.add_option("--selfsuspending").dest("selfsuspending_file")
-	      .help("name of the file that contains the job set's selfsuspending DAG")
-	      .set_default("");
-
-	parser.add_option("--sstype").dest("sstype")
-		  .choices({"general","pathwise"}).set_default("general")
-		  .help("pathwise vs general implementation of self-suspending tasks");
 
 	parser.add_option("-a", "--abort-actions").dest("abort_file")
 	      .help("name of the file that contains the job set's abort actions")
@@ -399,16 +387,6 @@ int main(int argc, char** argv)
 		          << std::endl;
 	}
 	precedence_file = (const std::string&) options.get("precedence_file");
-
-	want_selfsuspending = options.is_set_by_user("selfsuspending_file");
-	if (want_selfsuspending && parser.args().size() > 1) {
-		std::cerr << "[!!] Warning: multiple job sets "
-		          << "with a single selfsuspending DAG specified."
-		          << std::endl;
-	}
-	selfsuspending_file = (const std::string&) options.get("selfsuspending_file");
-	const std::string& sstype = (std::string) options.get("sstype");
-	want_pathwise = options.is_set_by_user("sstype");
 
 	want_aborts = options.is_set_by_user("abort_file");
 	if (want_aborts && parser.args().size() > 1) {

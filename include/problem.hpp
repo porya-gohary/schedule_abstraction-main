@@ -16,7 +16,7 @@ namespace NP {
 		typedef typename std::vector<Precedence_constraint<Time>> Precedence_constraints;
 
 		// ** Description of the workload:
-		// (1) a set of jobs or packets if for TSN
+		// (1) a set of jobs
 		Workload jobs;
 		// (2) a set of precedence constraints among the jobs
 		Precedence_constraints prec;
