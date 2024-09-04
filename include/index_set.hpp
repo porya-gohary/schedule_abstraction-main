@@ -6,15 +6,15 @@ namespace NP {
 		class Index_set
 		{
 			public:
-			// Using uint8_t to store 8 bits in each byte
-			typedef std::vector<uint8_t> Set_type;
+			// Using uint64_t to store 64 bits in each byte
+			typedef std::vector<uint64_t> Set_type;
 
 			// new empty job set
 			Index_set() : the_set() {}
 
 			// derive a new set by "cloning" an existing set and adding an index
 			Index_set(const Index_set& from, std::size_t idx)
-					: the_set(std::max(from.the_set.size(), (idx / 8) + 1))
+					: the_set(std::max(from.the_set.size(), (idx / 64) + 1))
 			{
 				std::copy(from.the_set.begin(), from.the_set.end(), the_set.begin());
 				set_bit(idx, true);
@@ -41,7 +41,7 @@ namespace NP {
 
 			bool contains(std::size_t idx) const
 			{
-				if (idx / 8 >= the_set.size()) {
+				if (idx / 64 >= the_set.size()) {
 					return false;
 				}
 				return get_bit(idx);
@@ -57,7 +57,7 @@ namespace NP {
 
 			bool is_subset_of(const Index_set& other) const
 			{
-				for (std::size_t i = 0; i < the_set.size() * 8; i++)
+				for (std::size_t i = 0; i < the_set.size() * 64; i++)
 					if (contains(i) && !other.contains(i))
 						return false;
 				return true;
@@ -66,7 +66,7 @@ namespace NP {
 			std::size_t size() const
 			{
 				std::size_t count = 0;
-				for (std::size_t i = 0; i < the_set.size() * 8; ++i)
+				for (std::size_t i = 0; i < the_set.size() * 64; ++i)
 					if (contains(i))
 						count++;
 				return count;
@@ -74,8 +74,8 @@ namespace NP {
 
 			void add(std::size_t idx)
 			{
-				if (idx / 8 >= the_set.size())
-					the_set.resize((idx / 8) + 1, 0);
+				if (idx / 64 >= the_set.size())
+					the_set.resize((idx / 64) + 1, 0);
 				set_bit(idx, true);
 			}
 
@@ -84,7 +84,7 @@ namespace NP {
 			{
 				bool first = true;
 				stream << "{";
-				for (std::size_t i = 0; i < s.the_set.size() * 8; ++i) {
+				for (std::size_t i = 0; i < s.the_set.size() * 64; ++i) {
 					if (s.contains(i)) {
 						if (!first)
 							stream << ", ";
@@ -104,8 +104,8 @@ namespace NP {
 			// Helper functions to set and get individual bits
 			void set_bit(std::size_t idx, bool value)
 			{
-				std::size_t byte_index = idx / 8;
-				std::size_t bit_index = idx % 8;
+				std::size_t byte_index = idx / 64;
+				std::size_t bit_index = idx % 64;
 				if (value) {
 					the_set[byte_index] |= (1 << bit_index);
 				} else {
@@ -115,8 +115,8 @@ namespace NP {
 
 			bool get_bit(std::size_t idx) const
 			{
-				std::size_t byte_index = idx / 8;
-				std::size_t bit_index = idx % 8;
+				std::size_t byte_index = idx / 64;
+				std::size_t bit_index = idx % 64;
 				return the_set[byte_index] & (1 << bit_index);
 			}
 
