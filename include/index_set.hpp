@@ -57,15 +57,10 @@ namespace NP {
 
 			bool is_subset_of(const Index_set& other) const
 			{
-				// If the current set has more integers than the other set, it can't be a subset.
-				if (the_set.size() > other.the_set.size()) {
-					return false;
-				}
-
 				// Compare each integer in the sets
 				for (std::size_t i = 0; i < the_set.size(); ++i) {
 					// If there are bits set in the current set that are not set in the other set, it's not a subset
-					if ((the_set[i] & other.the_set[i]) != the_set[i]) {
+					if (the_set[i]>0 && ((the_set[i] & other.the_set[i]) != the_set[i] || other.size()<=i)) {
 						return false;
 					}
 				}
