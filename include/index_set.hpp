@@ -112,9 +112,9 @@ namespace NP {
 				std::size_t byte_index = idx / 64;
 				std::size_t bit_index = idx % 64;
 				if (value) {
-					the_set[byte_index] |= (1 << bit_index);
+					the_set[byte_index] |= (((uint64_t)1) << bit_index);
 				} else {
-					the_set[byte_index] &= ~(1 << bit_index);
+					the_set[byte_index] &= ~(((uint64_t)1) << bit_index);
 				}
 			}
 
@@ -122,7 +122,7 @@ namespace NP {
 			{
 				std::size_t byte_index = idx / 64;
 				std::size_t bit_index = idx % 64;
-				return the_set[byte_index] & (1 << bit_index);
+				return the_set[byte_index] & (((uint64_t)1) << bit_index);
 			}
 
 			// no accidental copies
