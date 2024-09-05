@@ -60,7 +60,7 @@ namespace NP {
 				// Compare each integer in the sets
 				for (std::size_t i = 0; i < the_set.size(); ++i) {
 					// If there are bits set in the current set that are not set in the other set, it's not a subset
-					if (the_set[i]>0 && ((the_set[i] & other.the_set[i]) != the_set[i] || other.size()<=i)) {
+					if (the_set[i]>0 && (other.the_set.size()<=i || (the_set[i] & other.the_set[i]) != the_set[i])) {
 						return false;
 					}
 				}
