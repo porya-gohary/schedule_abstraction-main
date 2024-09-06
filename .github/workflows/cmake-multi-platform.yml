@@ -15,87 +15,21 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         build_type: [Release]
-        c_compiler: [gcc-10, gcc-11, gcc-12, gcc-latest, clang, cl]
-        cpp_compiler: [g++-10, g++-11, g++-12, g++-latest, clang++, cl]
-        cmake_option: [-DPARALLEL_RUN=OFF, -DPARALLEL_RUN=ON, -DCOLLECT_SCHEDULE_GRAPHS=ON]
+        compiler:
+          - { c_compiler: gcc-10, cpp_compiler: g++-10 }
+          - { c_compiler: gcc-11, cpp_compiler: g++-11 }
+          - { c_compiler: gcc-12, cpp_compiler: g++-12 }
+          - { c_compiler: clang, cpp_compiler: clang++ }
+          - { c_compiler: appleclang, cpp_compiler: appleclang }
+        cmake_option:
+          - -DPARALLEL_RUN=OFF -DCOLLECT_SCHEDULE_GRAPHS=ON
+          - -DPARALLEL_RUN=ON -DCOLLECT_SCHEDULE_GRAPHS=ON
         include:
-          # Windows with MSVC
           - os: windows-latest
-            c_compiler: cl
-            cpp_compiler: cl
+            compiler: { c_compiler: cl, cpp_compiler: cl }
             cmake_option: -DUSE_TBB_MALLOC=OFF -DMSVC=ON
             build_type: Release
 
-          # Ubuntu with GCC 10
-          - os: ubuntu-latest
-            c_compiler: gcc-10
-            cpp_compiler: g++-10
-
-          # Ubuntu with GCC 11
-          - os: ubuntu-latest
-            c_compiler: gcc-11
-            cpp_compiler: g++-11
-
-          # Ubuntu with GCC 12
-          - os: ubuntu-latest
-            c_compiler: gcc-12
-            cpp_compiler: g++-12
-
-          # Ubuntu with the latest GCC
-          - os: ubuntu-latest
-            c_compiler: gcc-latest
-            cpp_compiler: g++-latest
-
-          # Ubuntu with Clang
-          - os: ubuntu-latest
-            c_compiler: clang
-            cpp_compiler: clang++
-
-          # macOS with AppleClang
-          - os: macos-latest
-            c_compiler: clang
-            cpp_compiler: clang++
-            cmake_option: -DCOLLECT_SCHEDULE_GRAPHS=ON
-
-          # macOS with GCC 10 (Homebrew)
-          - os: macos-latest
-            c_compiler: gcc-10
-            cpp_compiler: g++-10
-
-          # macOS with GCC 11 (Homebrew)
-          - os: macos-latest
-            c_compiler: gcc-11
-            cpp_compiler: g++-11
-
-          # macOS with GCC 12 (Homebrew)
-          - os: macos-latest
-            c_compiler: gcc-12
-            cpp_compiler: g++-12
-
-          # macOS with the latest GCC (Homebrew)
-          - os: macos-latest
-            c_compiler: gcc-latest
-            cpp_compiler: g++-latest
-
-        exclude:
-          - os: windows-latest
-            c_compiler: gcc-10
-          - os: windows-latest
-            c_compiler: gcc-11
-          - os: windows-latest
-            c_compiler: gcc-12
-          - os: windows-latest
-            c_compiler: gcc-latest
-          - os: windows-latest
-            c_compiler: clang
-          - os: windows-latest
-            cmake_option: -DPARALLEL_RUN=ON
-          - os: windows-latest
-            cmake_option: -DPARALLEL_RUN=OFF
-          - os: ubuntu-latest
-            c_compiler: cl
-          - os: macos-latest
-            c_compiler: cl
 
     steps:
     - uses: actions/checkout@v3
@@ -119,15 +53,24 @@ jobs:
       if: ${{ matrix.os == 'macos-latest' }}
       run: |
         brew update
-        brew install tbb ${{ matrix.c_compiler }} ${{ matrix.cpp_compiler }}
+        brew install tbb
+        if [[ "${{ matrix.c_compiler }}" == "gcc-10" ]]; then
+          brew install gcc@10
+        elif [[ "${{ matrix.c_compiler }}" == "gcc-11" ]]; then
+          brew install gcc@11
+        elif [[ "${{ matrix.c_compiler }}" == "gcc-12" ]]; then
+          brew install gcc@12
+        elif [[ "${{ matrix.c_compiler }}" == "gcc" ]]; then
+          brew install gcc
+        fi
 
     - name: Configure CMake
-      run: >
-        cmake -B ${{ steps.strings.outputs.build-output-dir }}
-        -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }}
-        -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
-        -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
-        ${{ matrix.cmake_option }}
+      run: |
+        cmake -B ${{ steps.strings.outputs.build-output-dir }} \
+        -DCMAKE_C_COMPILER=${{ matrix.compiler.c_compiler }} \
+        -DCMAKE_CXX_COMPILER=${{ matrix.compiler.cpp_compiler }} \
+        -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+        ${{ matrix.cmake_option }} \
         -S ${{ github.workspace }}
 
     - name: Build
