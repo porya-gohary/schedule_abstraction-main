@@ -23,12 +23,30 @@ jobs:
           - { c_compiler: appleclang, cpp_compiler: appleclang }
         cmake_option:
           - -DPARALLEL_RUN=OFF -DCOLLECT_SCHEDULE_GRAPHS=ON
-          - -DPARALLEL_RUN=ON -DCOLLECT_SCHEDULE_GRAPHS=ON
+          - -DPARALLEL_RUN=ON
         include:
           - os: windows-latest
             compiler: { c_compiler: cl, cpp_compiler: cl }
             cmake_option: -DUSE_TBB_MALLOC=OFF -DMSVC=ON
             build_type: Release
+
+        exclude:
+          - os: windows-latest
+            c_compiler: gcc-10
+          - os: windows-latest
+            c_compiler: gcc-11
+          - os: windows-latest
+            c_compiler: gcc-12
+          - os: windows-latest
+            c_compiler: gcc
+          - os: windows-latest
+            c_compiler: clang
+          - os: windows-latest
+            cmake_option: -DPARALLEL_RUN=ON
+          - os: ubuntu-latest
+            c_compiler: cl
+          - os: macos-latest
+            c_compiler: cl
 
 
     steps:
