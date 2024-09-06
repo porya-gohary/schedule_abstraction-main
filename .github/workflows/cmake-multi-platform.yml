@@ -1,0 +1,170 @@
+name: CMake on Multiple Platforms
+
+on:
+  push:
+    branches: ['*']
+  pull_request:
+    branches: ['*']
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        build_type: [Release]
+        c_compiler: [gcc-10, gcc-11, gcc-12, gcc-13, gcc-latest, clang, cl]
+        cpp_compiler: [g++-10, g++-11, g++-12, g++-13, g++-latest, clang++, cl]
+        cmake_option: [-DPARALLEL_RUN=OFF, -DPARALLEL_RUN=ON, -DCOLLECT_SCHEDULE_GRAPHS=ON]
+        include:
+          # Windows with MSVC
+          - os: windows-latest
+            c_compiler: cl
+            cpp_compiler: cl
+            cmake_option: -DUSE_TBB_MALLOC=OFF -DMSVC=ON
+            build_type: Release
+
+          # Ubuntu with GCC 10
+          - os: ubuntu-latest
+            c_compiler: gcc-10
+            cpp_compiler: g++-10
+
+          # Ubuntu with GCC 11
+          - os: ubuntu-latest
+            c_compiler: gcc-11
+            cpp_compiler: g++-11
+
+          # Ubuntu with GCC 12
+          - os: ubuntu-latest
+            c_compiler: gcc-12
+            cpp_compiler: g++-12
+
+          # Ubuntu with GCC 13
+          - os: ubuntu-latest
+            c_compiler: gcc-13
+            cpp_compiler: g++-13
+
+          # Ubuntu with the latest GCC
+          - os: ubuntu-latest
+            c_compiler: gcc-latest
+            cpp_compiler: g++-latest
+
+          # Ubuntu with Clang
+          - os: ubuntu-latest
+            c_compiler: clang
+            cpp_compiler: clang++
+
+          # macOS with AppleClang
+          - os: macos-latest
+            c_compiler: clang
+            cpp_compiler: clang++
+            cmake_option: -DCOLLECT_SCHEDULE_GRAPHS=ON
+
+          # macOS with GCC 10 (Homebrew)
+          - os: macos-latest
+            c_compiler: gcc-10
+            cpp_compiler: g++-10
+
+          # macOS with GCC 11 (Homebrew)
+          - os: macos-latest
+            c_compiler: gcc-11
+            cpp_compiler: g++-11
+
+          # macOS with GCC 12 (Homebrew)
+          - os: macos-latest
+            c_compiler: gcc-12
+            cpp_compiler: g++-12
+
+          # macOS with GCC 13 (Homebrew)
+          - os: macos-latest
+            c_compiler: gcc-13
+            cpp_compiler: g++-13
+
+          # macOS with the latest GCC (Homebrew)
+          - os: macos-latest
+            c_compiler: gcc-latest
+            cpp_compiler: g++-latest
+
+        exclude:
+          - os: windows-latest
+            c_compiler: gcc-10
+          - os: windows-latest
+            c_compiler: gcc-11
+          - os: windows-latest
+            c_compiler: gcc-12
+          - os: windows-latest
+            c_compiler: gcc-13
+          - os: windows-latest
+            c_compiler: gcc-latest
+          - os: windows-latest
+            c_compiler: clang
+          - os: windows-latest
+            cmake_option: -DPARALLEL_RUN=ON
+          - os: windows-latest
+            cmake_option: -DPARALLEL_RUN=OFF
+          - os: ubuntu-latest
+            c_compiler: cl
+          - os: macos-latest
+            c_compiler: cl
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set reusable strings
+      id: strings
+      shell: bash
+      run: |
+        echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
+
+    - name: Pull submodules recursively
+      run: git submodule update --init --recursive
+
+    - name: Install dependencies on Linux
+      if: ${{ matrix.os == 'ubuntu-latest' }}
+      run: |
+        sudo apt-get -y update
+        sudo apt-get -y install libtbb-dev ${{ matrix.c_compiler }} ${{ matrix.cpp_compiler }}
+
+    - name: Install dependencies on macOS
+      if: ${{ matrix.os == 'macos-latest' }}
+      run: |
+        brew update
+        brew install tbb ${{ matrix.c_compiler }} ${{ matrix.cpp_compiler }}
+
+    - name: Configure CMake
+      run: >
+        cmake -B ${{ steps.strings.outputs.build-output-dir }}
+        -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }}
+        -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
+        -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+        ${{ matrix.cmake_option }}
+        -S ${{ github.workspace }}
+
+    - name: Build
+      run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }}
+
+    - name: Run an example (POSIX)
+      working-directory: ${{ steps.strings.outputs.build-output-dir }}
+      if: ${{ matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest' }}
+      run: ./nptest ../examples/fig1c.csv -m 4 --header
+      shell: bash
+
+    - name: Test (POSIX)
+      working-directory: ${{ steps.strings.outputs.build-output-dir }}
+      if: ${{ matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest' }}
+      run: ./runtests
+      shell: bash
+
+    - name: Run an example (Windows)
+      working-directory: ${{ steps.strings.outputs.build-output-dir }}
+      if: ${{ matrix.os == 'windows-latest' }}
+      run: .\\Release\\nptest.exe ..\\examples\\fig1c.csv -m 4 --header
+      shell: bash
+
+    - name: Test (Windows)
+      working-directory: ${{ steps.strings.outputs.build-output-dir }}
+      if: ${{ matrix.os == 'windows-latest' }}
+      run: .\\Release\\runtests.exe
+      shell: bash
