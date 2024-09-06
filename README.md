@@ -1,6 +1,6 @@
 # NP Schedulability Test
 
-This repository contains the implementations of schedulability tests for **sets of non-preemptive jobs** with **precedence constraints** and **self-suspension deays** scheduled on either **uniprocessors** or **globally scheduled identical multiprocessors**. The analyses are described in the following papers:
+This repository contains the implementations of schedulability tests for **sets of non-preemptive jobs** with **precedence constraints** and **self-suspension delays** scheduled on either **uniprocessor** or **globally scheduled identical multiprocessors**. The analyses are described in the following papers:
 
 - M. Nasri and B. Brandenburg, “[An Exact and Sustainable Analysis of Non-Preemptive Scheduling](https://people.mpi-sws.org/~bbb/papers/pdf/rtss17.pdf)”, *Proceedings of the 38th IEEE Real-Time Systems Symposium (RTSS 2017)*, pp. 12–23, December 2017.
 - M. Nasri, G. Nelissen, and B. Brandenburg, “[Response-Time Analysis of Limited-Preemptive Parallel DAG Tasks under Global Scheduling](http://drops.dagstuhl.de/opus/volltexte/2019/10758/pdf/LIPIcs-ECRTS-2019-21.pdf)”, *Proceedings of the 31st Euromicro Conference on Real-Time Systems (ECRTS 2019)*, pp. 21:1–21:23, July 2019.
@@ -13,7 +13,7 @@ An [earlier version of this tool](https://github.com/brandenburg/np-schedulabili
 *Proceedings of the 30th Euromicro Conference on Real-Time Systems (ECRTS 2018)*, pp. 9:1–9:23, July 2018.
 
 
-The uniprocessor analysis (Nasri & Brandenburg, 2017) is exact (in the absence of precedence constraints); the multiprocessor analyses (Nasri et al., 2018, 2019)(Srinivasa et al, 2024) are not. 
+The uniprocessor analysis (Nasri & Brandenburg, 2017) is exact (at least in the absence of precedence constraints); the multiprocessor analyses (Nasri et al., 2018, 2019)(Srinivasa et al, 2024) are sufficient. 
 
 ## Dependencies
 
@@ -23,15 +23,21 @@ The uniprocessor analysis (Nasri & Brandenburg, 2017) is exact (in the absence o
 
 - The [Intel oneAPI Threading Building Blocks (oneTBB)](https://www.threadingbuildingblocks.org) library and parallel runtime. 
 
-- The [Intel oneAPI Threading Building Blocks (oneTBB)](https://www.threadingbuildingblocks.org) library and parallel runtime. 
-
 - The [jemalloc](http://jemalloc.net) scalable memory allocator. Alternatively, the TBB allocator can be used instead; see build options below.
 
 - The [yaml-cpp](https://github.com/jbeder/yaml-cpp) library.
 
 ## Build Instructions
+### Windows
+For Windows, we recommend to load the project in Visual Studio and use cmake to build a solution. The easiest is to open a terminal (Tools > Command Line > Developper Command Prompt) and type the command 
+```bash
+cd build
+cmake ..
+```
+You can then open the solution and build it in VS. 
 
-For Windows, we recommend to load and build the project in Visual Studio. The rest of the instructions assume a Linux or macOS host.
+### Linux and macOS
+The rest of the instructions assume a Linux or macOS host.
 
 If `yaml-cpp` is not installed on your system, its submodule should be pulled by running the following command:
 ```bash
@@ -65,15 +71,15 @@ To enable the collection of schedule graphs (the `-g` option in `nptest`), set t
 
     cmake -DCOLLECT_SCHEDULE_GRAPHS=yes  ..
 
-Note that enabling `COLLECT_SCHEDULE_GRAPHS` turns off parallel analysis, i.e., the analysis becomes single-threaded, so don't turn it on by default. It is primarily a debugging aid. 
+Note that enabling `COLLECT_SCHEDULE_GRAPHS` disallow parallel analysis, i.e., the analysis is single-threaded. We do not recommend to turn it on by default. It is primarily a debugging aid. 
 
-By default, `nptest` uses `jemalloc`. To instead use the parallel allocator that comes with Intel TBB, set `USE_JE_MALLOC` to `no` and `USE_TBB_MALLOC` to `yes`.
+By default, `nptest` uses the default `libc` memory allocator (which may be a tremendous scalability bottleneck if the parallel execution is turned on). To instead use the parallel allocator that comes with Intel TBB, set `USE_JE_MALLOC` to `no` and `USE_TBB_MALLOC` to `yes`. 
 
     cmake -DUSE_JE_MALLOC=no -DUSE_TBB_MALLOC=yes ..
 
-To use the default `libc` allocator (which is a tremendous scalability bottleneck), set both options to `no`.
+If you prefer using `je_malloc` instead set `USE_JE_MALLOC` to `yes` and `USE_TBB_MALLOC` to `no`.
 
-    cmake -DUSE_JE_MALLOC=no -DUSE_TBB_MALLOC=no ..
+    cmake -DUSE_JE_MALLOC=yes -DUSE_TBB_MALLOC=no ..
 
 ## Unit Tests
 
@@ -91,7 +97,7 @@ $ ./runtests
 
 ## Input Format
 
-The tool operates on CSV files with a fixed column order. There are three main input formats: *job sets*, *precedence constraints*, and *abort actions*. 
+The tool operates on CSV files with a fixed column order. There are three main input formats: *job sets*, *precedence constraints*, and *abort actions* (abort actions are not supported currently in the version 3.0.0). 
 
 ### Job Sets
 
@@ -118,6 +124,8 @@ A precedent constraints CSV files define a DAG on the set of jobs provided in a 
 2. **Predecessor job ID** - the job ID of the source of the edge
 3. **Successor task ID** - the task ID of the target of the edge
 4. **Successor job ID** - the job ID of the target of the edge
+5. **Delay min** [optional] - the minimum delay between the execution completion of the predecessor job to the release of the successor job 
+6. **Delay max** [optional] - the maximum delay between the execution completion of the predecessor job to the release of the successor job
 
 An example precedent constraints file is provided in the `examples/` folder (e.g., [examples/fig1a.prec.csv](examples/fig1a.prec.csv)).
 
@@ -144,7 +152,7 @@ $ build/nptest examples/fig1a.csv
 examples/fig1a.csv,  0,  9,  6,  5,  1,  0.000329,  820.000000,  0
 ```
 
-By default, the tool assumes that *jobs are independent* (i.e., there no precedence constraints) and runs the *uniprocessor analysis* (RTSS'17). To specify precedence constraints or to run the (global) multiprocessor analysis (ECRTS'18), the `-p` and  `-m`  options need to be specified, respectively, as discussed below.
+By default, the tool assumes that *jobs are independent* (i.e., there no precedence constraints) and runs the *uniprocessor analysis* (RTSS'17). To specify precedence constraints (optionally with delays) or to run the (global) multiprocessor analysis (RTSS'24), the `-p` and  `-m`  options need to be specified, respectively, as discussed below.
 
 The output format is explained below.  
 
@@ -177,11 +185,9 @@ $ build/nptest -m 2 examples/fig1a.csv
 examples/fig1a.csv,  1,  9,  9,  9,  1,  0.000379,  1760.000000,  0,  2
 ```
 
-**NOTE**: While invoking `nptest` with `-m 1` specifies a uniprocessor platform, it is *not* the same as running the uniprocessor analysis. The uniprocessor analysis (RTSS'17) is activated *in the absence* of the `-m` option; providing `-m 1` activates the multiprocessor analysis (ECRTS'18) assuming there is a single processor. 
-
 ### Precedence Constraints
 
-To impose precedence constraints on the job set, provide the DAG structure in a separate CSV file via the `-p` option. For example:
+To impose precedence constraints (optionally with delays) on the job set, provide the DAG structure in a separate CSV file via the `-p` option. For example:
 
 ```
 $ build/nptest examples/fig1a.csv -p examples/fig1a.prec.csv 
@@ -192,7 +198,7 @@ The tool does not check whether the provided structure actually forms a DAG. If 
 
 ### Aborting Jobs Past a Certain Point
 
-The uniprocessor analysis now also supports so-called **abort actions**, which allow specifying that if a job executes past a certain point in time, it will be forcefully stopped and discarded by the runtime environment. To enable this support, pass a CSV file containing a list of abort actions using the `-a` option. For example:
+Older versions of the uniprocessor analysis (prior to v3.0.0) also supports so-called **abort actions**, which allow specifying that if a job executes past a certain point in time, it will be forcefully stopped and discarded by the runtime environment. To enable this support, pass a CSV file containing a list of abort actions using the `-a` option. For example:
 
 ```
 $ build/nptest -g examples/abort.jobs.csv -c -a examples/abort.actions.csv
@@ -217,12 +223,12 @@ The output is provided in CSV format and consists of the following columns:
     - 1 if the job is *is* schedulable (i.e., the tool could prove the absence of deadline misses),
     - 0 if it is *not*, or if the analysis timed out, if it reached the depth limit, or if the analysis cannot prove the absence of deadline misses (while the RTSS'17 analysis is exact, the ECRTS'19 analysis is only sufficient, but not exact). 
 3. The number of jobs in the job set.
-4. The number of nodes that were explored.
+4. The number of nodes that were created.
 5. The number of states that were explored.
 6. The number of edges that were discovered. 
 7. The maximum “exploration front width” of the schedule graph, which is the maximum number of unprocessed states  that are queued for exploration (at any point in time). 
 8. The CPU time used in the analysis (in seconds).
-9. The peak amount of memory used (as reported by `getrusage()`), divided by 1024. Due to non-portable differences in `getrusage()`, on Linux this reports the memory usage in megabytes, whereas on macOS it reports the memory usage in kilobytes.
+9. The peak amount of memory used (as reported by `getrusage()`), divided by 1024. Due to non-portable differences in `getrusage()`, on Linux this reports the memory usage in megabytes, whereas on macOS it reports the memory usage in kilobytes. On Windows, the memory usage reporting is deactivated. It will always show 0.
 10. A timeout indicator: 1 if the state-space exploration was aborted due to reaching the time limit (as set with the `-l` option); 0 otherwise. 
 11. The number of processors assumed during the analysis. 
 
@@ -256,6 +262,6 @@ The code is released under a 3-clause BSD license.
 
 ## Credits
 
-The software was originally developed by [Björn Brandenburg](https://people.mpi-sws.org/~bbb/). Joan Marcè i Igual, Sayra Ranjha, Srinidhi Srinivasan, Pourya Gohari and Richard Verhoeven contributed analysis improvements. It is now being maintained by [Geoffrey Nelissen](https://www.tue.nl/en/research/researchers/geoffrey-nelissen/).
+The software was originally developed by [Björn Brandenburg](https://people.mpi-sws.org/~bbb/). It is now being maintained by [Geoffrey Nelissen](https://www.tue.nl/en/research/researchers/geoffrey-nelissen/). Joan Marcè i Igual, Sayra Ranjha, Srinidhi Srinivasan, Pourya Gohari and Richard Verhoeven contributed major analysis and code improvements. 
 
 When using this software in academic work, please cite the papers listed at the top of this file.  
