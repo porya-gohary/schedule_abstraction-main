@@ -32,21 +32,17 @@ jobs:
 
         exclude:
           - os: windows-latest
-            c_compiler: gcc-10
+            compiler: { c_compiler: gcc-10, cpp_compiler: g++-10 }
           - os: windows-latest
-            c_compiler: gcc-11
+            compiler: { c_compiler: gcc-11, cpp_compiler: g++-11 }
           - os: windows-latest
-            c_compiler: gcc-12
+            compiler: { c_compiler: gcc-12, cpp_compiler: g++-12 }
           - os: windows-latest
-            c_compiler: gcc
+            compiler: { c_compiler: gcc, cpp_compiler: g++ }
           - os: windows-latest
-            c_compiler: clang
+            compiler: { c_compiler: clang, cpp_compiler: clang++ }
           - os: windows-latest
             cmake_option: -DPARALLEL_RUN=ON
-          - os: ubuntu-latest
-            c_compiler: cl
-          - os: macos-latest
-            c_compiler: cl
 
 
     steps:
