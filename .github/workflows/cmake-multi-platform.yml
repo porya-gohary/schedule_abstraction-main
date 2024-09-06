@@ -15,15 +15,15 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         build_type: [Release]
-        c_compiler: [gcc-10, gcc-11, gcc-12, gcc-13, gcc-latest, clang, cl]
-        cpp_compiler: [g++-10, g++-11, g++-12, g++-13, g++-latest, clang++, cl]
+        c_compiler: [gcc-10, gcc-11, gcc-12, gcc-latest, clang, cl]
+        cpp_compiler: [g++-10, g++-11, g++-12, g++-latest, clang++, cl]
         cmake_option: [-DPARALLEL_RUN=OFF, -DPARALLEL_RUN=ON, -DCOLLECT_SCHEDULE_GRAPHS=ON]
         include:
           # Windows with MSVC
           - os: windows-latest
             c_compiler: cl
             cpp_compiler: cl
-            cmake_option: -DUSE_TBB_MALLOC=OFF -DMSVC=ON
+            cmake_option: -DUSE_TBB_MALLOC=OFF -DMSVC=ON -DCOLLECT_SCHEDULE_GRAPHS=ON
             build_type: Release
 
           # Ubuntu with GCC 10
@@ -40,11 +40,6 @@ jobs:
           - os: ubuntu-latest
             c_compiler: gcc-12
             cpp_compiler: g++-12
-
-          # Ubuntu with GCC 13
-          - os: ubuntu-latest
-            c_compiler: gcc-13
-            cpp_compiler: g++-13
 
           # Ubuntu with the latest GCC
           - os: ubuntu-latest
@@ -77,11 +72,6 @@ jobs:
             c_compiler: gcc-12
             cpp_compiler: g++-12
 
-          # macOS with GCC 13 (Homebrew)
-          - os: macos-latest
-            c_compiler: gcc-13
-            cpp_compiler: g++-13
-
           # macOS with the latest GCC (Homebrew)
           - os: macos-latest
             c_compiler: gcc-latest
@@ -94,8 +84,6 @@ jobs:
             c_compiler: gcc-11
           - os: windows-latest
             c_compiler: gcc-12
-          - os: windows-latest
-            c_compiler: gcc-13
           - os: windows-latest
             c_compiler: gcc-latest
           - os: windows-latest
