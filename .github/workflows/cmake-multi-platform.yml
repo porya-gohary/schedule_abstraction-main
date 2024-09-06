@@ -20,7 +20,6 @@ jobs:
           - { c_compiler: gcc-11, cpp_compiler: g++-11 }
           - { c_compiler: gcc-12, cpp_compiler: g++-12 }
           - { c_compiler: clang, cpp_compiler: clang++ }
-          - { c_compiler: appleclang, cpp_compiler: appleclang }
         cmake_option:
           - -DPARALLEL_RUN=OFF -DCOLLECT_SCHEDULE_GRAPHS=ON
           - -DPARALLEL_RUN=ON
