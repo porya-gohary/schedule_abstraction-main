@@ -23,7 +23,7 @@ jobs:
           - os: windows-latest
             c_compiler: cl
             cpp_compiler: cl
-            cmake_option: -DUSE_TBB_MALLOC=OFF -DMSVC=ON -DCOLLECT_SCHEDULE_GRAPHS=ON
+            cmake_option: -DUSE_TBB_MALLOC=OFF -DMSVC=ON
             build_type: Release
 
           # Ubuntu with GCC 10
