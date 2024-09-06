@@ -60,30 +60,32 @@ jobs:
       if: ${{ matrix.os == 'ubuntu-latest' }}
       run: |
         sudo apt-get -y update
-        sudo apt-get -y install libtbb-dev ${{ matrix.c_compiler }} ${{ matrix.cpp_compiler }}
+        sudo apt-get -y install libtbb-dev ${{  matrix.compiler.c_compiler }} ${{  matrix.compiler.cpp_compiler }}
 
     - name: Install dependencies on macOS
       if: ${{ matrix.os == 'macos-latest' }}
       run: |
         brew update
         brew install tbb
-        if [[ "${{ matrix.c_compiler }}" == "gcc-10" ]]; then
+        if [[ "${{ matrix.compiler.c_compiler }}" == "gcc-10" ]]; then
           brew install gcc@10
-        elif [[ "${{ matrix.c_compiler }}" == "gcc-11" ]]; then
+        elif [[ "${{ matrix.compiler.c_compiler }}" == "gcc-11" ]]; then
           brew install gcc@11
-        elif [[ "${{ matrix.c_compiler }}" == "gcc-12" ]]; then
+        elif [[ "${{ matrix.compiler.c_compiler }}" == "gcc-12" ]]; then
           brew install gcc@12
-        elif [[ "${{ matrix.c_compiler }}" == "gcc" ]]; then
+        elif [[ "${{ matrix.compiler.c_compiler }}" == "gcc" ]]; then
           brew install gcc
         fi
 
     - name: Configure CMake
-      run: |
-        cmake -B ${{ steps.strings.outputs.build-output-dir }} \
-        -DCMAKE_C_COMPILER=${{ matrix.compiler.c_compiler }} \
-        -DCMAKE_CXX_COMPILER=${{ matrix.compiler.cpp_compiler }} \
-        -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
-        ${{ matrix.cmake_option }} \
+      # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
+      # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
+      run: >
+        cmake -B ${{ steps.strings.outputs.build-output-dir }}
+        -DCMAKE_CXX_COMPILER=${{ matrix.compiler.cpp_compiler }}
+        -DCMAKE_C_COMPILER=${{ matrix.compiler.c_compiler }}
+        -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+        ${{ matrix.cmake_option }}
         -S ${{ github.workspace }}
 
     - name: Build
