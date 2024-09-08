@@ -77,11 +77,11 @@ namespace NP {
 
 	};
 
-	class InvalidSelfSuspendingParameter : public std::exception
+	class Invalid_Self_Suspending_Parameter : public std::exception
 	{
 		public:
 
-		InvalidSelfSuspendingParameter(const JobID& bad_id)
+		Invalid_Self_Suspending_Parameter(const JobID& bad_id)
 		: ref(bad_id)
 		{}
 
@@ -107,7 +107,7 @@ namespace NP {
 			susps[idx].set_toIndex((Job_index)(&toJob - &(jobs[0])));
 			susps[idx].set_fromIndex((Job_index)(&fromJob - &(jobs[0])));
 			if (susps[idx].get_maxsus() < susps[idx].get_minsus()) {
-				throw InvalidSelfSuspendingParameter(susps[idx].get_fromID());
+				throw Invalid_Self_Suspending_Parameter(susps[idx].get_fromID());
 			}
 		}
 	}
