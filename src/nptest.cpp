@@ -26,10 +26,6 @@
 
 #define MAX_PROCESSORS 512
 
-#define NOSUSP 0
-#define GENERAL_SUSP 1
-#define PATHWISE_SUSP 2
-
 // command line options
 static bool want_naive;
 static bool want_dense;
@@ -62,7 +58,7 @@ static unsigned int num_worker_threads = 0;
 struct Analysis_result {
 	bool schedulable;
 	bool timeout;
-	unsigned long number_of_nodes, number_of_states, number_of_edges, max_width, number_of_jobs;
+	unsigned long long number_of_nodes, number_of_states, number_of_edges, max_width, number_of_jobs;
 	double cpu_time;
 	std::string graph;
 	std::string response_times_csv;
@@ -242,7 +238,7 @@ static void process_file(const std::string& fname)
 			std::cout << ",  " << (int) result.schedulable;
 
 		std::cout << ",  " << result.number_of_jobs
-				  << ",  " << result.number_of_nodes
+			  << ",  " << result.number_of_nodes
 		          << ",  " << result.number_of_states
 		          << ",  " << result.number_of_edges
 		          << ",  " << result.max_width
