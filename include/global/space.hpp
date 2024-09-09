@@ -1103,9 +1103,6 @@ namespace NP {
 				const auto* n_states = n.get_states();
 				for (State* s : *n_states)
 				{
-#ifdef CONFIG_PARALLEL
-					Nodes_map_accessor acc;
-#endif
 					// check for all possible parallelism levels of the moldable gang job j (if j is not gang or not moldable than min_paralellism = max_parallelism).
 					for (unsigned int p = j.get_max_parallelism(); p >= j.get_min_parallelism(); p--)
 					{
@@ -1145,23 +1142,28 @@ namespace NP {
 						}
 						else
 						{
-#ifdef CONFIG_PARALLEL
-							// if we do not have a pointer to a node with the same set of scheduled job yet,
-							// try to find an existing node with the same set of scheduled jobs. Otherwise, create one.
-							if (next == nullptr || acc.empty())
-							{
-								auto next_key = n.next_key(j);
-								Job_set new_sched_jobs{ n.get_scheduled_jobs(), j.get_job_index() };
+#ifdef CONFIG_PARALLEL							
+							Nodes_map_accessor acc;
+							auto next_key = n.next_key(j);
+							Job_set new_sched_jobs{ n.get_scheduled_jobs(), j.get_job_index() };
 
+							// Function to create a new node
+							auto create_new_node = [&]() {
+								return &(new_node_at(acc, n, j, j.get_job_index(),
+													 earliest_possible_job_release(n, j),
+													 earliest_certain_source_job_release(n, j),
+													 earliest_certain_sequential_source_job_release(n, j)));
+							};
+
+							// Try to find an existing node with the same set of scheduled jobs
+							if (next == nullptr || acc.empty()) {
 								while (next == nullptr || acc.empty()) {
 									// check if key exists
 									if (nodes_by_key.find(acc, next_key)) {
 										// If be_naive, a new node and a new state should be created for each new job dispatch.
 										if (be_naive) {
-											next = &(new_node_at(acc, n, j, j.get_job_index(), earliest_possible_job_release(n, j), earliest_certain_source_job_release(n, j), earliest_certain_sequential_source_job_release(n, j)));
-										}
-										else
-										{
+											next = create_new_node();
+										} else {
 											for (Node_ref other : acc->second) {
 												if (other->get_scheduled_jobs() == new_sched_jobs) {
 													next = other;
@@ -1169,11 +1171,14 @@ namespace NP {
 													break;
 												}
 											}
+											if (next == nullptr) {
+												next = create_new_node();
+											}
 										}
 									}
 									if (next == nullptr) {
 										if (nodes_by_key.insert(acc, next_key)) {
-											next = &(new_node_at(acc, n, j, j.get_job_index(), earliest_possible_job_release(n, j), earliest_certain_source_job_release(n, j), earliest_certain_sequential_source_job_release(n, j)));
+											next = create_new_node();
 										}
 									}
 									// if we raced with concurrent creation, try again
@@ -1182,7 +1187,7 @@ namespace NP {
 							// If be_naive, a new node and a new state should be created for each new job dispatch.
 							else if (be_naive) {
 								// note that the accessor should be pointing on something at this point
-								next = &(new_node_at(acc, n, j, j.get_job_index(), earliest_possible_job_release(n, j), earliest_certain_source_job_release(n, j), earliest_certain_sequential_source_job_release(n, j)));
+								next = create_new_node();
 							}
 							assert(!acc.empty());
 #else
