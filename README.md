@@ -262,6 +262,6 @@ The code is released under a 3-clause BSD license.
 
 ## Credits
 
-The software was originally developed by [Björn Brandenburg](https://people.mpi-sws.org/~bbb/). It is now being maintained by [Geoffrey Nelissen](https://www.tue.nl/en/research/researchers/geoffrey-nelissen/). Joan Marcè i Igual, Sayra Ranjha, Srinidhi Srinivasan, Pourya Gohari and Richard Verhoeven contributed major analysis and code improvements. 
+The software was originally developed by [Björn Brandenburg](https://people.mpi-sws.org/~bbb/). It is now being maintained by [Geoffrey Nelissen](https://www.tue.nl/en/research/researchers/geoffrey-nelissen/). Mitra Nasri, Joan Marcè i Igual, Sayra Ranjha, Srinidhi Srinivasan, Pourya Gohari and Richard Verhoeven contributed major analysis and code improvements. 
 
 When using this software in academic work, please cite the papers listed at the top of this file.  
