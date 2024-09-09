@@ -1101,11 +1101,11 @@ namespace NP {
 
 				// loop over all states in the node n
 				const auto* n_states = n.get_states();
+#ifdef CONFIG_PARALLEL
+				Nodes_map_accessor acc;
+#endif
 				for (State* s : *n_states)
 				{
-#ifdef CONFIG_PARALLEL
-					Nodes_map_accessor acc;
-#endif
 					// check for all possible parallelism levels of the moldable gang job j (if j is not gang or not moldable than min_paralellism = max_parallelism).
 					for (unsigned int p = j.get_max_parallelism(); p >= j.get_min_parallelism(); p--)
 					{
@@ -1168,6 +1168,9 @@ namespace NP {
 													DM("=== dispatch: next exists." << std::endl);
 													break;
 												}
+											}
+											if (next == nullptr) {
+												next = &(new_node_at(acc, n, j, j.get_job_index(), earliest_possible_job_release(n, j), earliest_certain_source_job_release(n, j), earliest_certain_sequential_source_job_release(n, j)));
 											}
 										}
 									}
