@@ -257,7 +257,7 @@ namespace NP {
 		{
 			stream << "Job{" << j.id.task << ", " << j.id.job << ", " << j.arrival << ", ";
 			for (auto i : j.exec_time)
-				stream << i << ", ";
+				stream << i.first << " cores: " << i.second << ", ";
 			stream << j.deadline << ", " << j.priority << "}";
 			return stream;
 		}
