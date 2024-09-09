@@ -40,12 +40,23 @@ namespace NP {
 		return !in.eof();
 	}
 
+	inline bool more_fields_in_line(std::istream& in)
+	{
+		if (!in.good() || in.peek() == (int)'\n' || in.peek() == (int)'\r')
+			return false;
+		else
+			return true;
+	}
+
 	inline void next_field(std::istream& in)
 	{
-		// eat up any trailing spaces
-		skip_all(in, ' ');
-		// eat up field separator
-		skip_one(in, ',');
+	  	while(in.good() && (in.peek() == ',' || in.peek()==' '))
+		{
+			// eat up any trailing spaces
+			skip_all(in, ' ');
+			// eat up field separator
+			skip_one(in, ',');
+		}
 	}
 
 	inline void next_line(std::istream& in)
@@ -63,44 +74,59 @@ namespace NP {
 		return JobID(jid, tid);
 	}
 
-	inline Precedence_constraint parse_precedence_constraint(std::istream &in)
+	//Functions that help parse selfsuspending tasks file
+	template<class Time>
+	Precedence_constraint<Time> parse_precedence_constraint(std::istream &in)
 	{
+		unsigned long from_tid, from_jid, to_tid, to_jid;
+		Time sus_min=0, sus_max=0;
+
 		std::ios_base::iostate state_before = in.exceptions();
+
 		in.exceptions(std::istream::failbit | std::istream::badbit);
 
-		// first two columns
-		auto from = parse_job_id(in);
-
+		in >> from_tid;
 		next_field(in);
-
-		// last two columns
-		auto to = parse_job_id(in);
+		in >> from_jid;
+		next_field(in);
+		in >> to_tid;
+		next_field(in);
+		in >> to_jid;
+		next_field(in);
+		if (more_fields_in_line(in))
+		{
+			in >> sus_min;
+			next_field(in);
+			in >> sus_max;
+		}
 
 		in.exceptions(state_before);
 
-		return Precedence_constraint(from, to);
+		return Precedence_constraint<Time>{JobID{from_jid, from_tid},
+											JobID{to_jid, to_tid},
+		                          			Interval<Time>{sus_min, sus_max}};
 	}
 
-	inline Precedence_constraints parse_dag_file(std::istream& in)
+	template<class Time>
+	std::vector<Precedence_constraint<Time>> parse_precedence_file(std::istream& in)
 	{
-		Precedence_constraints edges;
-
 		// skip column headers
 		next_line(in);
+		std::vector<Precedence_constraint<Time>> cstr;
 
 		// parse all rows
 		while (more_data(in)) {
-			// each row contains one precedence constraint
-			edges.push_back(parse_precedence_constraint(in));
+			// each row contains one self-suspending constraint
+			cstr.push_back(parse_precedence_constraint<Time>(in));
 			next_line(in);
 		}
-
-		return edges;
+		return cstr;
 	}
 
-	inline Precedence_constraints parse_yaml_dag_file(std::istream& in)
+	template<class Time>
+	inline std::vector<Precedence_constraint<Time>> parse_yaml_dag_file(std::istream& in)
 	{
-		Precedence_constraints edges;
+		std::vector<Precedence_constraint<Time>> edges;
 		// Clear any flags
 		in.clear();
 		// Move the pointer to the beginning
@@ -125,12 +151,12 @@ namespace NP {
 							auto tid = succ[0].as<unsigned long>();
 							auto jid = succ[1].as<unsigned long>();
 							auto to = JobID(jid, tid);
-							edges.push_back(Precedence_constraint(from, to));
+							edges.push_back(Precedence_constraint<Time>(from, to, {0, 0}));
 						} else {
 							auto tid = succ["Task ID"].as<unsigned long>();
 							auto jid = succ["Job ID"].as<unsigned long>();
 							auto to = JobID(jid, tid);
-							edges.push_back(Precedence_constraint(from, to));
+							edges.push_back(Precedence_constraint<Time>(from, to, {0, 0}));
 						}
 					}
 				}
@@ -142,7 +168,7 @@ namespace NP {
 		return edges;
 	}
 
-	template<class Time> Job<Time> parse_job(std::istream& in)
+	template<class Time> Job<Time> parse_job(std::istream& in, std::size_t idx)
 	{
 		unsigned long tid, jid;
 
@@ -171,7 +197,7 @@ namespace NP {
 		in.exceptions(state_before);
 
 		return Job<Time>{jid, Interval<Time>{arr_min, arr_max},
-						 Interval<Time>{cost_min, cost_max}, dl, prio, tid};
+						Interval<Time>{cost_min, cost_max}, dl, prio, idx, tid};
 	}
 
 	template<class Time>
@@ -181,9 +207,11 @@ namespace NP {
 		next_line(in);
 
 		typename Job<Time>::Job_set jobs;
+		std::size_t idx=0;
 
 		while (more_data(in)) {
-			jobs.push_back(parse_job<Time>(in));
+			jobs.push_back(parse_job<Time>(in, idx));
+			idx++;
 			// munge any trailing whitespace or extra columns
 			next_line(in);
 		}
@@ -191,6 +219,7 @@ namespace NP {
 		return jobs;
 	}
 
+	//Functions that help parse the abort actions file
 	template<class Time>
 	typename Job<Time>::Job_set parse_yaml_job_file(std::istream& in)
 	{

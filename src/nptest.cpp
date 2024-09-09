@@ -20,19 +20,15 @@
 #endif
 
 #include "problem.hpp"
-#include "uni/space.hpp"
 #include "global/space.hpp"
 #include "io.hpp"
 #include "clock.hpp"
-
 
 #define MAX_PROCESSORS 512
 
 // command line options
 static bool want_naive;
 static bool want_dense;
-static bool want_prm_iip;
-static bool want_cw_iip;
 
 static bool want_precedence = false;
 static std::string precedence_file;
@@ -42,6 +38,8 @@ static std::string aborts_file;
 
 static bool want_multiprocessor = false;
 static unsigned int num_processors = 1;
+
+static bool use_supernodes = true;
 
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
 static bool want_dot_graph;
@@ -60,16 +58,17 @@ static unsigned int num_worker_threads = 0;
 struct Analysis_result {
 	bool schedulable;
 	bool timeout;
-	unsigned long long number_of_states, number_of_edges, max_width, number_of_jobs;
+	unsigned long long number_of_nodes, number_of_states, number_of_edges, max_width, number_of_jobs;
 	double cpu_time;
 	std::string graph;
 	std::string response_times_csv;
 };
 
+
 template<class Time, class Space>
 static Analysis_result analyze(
 	std::istream &in,
-	std::istream &dag_in,
+	std::istream &prec_in,
 	std::istream &aborts_in,
     bool &is_yaml)
 {
@@ -77,10 +76,11 @@ static Analysis_result analyze(
 	oneapi::tbb::task_arena arena(num_worker_threads ? num_worker_threads : oneapi::tbb::info::default_concurrency());
 #endif
 
+
 	// Parse input files and create NP scheduling problem description
     typename NP::Job<Time>::Job_set jobs = is_yaml ? NP::parse_yaml_job_file<Time>(in) : NP::parse_csv_job_file<Time>(in);
 	// Parse precedence constraints
-	typename NP::Precedence_constraints edges = is_yaml ? NP::parse_yaml_dag_file(in) : NP::parse_dag_file(dag_in);
+	std::vector<NP::Precedence_constraint<Time>> edges = is_yaml ? NP::parse_yaml_dag_file<Time>(prec_in) : NP::parse_precedence_file<Time>(prec_in);
 
 	NP::Scheduling_problem<Time> problem{
         jobs,
@@ -93,8 +93,8 @@ static Analysis_result analyze(
 	opts.timeout = timeout;
 	opts.max_depth = max_depth;
 	opts.early_exit = !continue_after_dl_miss;
-	opts.num_buckets = problem.jobs.size();
 	opts.be_naive = want_naive;
+	opts.use_supernodes = use_supernodes;
 
 	// Actually call the analysis engine
 	auto space = Space::explore(problem, opts);
@@ -103,7 +103,7 @@ static Analysis_result analyze(
 	auto graph = std::ostringstream();
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
 	if (want_dot_graph)
-		graph << space;
+		graph << *space;
 #endif
 
 	auto rta = std::ostringstream();
@@ -111,7 +111,7 @@ static Analysis_result analyze(
 	if (want_rta_file) {
 		rta << "Task ID, Job ID, BCCT, WCCT, BCRT, WCRT" << std::endl;
 		for (const auto& j : problem.jobs) {
-			Interval<Time> finish = space.get_finish_times(j);
+			Interval<Time> finish = space->get_finish_times(j);
 			rta << j.get_task_id() << ", "
 			    << j.get_job_id() << ", "
 			    << finish.from() << ", "
@@ -124,41 +124,36 @@ static Analysis_result analyze(
 		}
 	}
 
-	return {
-		space.is_schedulable(),
-		space.was_timed_out(),
-		space.number_of_states(),
-		space.number_of_edges(),
-		space.max_exploration_front_width(),
-		problem.jobs.size(),
-		space.get_cpu_time(),
+	Analysis_result results = Analysis_result{
+		space->is_schedulable(),
+		space->was_timed_out(),
+		space->number_of_nodes(),
+		space->number_of_states(),
+		space->number_of_edges(),
+		space->max_exploration_front_width(),
+		(unsigned long)(problem.jobs.size()),
+		space->get_cpu_time(),
 		graph.str(),
 		rta.str()
 	};
+	delete space;
+	return results;
 }
 
 static Analysis_result process_stream(
 	std::istream &in,
-	std::istream &dag_in,
+	std::istream &prec_in,
 	std::istream &aborts_in,
     bool is_yaml)
 {
 	if (want_multiprocessor && want_dense)
-		return analyze<dense_t, NP::Global::State_space<dense_t>>(in, dag_in, aborts_in, is_yaml);
+		return analyze<dense_t, NP::Global::State_space<dense_t>>(in, prec_in, aborts_in, is_yaml);
 	else if (want_multiprocessor && !want_dense)
-		return analyze<dtime_t, NP::Global::State_space<dtime_t>>(in, dag_in, aborts_in, is_yaml);
-	else if (want_dense && want_prm_iip)
-		return analyze<dense_t, NP::Uniproc::State_space<dense_t, NP::Uniproc::Precatious_RM_IIP<dense_t>>>(in, dag_in, aborts_in, is_yaml);
-	else if (want_dense && want_cw_iip)
-		return analyze<dense_t, NP::Uniproc::State_space<dense_t, NP::Uniproc::Critical_window_IIP<dense_t>>>(in, dag_in, aborts_in, is_yaml);
-	else if (want_dense && !want_prm_iip)
-		return analyze<dense_t, NP::Uniproc::State_space<dense_t>>(in, dag_in, aborts_in, is_yaml);
-	else if (!want_dense && want_prm_iip)
-		return analyze<dtime_t, NP::Uniproc::State_space<dtime_t, NP::Uniproc::Precatious_RM_IIP<dtime_t>>>(in, dag_in, aborts_in, is_yaml);
-	else if (!want_dense && want_cw_iip)
-		return analyze<dtime_t, NP::Uniproc::State_space<dtime_t, NP::Uniproc::Critical_window_IIP<dtime_t>>>(in, dag_in, aborts_in, is_yaml);
+		return analyze<dtime_t, NP::Global::State_space<dtime_t>>(in, prec_in, aborts_in, is_yaml);
+	else if (want_dense)
+		return analyze<dense_t, NP::Global::State_space<dense_t>>(in, prec_in, aborts_in, is_yaml);
 	else
-		return analyze<dtime_t, NP::Uniproc::State_space<dtime_t>>(in, dag_in, aborts_in, is_yaml);
+		return analyze<dtime_t, NP::Global::State_space<dtime_t>>(in, prec_in, aborts_in, is_yaml);
 }
 
 static void process_file(const std::string& fname)
@@ -186,7 +181,9 @@ static void process_file(const std::string& fname)
 			static_cast<std::istream&>(empty_aborts_stream);
 
 		if (fname == "-")
+		{
 			result = process_stream(std::cin, dag_in, aborts_in, false);
+		}
 		else {
             // check the extension of the file
             std::string ext = fname.substr(fname.find_last_of(".") + 1);
@@ -197,8 +194,10 @@ static void process_file(const std::string& fname)
 
 			auto in = std::ifstream(fname, std::ios::in);
 			result = process_stream(in, dag_in, aborts_in, is_yaml);
+
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
 			if (want_dot_graph) {
+				DM("\nDot graph being made\n");
 				std::string dot_name = fname;
 				auto p = is_yaml ? dot_name.find(".yaml") : dot_name.find(".csv");
 				if (p != std::string::npos) {
@@ -239,6 +238,7 @@ static void process_file(const std::string& fname)
 			std::cout << ",  " << (int) result.schedulable;
 
 		std::cout << ",  " << result.number_of_jobs
+			  << ",  " << result.number_of_nodes
 		          << ",  " << result.number_of_states
 		          << ",  " << result.number_of_edges
 		          << ",  " << result.max_width
@@ -255,17 +255,23 @@ static void process_file(const std::string& fname)
 		exit(1);
 	} catch (NP::InvalidJobReference& ex) {
 		std::cerr << precedence_file << ": bad job reference: job "
-		          << ex.ref.job << " of task " << ex.ref.task
-			      << " is not part of the job set given in "
-			      << fname
-			      << std::endl;
+				  << ex.ref.job << " of task " << ex.ref.task
+				  << " is not part of the job set given in "
+				  << fname
+				  << std::endl;
 		exit(3);
 	} catch (NP::InvalidAbortParameter& ex) {
 		std::cerr << aborts_file << ": invalid abort parameter: job "
-		          << ex.ref.job << " of task " << ex.ref.task
-			      << " has an impossible abort time (abort before release)"
-			      << std::endl;
+				  << ex.ref.job << " of task " << ex.ref.task
+				  << " has an impossible abort time (abort before release)"
+				  << std::endl;
 		exit(4);
+	} catch (NP::InvalidPrecParameter& ex) {
+		std::cerr << precedence_file << ": invalid self-suspending parameter: job "
+				  << ex.ref.job << " of task " << ex.ref.task
+				  << " has an invalid self-suspending time"
+				  << std::endl;
+		exit(5);
 	} catch (std::exception& ex) {
 		std::cerr << fname << ": '" << ex.what() << "'" << std::endl;
 		exit(1);
@@ -274,8 +280,9 @@ static void process_file(const std::string& fname)
 
 static void print_header(){
 	std::cout << "# file name"
-	          << ", schedulable?"
+	          << ", schedulable?(1Y/0N)"
 	          << ", #jobs"
+	          << ", #nodes"
 	          << ", #states"
 	          << ", #edges"
 	          << ", max width"
@@ -310,10 +317,6 @@ int main(int argc, char** argv)
 	      .action("store_const").set_const("1")
 	      .help("use the naive exploration method (default: merging)");
 
-	parser.add_option("-i", "--iip").dest("iip")
-	      .choices({"none", "P-RM", "CW"}).set_default("none")
-	      .help("the IIP to use (default: none)");
-
 	parser.add_option("-p", "--precedence").dest("precedence_file")
 	      .help("name of the file that contains the job set's precedence DAG")
 	      .set_default("");
@@ -339,6 +342,9 @@ int main(int argc, char** argv)
 	      .action("store_const").set_const("1")
 	      .help("store the state graph in Graphviz dot format (default: off)");
 
+	parser.add_option("--sn", "--use-supernodes").dest("sn").set_default("1")
+	      .help("use supernodes while buildidng the graph (default: on)");
+
 	parser.add_option("-r", "--save-response-times").dest("rta").set_default("0")
 	      .action("store_const").set_const("1")
 	      .help("store the best- and worst-case response times (default: off)");
@@ -351,13 +357,11 @@ int main(int argc, char** argv)
 
 
 	auto options = parser.parse_args(argc, argv);
+	//all the options that could have been entered above are processed below and appropriate variables
+	// are assigned their respective values.
 
-	const std::string& time_model = options.get("time_model");
+	const std::string& time_model = (const std::string&) options.get("time_model");
 	want_dense = time_model == "dense";
-
-	const std::string& iip = options.get("iip");
-	want_prm_iip = iip == "P-RM";
-	want_cw_iip = iip == "CW";
 
 	want_naive = options.get("naive");
 
@@ -399,8 +403,11 @@ int main(int argc, char** argv)
 
 	continue_after_dl_miss = options.get("go_on_after_dl");
 
+	use_supernodes = options.get("sn");
+
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
 	want_dot_graph = options.get("dot");
+	DM("Dot graph"<<want_dot_graph<<std::endl);
 #else
 	if (options.is_set_by_user("dot")) {
 		std::cerr << "Error: graph collection support must be enabled "
@@ -421,9 +428,11 @@ int main(int argc, char** argv)
 	}
 #endif
 
+	// this prints the header in the output on the console
 	if (options.get("print_header"))
 		print_header();
 
+	// process_file is given the arguments that have been passed
 	for (auto f : parser.args())
 		process_file(f);
 

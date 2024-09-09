@@ -38,6 +38,12 @@ template<class T> class Interval {
 	{
 	}
 
+	Interval()
+	: a(0)
+	, b(0)
+	{
+	}
+
 	const T& from() const
 	{
 		return a;
@@ -76,6 +82,23 @@ template<class T> class Interval {
 	bool contains(const T& point) const
 	{
 		return from() <= point && point <= until();
+	}
+
+	bool disjoint_before(const Interval<T>& other) const
+	{
+		return other.until() < from();
+	}
+
+	bool disjoint_after(const Interval<T>& other) const
+	{
+		return until() < other.from();
+	}
+
+  // RV:  note that  " a.overlap(b) "  is not equal to " !(a.disjoint(b) "
+  //      mixing calls to overlap() and disjoint() might be confusing.
+	bool overlap(const Interval<T>& other) const
+	{
+		return (not (disjoint_before(other)) || (disjoint_after(other)));
 	}
 
 	bool disjoint(const Interval<T>& other) const
@@ -126,6 +149,12 @@ template<class T> class Interval {
 		b = std::max(until(), other.until());
 	}
 
+	void equate(const Interval<T>& other)
+	{
+		a = other.from();
+		b = other.until();
+	}
+
 	Interval<T> operator|(const Interval<T>& other) const
 	{
 		return merge(other);
@@ -157,62 +186,5 @@ template<class T> std::ostream& operator<< (std::ostream& stream, const Interval
 	stream << "I(" << i.from() << ", " << i.until() << ")";
 	return stream;
 }
-
-
-
-template<class T, class X, Interval<T> (*map)(const X&)> class Interval_lookup_table {
-	typedef std::vector<std::reference_wrapper<const X>> Bucket;
-
-	private:
-
-	std::unique_ptr<Bucket[]> buckets;
-	const Interval<T> range;
-	const T width;
-	const unsigned int num_buckets;
-
-
-	public:
-
-	std::size_t bucket_of(const T& point) const
-	{
-		if (range.contains(point)) {
-			return static_cast<std::size_t>((point - range.from()) / width);
-		} else if (point < range.from()) {
-			return 0;
-		} else
-			return num_buckets - 1;
-	}
-
-	Interval_lookup_table(const Interval<T>& range, T bucket_width)
-	: range(range)
-	, width(std::max(bucket_width, static_cast<T>(1)))
-	, num_buckets(1 + std::max(
-	                  static_cast<std::size_t>(range.length() / this->width),
-	                  static_cast<std::size_t>(1)))
-	{
-		buckets = std::make_unique<Bucket[]>(num_buckets);
-	}
-
-	void insert(const X& x)
-	{
-		Interval<T> w = map(x);
-		auto a = bucket_of(w.from()), b = bucket_of(w.until());
-		assert(a < num_buckets);
-		assert(b < num_buckets);
-		for (auto i = a; i <= b; i++)
-			buckets[i].push_back(x);
-	}
-
-	const Bucket& lookup(T point) const
-	{
-		return buckets[bucket_of(point)];
-	}
-
-	const Bucket& bucket(std::size_t i) const
-	{
-		return buckets[i];
-	}
-
-};
 
 #endif

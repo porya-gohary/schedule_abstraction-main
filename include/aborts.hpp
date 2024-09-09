@@ -71,7 +71,7 @@ namespace NP {
 	void validate_abort_refs(const std::vector<Abort_action<Time>>& aborts,
 	                         const typename Job<Time>::Job_set jobs)
 	{
-		for (auto action : aborts) {
+		for (const auto& action : aborts) {
 			auto job = lookup<Time>(jobs, action.get_id());
 			if (action.earliest_trigger_time() < job.earliest_arrival() ||
 			    action.latest_trigger_time() < job.latest_arrival())

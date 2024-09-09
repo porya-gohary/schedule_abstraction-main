@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.8.0)
 
-project(NP_schedulabiliy_test VERSION 2.2.0 LANGUAGES CXX)
+project(NP_schedulabiliy_test VERSION 3.0.0 LANGUAGES CXX)
 
 include_directories(include)
 include_directories(lib/include)
@@ -55,6 +55,12 @@ if (USE_YAML_CPP_PACKAGE)
     find_package(yaml-cpp)
     if (NOT yaml-cpp_FOUND)
         set(USE_YAML_CPP_PACKAGE OFF CACHE BOOL "Use yaml-cpp" FORCE)
+    else ()
+        message(STATUS "Using yaml-cpp config file: ${yaml-cpp_CONFIG}")
+        message(STATUS "yaml-cpp include: ${YAML_CPP_INCLUDE_DIR}")
+        message(STATUS "yaml-cpp library: ${YAML_CPP_LIBRARY_DIR}")
+        include_directories(${YAML_CPP_INCLUDE_DIR})
+        link_directories(${YAML_CPP_LIBRARY_DIR})
     endif ()
 endif ()
 

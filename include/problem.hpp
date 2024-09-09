@@ -13,12 +13,13 @@ namespace NP {
 
 		typedef typename Job<Time>::Job_set Workload;
 		typedef typename std::vector<Abort_action<Time>> Abort_actions;
+		typedef typename std::vector<Precedence_constraint<Time>> Precedence_constraints;
 
 		// ** Description of the workload:
 		// (1) a set of jobs
 		Workload jobs;
 		// (2) a set of precedence constraints among the jobs
-		Precedence_constraints dag;
+		Precedence_constraints prec;
 		// (3) abort actions for (some of) the jobs
 		Abort_actions aborts;
 
@@ -28,27 +29,27 @@ namespace NP {
 		unsigned int num_processors;
 
 		// Classic default setup: no abort actions
-		Scheduling_problem(Workload jobs, Precedence_constraints dag,
+		Scheduling_problem(Workload jobs, Precedence_constraints prec,
 		                   unsigned int num_processors = 1)
 		: num_processors(num_processors)
 		, jobs(jobs)
-		, dag(dag)
+		, prec(prec)
 		{
 			assert(num_processors > 0);
-			validate_prec_refs<Time>(dag, jobs);
+			validate_prec_cstrnts<Time>(this->prec, jobs);
 		}
 
-		// Full constructor with abort actions
-		Scheduling_problem(Workload jobs, Precedence_constraints dag,
+		// Constructor with abort actions and precedence constraints
+		Scheduling_problem(Workload jobs, Precedence_constraints prec,
 		                   Abort_actions aborts,
 		                   unsigned int num_processors)
 		: num_processors(num_processors)
 		, jobs(jobs)
-		, dag(dag)
+		, prec(prec)
 		, aborts(aborts)
 		{
 			assert(num_processors > 0);
-			validate_prec_refs<Time>(dag, jobs);
+			validate_prec_cstrnts<Time>(this->prec, jobs);
 			validate_abort_refs<Time>(aborts, jobs);
 		}
 
@@ -82,16 +83,15 @@ namespace NP {
 		// baseline).
 		bool be_naive;
 
-		// Implementation-specific: how large should the lookup table
-		// of the main workload index be?
-		std::size_t num_buckets;
+		// If using supernodes
+		bool use_supernodes;
 
 		Analysis_options()
 		: timeout(0)
 		, max_depth(0)
 		, early_exit(true)
-		, num_buckets(1000)
 		, be_naive(false)
+		, use_supernodes(true)
 		{
 		}
 	};

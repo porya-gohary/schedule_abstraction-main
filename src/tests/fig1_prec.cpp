@@ -4,7 +4,7 @@
 #include <sstream>
 
 #include "io.hpp"
-#include "uni/space.hpp"
+#include "global/space.hpp"
 
 using namespace NP;
 
@@ -37,23 +37,26 @@ TEST_CASE("[prec] RTSS17-Fig1a") {
 	auto in = std::istringstream(fig1a_jobs_file);
 
 	Scheduling_problem<dtime_t> prob{
-			parse_csv_job_file<dtime_t>(in),
-			parse_dag_file(dag_in)};
+		parse_csv_job_file<dtime_t>(in),
+		parse_precedence_file<dtime_t>(dag_in)};
 
 	Analysis_options opts;
 
 	opts.be_naive = true;
-	auto nspace = Uniproc::State_space<dtime_t>::explore(prob, opts);
-	CHECK(nspace.is_schedulable());
+	auto nspace = Global::State_space<dtime_t>::explore(prob, opts);
+	CHECK(nspace->is_schedulable());
 
 	opts.be_naive = false;
-	auto space = Uniproc::State_space<dtime_t>::explore(prob, opts);
-	CHECK(space.is_schedulable());
+	auto space = Global::State_space<dtime_t>::explore(prob, opts);
+	CHECK(space->is_schedulable());
 
 	for (const Job<dtime_t>& j : prob.jobs) {
-		CHECK(nspace.get_finish_times(j) == space.get_finish_times(j));
-		CHECK(nspace.get_finish_times(j).from() != 0);
+		CHECK(nspace->get_finish_times(j) == space->get_finish_times(j));
+		CHECK(nspace->get_finish_times(j).from() != 0);
 	}
+
+	delete space;
+	delete nspace;
 }
 
 const std::string prec_dag_file_with_cycle =
@@ -72,19 +75,22 @@ TEST_CASE("[prec] handle cycles gracefully") {
 	auto in = std::istringstream(fig1a_jobs_file);
 
 	Scheduling_problem<dtime_t> prob{
-			parse_csv_job_file<dtime_t>(in),
-			parse_dag_file(dag_in)};
+		parse_csv_job_file<dtime_t>(in),
+		parse_precedence_file<dtime_t>(dag_in)};
 
 	Analysis_options opts;
-	opts.early_exit = false;
+	//opts.early_exit = false;
 
 	opts.be_naive = true;
-	auto nspace = Uniproc::State_space<dtime_t>::explore(prob, opts);
-	CHECK_FALSE(nspace.is_schedulable());
+	auto nspace = Global::State_space<dtime_t>::explore(prob, opts);
+	CHECK_FALSE(nspace->is_schedulable());
 
 	opts.be_naive = false;
-	auto space = Uniproc::State_space<dtime_t>::explore(prob, opts);
-	CHECK_FALSE(space.is_schedulable());
+	auto space = Global::State_space<dtime_t>::explore(prob, opts);
+	CHECK_FALSE(space->is_schedulable());
+
+	delete space;
+	delete nspace;
 }
 
 const std::string deadend_jobs_file =
@@ -112,18 +118,21 @@ TEST_CASE("[prec] handle analysis deadend gracefully") {
 	auto in = std::istringstream(deadend_jobs_file);
 
 	Scheduling_problem<dtime_t> prob{
-			parse_csv_job_file<dtime_t>(in),
-			parse_dag_file(dag_in)};
+		parse_csv_job_file<dtime_t>(in),
+		parse_precedence_file<dtime_t>(dag_in)};
 
 	Analysis_options opts;
-	opts.early_exit = false;
+	//opts.early_exit = false;
 
 	opts.be_naive = true;
-	auto nspace = Uniproc::State_space<dtime_t>::explore(prob, opts);
-	CHECK_FALSE(nspace.is_schedulable());
+	auto nspace = Global::State_space<dtime_t>::explore(prob, opts);
+	CHECK_FALSE(nspace->is_schedulable());
 
 	opts.be_naive = false;
-	auto space = Uniproc::State_space<dtime_t>::explore(prob, opts);
-	CHECK_FALSE(space.is_schedulable());
+	auto space = Global::State_space<dtime_t>::explore(prob, opts);
+	CHECK_FALSE(space->is_schedulable());
+
+	delete space;
+	delete nspace;
 }
 

@@ -6,7 +6,7 @@
 
 #include "index_set.hpp"
 #include "jobs.hpp"
-#include "uni/space.hpp"
+#include "global/space.hpp"
 
 using namespace NP;
 
@@ -44,48 +44,29 @@ TEST_CASE("Intervals") {
 
 
 TEST_CASE("Job hashes work") {
-	Job<dtime_t> j1{9,  Interval<dtime_t>(0, 0), Interval<dtime_t>(3, 13), 60, 60};
-	Job<dtime_t> j2{9,  Interval<dtime_t>(0, 0), Interval<dtime_t>(3, 13), 60, 60};
-	Job<dtime_t> j3{10, Interval<dtime_t>(0, 0), Interval<dtime_t>(3, 13), 60, 60};
+	Job<dtime_t> j1{9,  Interval<dtime_t>(0, 0), Interval<dtime_t>(3, 13), 60, 60, 0, 0};
+	Job<dtime_t> j2{9,  Interval<dtime_t>(0, 0), Interval<dtime_t>(3, 13), 60, 60, 0, 0};
+	Job<dtime_t> j3{10, Interval<dtime_t>(0, 0), Interval<dtime_t>(3, 13), 60, 60, 0, 2};
 
 	auto h = std::hash<Job<dtime_t>>{};
 
-	CHECK(h(j1) == h(j2));
+	CHECK(h(j1) == h(j2)); // The job index (last argument) can be used to make the hash uniq.
 	CHECK(h(j3) != h(j1));
 }
 
 
-TEST_CASE("Interval LUT") {
-
-	Interval_lookup_table<dtime_t, Job<dtime_t>, &Job<dtime_t>::scheduling_window> lut(Interval<dtime_t>(0, 60), 10);
-
-	Job<dtime_t> j1{10, Interval<dtime_t>(0, 0), Interval<dtime_t>(3, 13), 60, 60};
-
-	lut.insert(j1);
-
-	int count = 0;
-	for (auto j : lut.lookup(30))
-		count++;
-
-	CHECK(count == 1);
-}
-
 
 TEST_CASE("state space") {
 
-	NP::Uniproc::Schedule_state<dtime_t> s0;
+	NP::Global::Schedule_node<dtime_t> n0{0,0};
 
-	CHECK(s0.earliest_finish_time() == 0);
-	CHECK(s0.latest_finish_time() == 0);
+	CHECK(n0.finish_range().from() == 0);
+	CHECK(n0.finish_range().until() == 0);
 
-	auto h = std::hash<Uniproc::Schedule_state<dtime_t>>{};
+	Job<dtime_t> j1{10, Interval<dtime_t>(0, 0), Interval<dtime_t>(3, 13), 60, 60, 0};
 
-	CHECK(h(s0) == 0);
-
-	Job<dtime_t> j1{10, Interval<dtime_t>(0, 0), Interval<dtime_t>(3, 13), 60, 60};
-
-	CHECK(j1.least_cost() == 3);
-	CHECK(j1.maximal_cost() == 13);
+	CHECK(j1.least_exec_time() == 3);
+	CHECK(j1.maximal_exec_time() == 13);
 	CHECK(j1.earliest_arrival() == 0);
 	CHECK(j1.latest_arrival() == 0);
 }

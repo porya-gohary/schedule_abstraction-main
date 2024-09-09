@@ -3,6 +3,7 @@
 
 #include <ostream>
 #include <vector>
+#include <map>
 #include <algorithm> // for find
 #include <functional> // for hash
 #include <exception>
@@ -13,6 +14,7 @@
 namespace NP {
 
 	typedef std::size_t hash_value_t;
+	typedef std::size_t Job_index;
 
 	struct JobID {
 		unsigned long job;
@@ -35,28 +37,34 @@ namespace NP {
 		}
 	};
 
+	
 	template<class Time> class Job {
 
 	public:
 		typedef std::vector<Job<Time>> Job_set;
 		typedef Time Priority; // Make it a time value to support EDF
+		typedef std::map<unsigned int, Interval<Time>> Cost;
 
 	private:
 		Interval<Time> arrival;
-		Interval<Time> cost;
+		Interval<unsigned int> parallelism; // on which range of core numbers can it run in parallel
+		Cost exec_time; // execution time range depending on the number of cores assigned to the job to execute
 		Time deadline;
 		Priority priority;
 		JobID id;
 		hash_value_t key;
+		Job_index index;  // RV: index in the jobs array of the workload.
 
 		void compute_hash() {
 			auto h = std::hash<Time>{};
-			key = h(arrival.from());
+			//RV: added index to the hash key, which seems to prevent collisions in state/node lookup keys.
+			key = h(index);
+			key = (key << 4) ^ h(arrival.from());
 			key = (key << 4) ^ h(id.task);
 			key = (key << 4) ^ h(arrival.until());
-			key = (key << 4) ^ h(cost.from());
+			key = (key << 4) ^ h(exec_time[0].from());
 			key = (key << 4) ^ h(deadline);
-			key = (key << 4) ^ h(cost.upto());
+			key = (key << 4) ^ h(exec_time[0].upto());
 			key = (key << 4) ^ h(id.job);
 			key = (key << 4) ^ h(priority);
 		}
@@ -64,12 +72,26 @@ namespace NP {
 	public:
 
 		Job(unsigned long id,
+			Interval<Time> arr, Cost exec_time,
+			Interval<unsigned int> parallelism,
+			Time dl, Priority prio,
+			Job_index idx,
+			unsigned long tid = 0)
+		: arrival(arr), exec_time(exec_time), parallelism(parallelism),
+		  deadline(dl), priority(prio), id(id, tid), index(idx)
+		{
+			compute_hash();
+		}
+
+		Job(unsigned long id,
 			Interval<Time> arr, Interval<Time> cost,
 			Time dl, Priority prio,
+			Job_index idx,
 			unsigned long tid = 0)
-		: arrival(arr), cost(cost),
-		  deadline(dl), priority(prio), id(id, tid)
+			: arrival(arr), parallelism(Interval<unsigned int>{ 1, 1 }),
+			deadline(dl), priority(prio), id(id, tid), index(idx)
 		{
+			exec_time.emplace(1, cost);
 			compute_hash();
 		}
 
@@ -93,24 +115,65 @@ namespace NP {
 			return arrival;
 		}
 
-		Time least_cost() const
+		Time least_exec_time(unsigned int ncores = 1) const
 		{
-			return cost.from();
+			assert(ncores >= parallelism.min() && ncores <= parallelism.max());
+			auto cost = exec_time.find(ncores);
+			if (cost == exec_time.end())
+				return Time_model::constants<Time>::infinity();
+			else
+				return cost->second.min();
 		}
 
-		Time maximal_cost() const
+		Time maximal_exec_time(unsigned int ncores = 1) const
 		{
-			return cost.upto();
+			assert(ncores >= parallelism.min() && ncores <= parallelism.max());
+			auto cost = exec_time.find(ncores);
+			if (cost == exec_time.end())
+				return Time_model::constants<Time>::infinity();
+			else
+				return cost->second.max();
 		}
 
-		const Interval<Time>& get_cost() const
+		Interval<Time> get_cost(unsigned int ncores = 1) const
 		{
-			return cost;
+			assert(ncores >= parallelism.min() && ncores <= parallelism.max());
+			auto cost = exec_time.find(ncores);
+			if (cost == exec_time.end())
+				return Interval<Time>{Time_model::constants<Time>::infinity(), Time_model::constants<Time>::infinity()};
+			else
+				return cost->second;
+		}
+
+		int get_next_parallelism(unsigned int ncores) const
+		{
+			assert(ncores < parallelism.max());
+			auto it = exec_time.upper_bound(ncores);
+			if (it == exec_time.end())
+				return -1;
+			else
+				return it->first;
+
 		}
 
 		Priority get_priority() const
 		{
 			return priority;
+		}
+
+		unsigned int get_min_parallelism() const
+		{
+			return parallelism.min();
+		}
+
+		unsigned int get_max_parallelism() const
+		{
+			return parallelism.max();
+		}
+
+		const Interval<unsigned int>& get_parallelism() const
+		{
+			return parallelism;
 		}
 
 		Time get_deadline() const
@@ -143,6 +206,11 @@ namespace NP {
 		bool is(const JobID& search_id) const
 		{
 			return this->id == search_id;
+		}
+
+		Job_index get_job_index() const
+		{
+			return index;
 		}
 
 		bool higher_priority_than(const Job &other) const
@@ -187,9 +255,10 @@ namespace NP {
 
 		friend std::ostream& operator<< (std::ostream& stream, const Job& j)
 		{
-			stream << "Job{" << j.id.job << ", " << j.arrival << ", "
-			       << j.cost << ", " << j.deadline << ", " << j.priority
-			       << ", " << j.id.task << "}";
+			stream << "Job{" << j.id.task << ", " << j.id.job << ", " << j.arrival << ", ";
+			for (auto i : j.exec_time)
+				stream << i.first << " cores: " << i.second << ", ";
+			stream << j.deadline << ", " << j.priority << "}";
 			return stream;
 		}
 
