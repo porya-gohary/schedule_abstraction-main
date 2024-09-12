@@ -1272,7 +1272,7 @@ namespace NP {
 							new_or_merge_state(*next, *s, j.get_job_index(), predecessors_of(j),
 								Interval<Time>{_st}, ftimes, next->get_scheduled_jobs(), successors, predecessors_suspensions, earliest_certain_gang_source_job_disptach(n, *s, j), p);
 
-							// make sure we didn't skip any jobsm which would then certainly miss its deadline
+							// make sure we didn't skip any jobs which would then certainly miss its deadline
 							// only do that if we stop the analysis when a deadline miss is found 
 							if (be_naive && early_exit) {
 								check_for_deadline_misses(n, *next);
