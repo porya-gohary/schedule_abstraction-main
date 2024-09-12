@@ -464,23 +464,27 @@ namespace NP {
 							DM("deadline miss: " << new_n << " -> " << j << std::endl);
 							// This job is still incomplete but has no chance
 							// of being scheduled before its deadline anymore.
-							// Abort.
-							aborted = true;
-							// create a dummy node for explanation purposes
-							auto frange = new_n.get_last_state()->core_availability(pmin) + j.get_cost(pmin);
-							Node& next =
-								new_node(new_n, j, j.get_job_index(), 0, 0, 0);
-							//const CoreAvailability empty_cav = {};
-							State& next_s = new_state(*new_n.get_last_state(), j.get_job_index(), predecessors_of(j), frange, frange, new_n.get_scheduled_jobs(), successors, predecessors_suspensions, 0, pmin);
-							next.add_state(&next_s);
-							num_states++;
+							observed_deadline_miss = true;
+							// if we stop at the first deadline miss, abort and create node in the graph for explanation purposes
+							if (early_exit) 
+							{
+								aborted = true;
+								// create a dummy node for explanation purposes
+								auto frange = new_n.get_last_state()->core_availability(pmin) + j.get_cost(pmin);
+								Node& next =
+									new_node(new_n, j, j.get_job_index(), 0, 0, 0);
+								//const CoreAvailability empty_cav = {};
+								State& next_s = new_state(*new_n.get_last_state(), j.get_job_index(), predecessors_of(j), frange, frange, new_n.get_scheduled_jobs(), successors, predecessors_suspensions, 0, pmin);
+								next.add_state(&next_s);
+								num_states++;
 
-							// update response times
-							update_finish_times(j, frange);
+								// update response times
+								update_finish_times(j, frange);
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
-							edges.emplace_back(&j, &new_n, &next, frange, pmin);
+								edges.emplace_back(&j, &new_n, &next, frange, pmin);
 #endif
-							count_edge();
+								count_edge();
+							}
 							break;
 						}
 					}
@@ -1162,18 +1166,21 @@ namespace NP {
 						// check for possible abort actions
 						auto j_idx = j.get_job_index();
 						if (abort_actions[j_idx]) {
-							auto et = abort_actions[j_idx]->earliest_trigger_time();
+							auto lt = abort_actions[j_idx]->latest_trigger_time();
 							// Rule: if we're certainly past the trigger, the job is
 							//       completely skipped.
-							if (_st.first >= et)
-								// job doesn't even start, is skipped immediately
-								continue;
-
-							// The job can start its execution but we check
-							// if the job must be aborted before it finishes
-							auto eat = earliest_job_abortion(*abort_actions[j_idx]);
-							auto lat = latest_job_abortion(*abort_actions[j_idx]);
-							ftimes = Interval<Time>{ std::min(eft, eat), std::min(lft, lat) };
+							if (_st.first >= lt) {
+								// job doesn't even start, it is skipped immediately
+								ftimes = Interval<Time>{ _st };
+								observed_deadline_miss = true;
+							}
+							else {
+								// The job can start its execution but we check
+								// if the job must be aborted before it finishes
+								auto eat = earliest_job_abortion(*abort_actions[j_idx]);
+								auto lat = latest_job_abortion(*abort_actions[j_idx]);
+								ftimes = Interval<Time>{ std::min(eft, eat), std::min(lft, lat) };
+							}
 						}
 						else {
 							// compute range of possible finish times
@@ -1266,8 +1273,9 @@ namespace NP {
 							new_or_merge_state(*next, *s, j.get_job_index(), predecessors_of(j),
 								Interval<Time>{_st}, ftimes, next->get_scheduled_jobs(), successors, predecessors_suspensions, earliest_certain_gang_source_job_disptach(n, *s, j), p);
 
-							// make sure we didn't skip any jobs
-							if (be_naive) {
+							// make sure we didn't skip any jobsm which would then certainly miss its deadline
+							// only do that if we stop the analysis when a deadline miss is found 
+							if (be_naive && early_exit) {
 								check_for_deadline_misses(n, *next);
 							}
 						}
@@ -1279,8 +1287,10 @@ namespace NP {
 					}
 				}
 
-				// if we are not using the naive exploration, we check for deadline misses only per job dispatched
-				if (!be_naive && next != nullptr)
+				// if we stop the analysis when a deadline miss is found, then check whether a job will certainly miss 
+				// its deadline because of when the processors become free next.
+				// if we are not using the naive exploration, we check for deadline misses only once per job dispatched
+				if (early_exit && !be_naive && next != nullptr)
 					check_for_deadline_misses(n, *next);
 
 				return dispatched_one;
@@ -1336,9 +1346,11 @@ namespace NP {
 				}
 
 				// check for a dead end
-				if (!found_one && !all_jobs_scheduled(n))
+				if (!found_one && !all_jobs_scheduled(n)) {
 					// out of options and we didn't schedule all jobs
+					observed_deadline_miss = true;
 					aborted = true;
+				}
 			}
 
 			// naive: no state merging
