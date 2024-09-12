@@ -1172,7 +1172,6 @@ namespace NP {
 							if (_st.first >= lt) {
 								// job doesn't even start, it is skipped immediately
 								ftimes = Interval<Time>{ _st };
-								observed_deadline_miss = true;
 							}
 							else {
 								// The job can start its execution but we check
