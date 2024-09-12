@@ -97,7 +97,7 @@ $ ./runtests
 
 ## Input Format
 
-The tool operates on CSV files with a fixed column order. There are three main input formats: *job sets*, *precedence constraints*, and *abort actions* (abort actions are not supported currently in the version 3.0.0). 
+The tool operates on CSV files with a fixed column order. There are three main input formats: *job sets*, *precedence constraints*, and *abort actions*. 
 
 ### Job Sets
 
@@ -198,7 +198,7 @@ The tool does not check whether the provided structure actually forms a DAG. If 
 
 ### Aborting Jobs Past a Certain Point
 
-Older versions of the uniprocessor analysis (prior to v3.0.0) also supports so-called **abort actions**, which allow specifying that if a job executes past a certain point in time, it will be forcefully stopped and discarded by the runtime environment. To enable this support, pass a CSV file containing a list of abort actions using the `-a` option. For example:
+The analysis also supports so-called **abort actions**, which allow specifying that if a job executes past a certain point in time, it will be forcefully stopped and discarded by the runtime environment. To enable this support, pass a CSV file containing a list of abort actions using the `-a` option. For example:
 
 ```
 $ build/nptest -g examples/abort.jobs.csv -c -a examples/abort.actions.csv
