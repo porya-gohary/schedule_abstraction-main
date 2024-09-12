@@ -41,6 +41,7 @@ namespace NP {
 			typedef Scheduling_problem<Time> Problem;
 			typedef typename Scheduling_problem<Time>::Workload Workload;
 			typedef typename Scheduling_problem<Time>::Precedence_constraints Precedence_constraints;
+			typedef typename Scheduling_problem<Time>::Abort_actions Abort_actions;
 			typedef Schedule_state<Time> State;
 			typedef typename std::vector<Interval<Time>> CoreAvailability;
 
@@ -50,17 +51,13 @@ namespace NP {
 				const Problem& prob,
 				const Analysis_options& opts)
 			{
-				// doesn't yet support exploration after deadline miss
-				assert(opts.early_exit);
-
-				State_space* s = new State_space(prob.jobs, prob.prec, prob.num_processors, opts.timeout,
-					opts.max_depth, opts.use_supernodes);
+				State_space* s = new State_space(prob.jobs, prob.prec, prob.aborts, prob.num_processors, 
+					opts.timeout, opts.max_depth, opts.early_exit, opts.use_supernodes);
 				s->be_naive = opts.be_naive;
 				s->cpu_time.start();
 				s->explore();
 				s->cpu_time.stop();
 				return s;
-
 			}
 
 			// convenience interface for tests
@@ -102,7 +99,7 @@ namespace NP {
 
 			bool is_schedulable() const
 			{
-				return !aborted;
+				return !aborted && !observed_deadline_miss;
 			}
 
 			bool was_timed_out() const
@@ -256,6 +253,8 @@ namespace NP {
 
 			bool aborted;
 			bool timed_out;
+			bool observed_deadline_miss;
+			bool early_exit;
 
 			const unsigned int max_depth;
 
@@ -281,14 +280,17 @@ namespace NP {
 
 			typedef std::vector<std::pair<Job_ref, Interval<Time>>> Suspensions_list;
 
+			// not touched after initialization
 			std::vector<Suspensions_list> _predecessors_suspensions;
 			std::vector<Suspensions_list> _successors;
-
+			// use these const references to ensure read-only access
 			const std::vector<Suspensions_list>& predecessors_suspensions;
 			const std::vector<Suspensions_list>& successors;
 
-			Nodes_storage nodes_storage;
+			// list of actions when a job is aborted
+			std::vector<const Abort_action<Time>*> abort_actions;
 
+			Nodes_storage nodes_storage;
 			Nodes_map nodes_by_key;
 
 #ifdef CONFIG_PARALLEL
@@ -311,13 +313,16 @@ namespace NP {
 
 			State_space(const Workload& jobs,
 				const Precedence_constraints& edges,
+				const Abort_actions& aborts,
 				unsigned int num_cpus,
 				double max_cpu_time = 0,
 				unsigned int max_depth = 0,
+				bool early_exit = true,
 				bool use_supernodes = true)
 				: jobs(jobs)
 				, aborted(false)
 				, timed_out(false)
+				, observed_deadline_miss(false)
 				, be_naive(false)
 				, timeout(max_cpu_time)
 				, max_depth(max_depth)
@@ -339,6 +344,8 @@ namespace NP {
 				, _successors(jobs.size())
 				, predecessors_suspensions(_predecessors_suspensions)
 				, successors(_successors)
+				, early_exit(early_exit)
+				, abort_actions(jobs.size(), NULL)
 				, use_supernodes(use_supernodes)
 #ifdef CONFIG_PARALLEL
 				, partial_rta(jobs.size())
@@ -364,6 +371,10 @@ namespace NP {
 					_jobs_by_deadline.insert({ j.get_deadline(), &j });
 				}
 
+				for (const Abort_action<Time>& a : aborts) {
+					const Job<Time>& j = lookup<Time>(jobs, a.get_id());
+					abort_actions[j.get_job_index()] = &a;
+				}
 			}
 
 		private:
@@ -402,8 +413,12 @@ namespace NP {
 				Response_times& r, const Job<Time>& j, Interval<Time> range)
 			{
 				update_finish_times(r, j.get_job_index(), range);
-				if (j.exceeds_deadline(range.upto()))
-					aborted = true;
+				if (j.exceeds_deadline(range.upto())) {
+					observed_deadline_miss = true;
+
+					if (early_exit)
+						aborted = true;
+				}
 			}
 
 			void update_finish_times(const Job<Time>& j, Interval<Time> range)
@@ -449,23 +464,27 @@ namespace NP {
 							DM("deadline miss: " << new_n << " -> " << j << std::endl);
 							// This job is still incomplete but has no chance
 							// of being scheduled before its deadline anymore.
-							// Abort.
-							aborted = true;
-							// create a dummy node for explanation purposes
-							auto frange = new_n.get_last_state()->core_availability(pmin) + j.get_cost(pmin);
-							Node& next =
-								new_node(new_n, j, j.get_job_index(), 0, 0, 0);
-							//const CoreAvailability empty_cav = {};
-							State& next_s = new_state(*new_n.get_last_state(), j.get_job_index(), predecessors_of(j), frange, frange, new_n.get_scheduled_jobs(), successors, predecessors_suspensions, 0, pmin);
-							next.add_state(&next_s);
-							num_states++;
+							observed_deadline_miss = true;
+							// if we stop at the first deadline miss, abort and create node in the graph for explanation purposes
+							if (early_exit) 
+							{
+								aborted = true;
+								// create a dummy node for explanation purposes
+								auto frange = new_n.get_last_state()->core_availability(pmin) + j.get_cost(pmin);
+								Node& next =
+									new_node(new_n, j, j.get_job_index(), 0, 0, 0);
+								//const CoreAvailability empty_cav = {};
+								State& next_s = new_state(*new_n.get_last_state(), j.get_job_index(), predecessors_of(j), frange, frange, new_n.get_scheduled_jobs(), successors, predecessors_suspensions, 0, pmin);
+								next.add_state(&next_s);
+								num_states++;
 
-							// update response times
-							update_finish_times(j, frange);
+								// update response times
+								update_finish_times(j, frange);
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
-							edges.emplace_back(&j, &new_n, &next, frange, pmin);
+								edges.emplace_back(&j, &new_n, &next, frange, pmin);
 #endif
-							count_edge();
+								count_edge();
+							}
 							break;
 						}
 					}
@@ -867,6 +886,16 @@ namespace NP {
 				return std::min(t_wos, t_ws);
 			}
 
+			Time earliest_job_abortion(const Abort_action<Time>& a)
+			{
+				return a.earliest_trigger_time() + a.least_cleanup_cost();
+			}
+
+			Time latest_job_abortion(const Abort_action<Time>& a)
+			{
+				return a.latest_trigger_time() + a.maximum_cleanup_cost();
+			}
+
 			// assumes j is ready
 			// NOTE: we don't use Interval<Time> here because the
 			//       Interval c'tor sorts its arguments.
@@ -1128,20 +1157,44 @@ namespace NP {
 						if (_st.first > t_wc || _st.first >= t_high || _st.first >= t_avail)
 							continue; // nope, not next job that can be dispatched in state s, try the next state.
 
-						Interval<Time> st{ _st };
+						//calculate the job finish time interval
+						Interval<Time> ftimes;
+						auto exec_time = j.get_cost(p);
+						Time eft = _st.first + exec_time.min();
+						Time lft = _st.second + exec_time.max();
+
+						// check for possible abort actions
+						auto j_idx = j.get_job_index();
+						if (abort_actions[j_idx]) {
+							auto lt = abort_actions[j_idx]->latest_trigger_time();
+							// Rule: if we're certainly past the trigger, the job is
+							//       completely skipped.
+							if (_st.first >= lt) {
+								// job doesn't even start, it is skipped immediately
+								ftimes = Interval<Time>{ _st };
+							}
+							else {
+								// The job can start its execution but we check
+								// if the job must be aborted before it finishes
+								auto eat = earliest_job_abortion(*abort_actions[j_idx]);
+								auto lat = latest_job_abortion(*abort_actions[j_idx]);
+								ftimes = Interval<Time>{ std::min(eft, eat), std::min(lft, lat) };
+							}
+						}
+						else {
+							// compute range of possible finish times
+							ftimes = Interval<Time>{ eft, lft };
+						}
 
 						// yep, job j is a feasible successor in state s
-						dispatched_one = true;
-
-						// compute range of possible finish times
-						Interval<Time> ftimes = st + j.get_cost(p);
+						dispatched_one = true;						
 
 						// update finish-time estimates
 						update_finish_times(j, ftimes);
 
 						if (use_supernodes == false)
 						{
-							next = &(dispatch_wo_supernodes(n, *s, j, st, ftimes, p));
+							next = &(dispatch_wo_supernodes(n, *s, j, Interval<Time>{_st}, ftimes, p));
 						}
 						else
 						{
@@ -1217,10 +1270,11 @@ namespace NP {
 							// next should always exist at this point, possibly without states in it
 							// create a new state resulting from scheduling j in state s on p cores and try to merge it with an existing state in node 'next'.							
 							new_or_merge_state(*next, *s, j.get_job_index(), predecessors_of(j),
-								st, ftimes, next->get_scheduled_jobs(), successors, predecessors_suspensions, earliest_certain_gang_source_job_disptach(n, *s, j), p);
+								Interval<Time>{_st}, ftimes, next->get_scheduled_jobs(), successors, predecessors_suspensions, earliest_certain_gang_source_job_disptach(n, *s, j), p);
 
-							// make sure we didn't skip any jobs
-							if (be_naive) {
+							// make sure we didn't skip any jobs which would then certainly miss its deadline
+							// only do that if we stop the analysis when a deadline miss is found 
+							if (be_naive && early_exit) {
 								check_for_deadline_misses(n, *next);
 							}
 						}
@@ -1232,8 +1286,10 @@ namespace NP {
 					}
 				}
 
-				// if we are not using the naive exploration, we check for deadline misses only per job dispatched
-				if (!be_naive && next != nullptr)
+				// if we stop the analysis when a deadline miss is found, then check whether a job will certainly miss 
+				// its deadline because of when the processors become free next.
+				// if we are not using the naive exploration, we check for deadline misses only once per job dispatched
+				if (early_exit && !be_naive && next != nullptr)
 					check_for_deadline_misses(n, *next);
 
 				return dispatched_one;
@@ -1289,9 +1345,11 @@ namespace NP {
 				}
 
 				// check for a dead end
-				if (!found_one && !all_jobs_scheduled(n))
+				if (!found_one && !all_jobs_scheduled(n)) {
 					// out of options and we didn't schedule all jobs
+					observed_deadline_miss = true;
 					aborted = true;
+				}
 			}
 
 			// naive: no state merging
