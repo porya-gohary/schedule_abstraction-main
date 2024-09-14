@@ -72,12 +72,11 @@ namespace NP {
 	public:
 
 		Job(unsigned long id,
-			Interval<Time> arr, Cost exec_time,
-			Interval<unsigned int> parallelism,
+			Interval<Time> arr, const Cost& exec_time,
 			Time dl, Priority prio,
 			Job_index idx,
 			unsigned long tid = 0)
-		: arrival(arr), exec_time(exec_time), parallelism(parallelism),
+		: arrival(arr), exec_time(exec_time), parallelism(exec_time.begin()->first, exec_time.rbegin()->first),
 		  deadline(dl), priority(prio), id(id, tid), index(idx)
 		{
 			compute_hash();
