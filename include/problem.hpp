@@ -29,7 +29,7 @@ namespace NP {
 		unsigned int num_processors;
 
 		// Classic default setup: no abort actions
-		Scheduling_problem(Workload jobs, Precedence_constraints prec,
+		Scheduling_problem(const Workload& jobs, const Precedence_constraints& prec,
 		                   unsigned int num_processors = 1)
 		: num_processors(num_processors)
 		, jobs(jobs)
@@ -40,8 +40,8 @@ namespace NP {
 		}
 
 		// Constructor with abort actions and precedence constraints
-		Scheduling_problem(Workload jobs, Precedence_constraints prec,
-		                   Abort_actions aborts,
+		Scheduling_problem(const Workload& jobs, const Precedence_constraints& prec,
+		                   const Abort_actions& aborts,
 		                   unsigned int num_processors)
 		: num_processors(num_processors)
 		, jobs(jobs)
@@ -54,7 +54,7 @@ namespace NP {
 		}
 
 		// Convenience constructor: no DAG, no abort actions
-		Scheduling_problem(Workload jobs,
+		Scheduling_problem(const Workload& jobs,
 		                   unsigned int num_processors = 1)
 		: jobs(jobs)
 		, num_processors(num_processors)
