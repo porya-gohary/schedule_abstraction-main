@@ -27,7 +27,11 @@
 #define MAX_PROCESSORS 512
 
 // command line options
+static bool want_verbose;
 static bool want_naive;
+static bool merge_conservative;
+static bool merge_use_job_finish_times;
+static int merge_depth;
 static bool want_dense;
 
 static bool want_precedence = false;
@@ -48,6 +52,7 @@ static double timeout;
 static unsigned int max_depth = 0;
 
 static bool want_rta_file;
+static bool want_width_file;
 
 static bool continue_after_dl_miss = false;
 
@@ -62,6 +67,7 @@ struct Analysis_result {
 	double cpu_time;
 	std::string graph;
 	std::string response_times_csv;
+	std::string width_evolution_csv;
 };
 
 
@@ -90,10 +96,14 @@ static Analysis_result analyze(
 
 	// Set common analysis options
 	NP::Analysis_options opts;
+	opts.verbose = want_verbose;
 	opts.timeout = timeout;
 	opts.max_depth = max_depth;
 	opts.early_exit = !continue_after_dl_miss;
 	opts.be_naive = want_naive;
+	opts.merge_conservative = merge_conservative;
+	opts.merge_depth = merge_depth;
+	opts.merge_use_job_finish_times = merge_use_job_finish_times;
 	opts.use_supernodes = use_supernodes;
 
 	// Actually call the analysis engine
@@ -124,6 +134,17 @@ static Analysis_result analyze(
 		}
 	}
 
+	auto width_stream = std::ostringstream();
+	if (want_width_file) {
+		width_stream << "Depth, Width" << std::endl;
+		const std::vector<unsigned long>& width = space->evolution_exploration_front_width();
+		for (int d = 0; d < problem.jobs.size(); d++) {
+			width_stream << d << ", "
+					   << width[d] 
+					   << std::endl;
+		}
+	}
+
 	Analysis_result results = Analysis_result{
 		space->is_schedulable(),
 		space->was_timed_out(),
@@ -134,7 +155,8 @@ static Analysis_result analyze(
 		(unsigned long)(problem.jobs.size()),
 		space->get_cpu_time(),
 		graph.str(),
-		rta.str()
+		rta.str(),
+		width_stream.str()
 	};
 	delete space;
 	return results;
@@ -215,6 +237,17 @@ static void process_file(const std::string& fname)
 					rta_name.replace(p, std::string::npos, ".rta.csv");
 					auto out  = std::ofstream(rta_name,  std::ios::out);
 					out << result.response_times_csv;
+					out.close();
+				}
+			}
+
+			if (want_width_file) {
+				std::string width_file_name = fname;
+				auto p = is_yaml ? width_file_name.find(".yaml") : width_file_name.find(".csv");
+				if (p != std::string::npos) {
+					width_file_name.replace(p, std::string::npos, ".width.csv");
+					auto out = std::ofstream(width_file_name, std::ios::out);
+					out << result.width_evolution_csv;
 					out.close();
 				}
 			}
@@ -300,6 +333,11 @@ int main(int argc, char** argv)
 	parser.description("Exact NP Schedulability Tester");
 	parser.usage("usage: %prog [OPTIONS]... [JOB SET FILES]...");
 
+	parser.add_option("--merge").dest("merge_opts")
+		.metavar("MERGE-OPTION")
+		.choices({ "no", "c1", "c2", "l1", "l2", "l3", "lmax"}).set_default("l1")
+		.help("choose type of state merging approach used during the analysis. 'no': no merging, 'cx': conservative, 'lx': lossy with depth=x, 'lmax': lossy with max depth (default: l1)");
+
 	parser.add_option("-t", "--time").dest("time_model")
 	      .metavar("TIME-MODEL")
 	      .choices({"dense", "discrete"}).set_default("discrete")
@@ -313,9 +351,9 @@ int main(int argc, char** argv)
 	      .help("abort graph exploration after reaching given depth (>= 2)")
 	      .set_default("0");
 
-	parser.add_option("-n", "--naive").dest("naive").set_default("0")
+	/*parser.add_option("-n", "--naive").dest("naive").set_default("0")
 	      .action("store_const").set_const("1")
-	      .help("use the naive exploration method (default: merging)");
+	      .help("use the naive exploration method (default: merging)");*/
 
 	parser.add_option("-p", "--precedence").dest("precedence_file")
 	      .help("name of the file that contains the job set's precedence DAG")
@@ -342,12 +380,16 @@ int main(int argc, char** argv)
 	      .action("store_const").set_const("1")
 	      .help("store the state graph in Graphviz dot format (default: off)");
 
+	parser.add_option("-v", "--verbose").dest("verbose").set_default("0")
+		.action("store_const").set_const("1")
+		.help("show the current status of the analysis (default: off)");
+
 	parser.add_option("--sn", "--use-supernodes").dest("sn").set_default("1")
 	      .help("use supernodes while buildidng the graph (default: on)");
 
-	parser.add_option("-r", "--save-response-times").dest("rta").set_default("0")
+	parser.add_option("-r", "--report").dest("rta").set_default("0")
 	      .action("store_const").set_const("1")
-	      .help("store the best- and worst-case response times (default: off)");
+	      .help("Reporting: store the best- and worst-case response times and store the evolution of the width of the graph (default: off)");
 
 	parser.add_option("-c", "--continue-after-deadline-miss")
 	      .dest("go_on_after_dl").set_default("0")
@@ -360,10 +402,29 @@ int main(int argc, char** argv)
 	//all the options that could have been entered above are processed below and appropriate variables
 	// are assigned their respective values.
 
-	const std::string& time_model = (const std::string&) options.get("time_model");
+	const std::string& merge_opts = (std::string&)options.get("merge_opts");
+	want_naive = (merge_opts == "no");
+	if (merge_opts == "c1") {
+		merge_conservative = true;
+		merge_use_job_finish_times = false;
+	}
+	else if (merge_opts == "c2") {
+		merge_conservative = true;
+		merge_use_job_finish_times = true;
+	}
+	if (merge_opts == "l2")
+		merge_depth = 2;
+	else if (merge_opts == "l3")
+		merge_depth = 3;
+	else if (merge_opts == "lmax")
+		merge_depth = -1;
+	else
+		merge_depth = 1;
+
+	const std::string& time_model = (std::string&) options.get("time_model");
 	want_dense = time_model == "dense";
 
-	want_naive = options.get("naive");
+	//want_naive = options.get("naive");
 
 	timeout = options.get("timeout");
 
@@ -400,6 +461,9 @@ int main(int argc, char** argv)
 	}
 
 	want_rta_file = options.get("rta");
+	want_width_file = options.get("rta");
+
+	want_verbose = options.get("verbose");
 
 	continue_after_dl_miss = options.get("go_on_after_dl");
 

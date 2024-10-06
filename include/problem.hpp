@@ -83,6 +83,14 @@ namespace NP {
 		// baseline).
 		bool be_naive;
 
+		// If we use state merging, defines options to use
+		bool merge_conservative;
+		bool merge_use_job_finish_times;
+		int merge_depth;
+
+		// Should we write where we are in the analysis?
+		bool verbose;
+
 		// If using supernodes
 		bool use_supernodes;
 
@@ -91,6 +99,10 @@ namespace NP {
 		, max_depth(0)
 		, early_exit(true)
 		, be_naive(false)
+		, merge_conservative(false)
+		, merge_use_job_finish_times(false)
+		, merge_depth(1)
+		, verbose(false)
 		, use_supernodes(true)
 		{
 		}
