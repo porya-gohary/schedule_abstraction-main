@@ -18,6 +18,9 @@
 namespace NP {
 	namespace Global {
 
+		template<class Time> class Schedule_state;
+		template<class Time> class Schedule_node;
+
 		template<class Time> class Problem_data
 		{
 		public:
@@ -32,8 +35,10 @@ namespace NP {
 
 		private:
 			const Workload& jobs; 
+
 			typedef const Job<Time>* Job_ref;
 			typedef std::multimap<Time, Job_ref> By_time_map;
+			typedef std::vector<Job_index> Job_precedence_set;
 
 			// not touched after initialization
 			By_time_map _successor_jobs_by_latest_arrival;
@@ -121,6 +126,11 @@ namespace NP {
 			const Job_precedence_set& predecessors_of(const Job<Time>& j) const
 			{
 				return predecessors[j.get_job_index()];
+			}
+
+			const Job_precedence_set& predecessors_of(Job_index j) const
+			{
+				return predecessors[j];
 			}
 
 			const Abort_action<Time>* abort_action_of(Job_index j) const
@@ -477,7 +487,7 @@ namespace NP {
 				return rmax;
 			}
 
-			Time get_earliest_certain_seq_source_job_release()
+			Time get_earliest_certain_seq_source_job_release() const
 			{
 				if (sequential_source_jobs_by_latest_arrival.empty())
 					return Time_model::constants<Time>::infinity();
@@ -485,7 +495,7 @@ namespace NP {
 					return sequential_source_jobs_by_latest_arrival.begin()->first;
 			}
 
-			Time get_earliest_certain_gang_source_job_release()
+			Time get_earliest_certain_gang_source_job_release() const
 			{
 				if (gang_source_jobs_by_latest_arrival.empty())
 					return Time_model::constants<Time>::infinity();

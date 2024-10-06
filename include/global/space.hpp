@@ -356,15 +356,8 @@ namespace NP {
 			{
 				// construct initial state
 				nodes_storage.emplace_back();
-
-				Time next_certain_seq_release = prob_data.get_earliest_certain_seq_source_job_release();
-
-				Time next_certain_gang_release =prob_data.get_earliest_certain_gang_source_job_release();
-
-				Time next_certain_release = std::min(next_certain_seq_release, next_certain_gang_release);
-
-				Node& n = new_node(num_cores, prob_data.jobs_by_earliest_arrival.begin()->first, next_certain_release, next_certain_seq_release);
-				State& s = new_state(num_cores, next_certain_gang_release);
+				Node& n = new_node(num_cores, prob_data);
+				State& s = new_state(num_cores, prob_data);
 				n.add_state(&s);
 				num_states++;
 			}
@@ -530,7 +523,7 @@ namespace NP {
 								Node& next =
 									new_node(new_n, j, j.get_job_index(), 0, 0, 0);
 								//const CoreAvailability empty_cav = {};
-								State& next_s = new_state(*new_n.get_last_state(), j.get_job_index(), prob_data.predecessors_of(j), frange, frange, new_n.get_scheduled_jobs(), prob_data.successors, prob_data.predecessors_suspensions, 0, pmin);
+								State& next_s = new_state(*new_n.get_last_state(), j.get_job_index(), frange, frange, new_n.get_scheduled_jobs(), prob_data, 0, pmin);
 								next.add_state(&next_s);
 								num_states++;
 
@@ -600,8 +593,8 @@ namespace NP {
 				Job_set sched_jobs{ n.get_scheduled_jobs(), j.get_job_index() };
 
 				// create a new state resulting from scheduling j in state s.
-				State& st = new_state(s, j.get_job_index(), prob_data.predecessors_of(j),
-					start_times, finish_times, sched_jobs, prob_data.successors, prob_data.predecessors_suspensions, prob_data.earliest_certain_gang_source_job_disptach(n, s, j), ncores);
+				State& st = new_state(s, j.get_job_index(),
+					start_times, finish_times, sched_jobs, prob_data, prob_data.earliest_certain_gang_source_job_disptach(n, s, j), ncores);
 
 				bool found_match = false;
 				hash_value_t key = n.next_key(j);
@@ -838,8 +831,8 @@ namespace NP {
 #endif
 							// next should always exist at this point, possibly without states in it
 							// create a new state resulting from scheduling j in state s on p cores and try to merge it with an existing state in node 'next'.							
-							new_or_merge_state(*next, *s, j.get_job_index(), prob_data.predecessors_of(j),
-								Interval<Time>{_st}, ftimes, next->get_scheduled_jobs(), prob_data.successors, prob_data.predecessors_suspensions, prob_data.earliest_certain_gang_source_job_disptach(n, *s, j), p);
+							new_or_merge_state(*next, *s, j.get_job_index(),
+								Interval<Time>{_st}, ftimes, next->get_scheduled_jobs(), prob_data, prob_data.earliest_certain_gang_source_job_disptach(n, *s, j), p);
 
 							// make sure we didn't skip any jobs which would then certainly miss its deadline
 							// only do that if we stop the analysis when a deadline miss is found 

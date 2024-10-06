@@ -13,6 +13,7 @@
 #include "jobs.hpp"
 #include "statistics.hpp"
 #include "util.hpp"
+#include "problem_data.hpp"
 
 namespace NP {
 
@@ -20,6 +21,8 @@ namespace NP {
 
 		typedef Index_set Job_set;
 		typedef std::vector<Job_index> Job_precedence_set;
+
+		template<class Time> class Problem_data;
 
 		template<class Time> class Schedule_node;
 
@@ -69,11 +72,11 @@ namespace NP {
 		public:
 
 			// initial state -- nothing yet has finished, nothing is running
-			Schedule_state(const unsigned int num_processors, const Time next_certain_gang_source_job_disptach)
+			Schedule_state(const unsigned int num_processors, const Problem_data<Time>& prob_data)
 				: core_avail{ num_processors, Interval<Time>(Time(0), Time(0)) }
 				, certain_jobs{}
 				, earliest_certain_successor_job_disptach{ Time_model::constants<Time>::infinity() }
-				, earliest_certain_gang_source_job_disptach{ next_certain_gang_source_job_disptach }
+				, earliest_certain_gang_source_job_disptach{ prob_data.get_earliest_certain_gang_source_job_release() }
 			{
 				assert(core_avail.size() > 0);
 			}
@@ -82,16 +85,17 @@ namespace NP {
 			Schedule_state(
 				const Schedule_state& from,
 				Job_index j,
-				const Job_precedence_set& predecessors,
 				Interval<Time> start_times,
 				Interval<Time> finish_times,
 				const Job_set& scheduled_jobs,
-				const Successors& successors_of,
-				const Predecessors& predecessors_of,
+				const Problem_data<Time>& prob_data,
 				const Time next_certain_gang_source_job_disptach,
 				unsigned int ncores = 1)
 				: earliest_certain_gang_source_job_disptach(next_certain_gang_source_job_disptach)
 			{
+				const Successors& successors_of = prob_data.successors;
+				const Predecessors& predecessors_of = prob_data.predecessors_suspensions;
+				const Job_precedence_set & predecessors = prob_data.predecessors_of(j);
 				// update the set of certainly running jobs
 				update_certainly_running_jobs(from, j, start_times, finish_times, ncores, predecessors);
 
@@ -643,24 +647,34 @@ namespace NP {
 
 		public:
 
-			// initial node
-			Schedule_node(
-				unsigned int num_cores,
-				const Time next_earliest_release = 0,
-				const Time next_certain_source_job_release = Time_model::constants<Time>::infinity(), // the next time a job without predecessor is certainly released
-				const Time next_certain_sequential_source_job_release = Time_model::constants<Time>::infinity() // the next time a job without predecessor that can execute on a single core is certainly released
-			)
+			// initial node (for convenience for unit tests)
+			Schedule_node(unsigned int num_cores)
 				: lookup_key{ 0 }
 				, num_cpus(num_cores)
 				, finish_time{ 0,0 }
 				, a_max{ 0 }
 				, num_jobs_scheduled(0)
-				, earliest_pending_release{ next_earliest_release }
+				, earliest_pending_release{ 0 }
+				, next_certain_source_job_release {Time_model::constants<Time>::infinity() }
 				, next_certain_successor_jobs_disptach{ Time_model::constants<Time>::infinity() }
-				, next_certain_source_job_release{ next_certain_source_job_release }
-				, next_certain_sequential_source_job_release{ next_certain_sequential_source_job_release }
+				, next_certain_sequential_source_job_release{ Time_model::constants<Time>::infinity() }
 				, next_certain_gang_source_job_disptach{ Time_model::constants<Time>::infinity() }
 			{
+			}
+
+			// initial node
+			Schedule_node (unsigned int num_cores, const Problem_data<Time>& prob_data)
+				: lookup_key{ 0 }
+				, num_cpus(num_cores)
+				, finish_time{ 0,0 }
+				, a_max{ 0 }
+				, num_jobs_scheduled(0)
+				, earliest_pending_release{ prob_data.jobs_by_earliest_arrival.begin()->first }
+				, next_certain_successor_jobs_disptach{ Time_model::constants<Time>::infinity() }
+				, next_certain_sequential_source_job_release{ prob_data.get_earliest_certain_gang_source_job_release() }
+				, next_certain_gang_source_job_disptach{ Time_model::constants<Time>::infinity() }
+			{
+				next_certain_source_job_release = std::min(next_certain_sequential_source_job_release, prob_data.get_earliest_certain_gang_source_job_release());
 			}
 
 			// transition: new node by scheduling a job 'j' in an existing node 'from'
