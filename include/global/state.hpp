@@ -92,7 +92,7 @@ namespace NP {
 				Time next_source_job_rel,
 				unsigned int ncores = 1)
 			{
-				const Successors& successors_of = state_space_data.successors;
+				const Successors& successors_of = state_space_data.successors_suspensions;
 				const Predecessors& predecessors_of = state_space_data.predecessors_suspensions;
 				const Job_precedence_set & predecessors = state_space_data.predecessors_of(j);
 				// update the set of certainly running jobs

@@ -32,11 +32,12 @@ namespace NP {
 			typedef Schedule_state<Time> State;
 			typedef Schedule_node<Time> Node;
 			typedef typename std::vector<Interval<Time>> CoreAvailability;
+			typedef const Job<Time>* Job_ref;
+			typedef std::vector<Job_index> Job_precedence_set;
+			typedef std::vector<std::pair<Job_ref, Interval<Time>>> Suspensions_list;
 
 		private:
-			typedef const Job<Time>* Job_ref;
 			typedef std::multimap<Time, Job_ref> By_time_map;
-			typedef std::vector<Job_index> Job_precedence_set;
 
 			// not touched after initialization
 			By_time_map _successor_jobs_by_latest_arrival;
@@ -46,14 +47,9 @@ namespace NP {
 			By_time_map _jobs_by_deadline;
 			std::vector<Job_precedence_set> _predecessors;
 
-			// use these const references to ensure read-only access
-			const std::vector<Job_precedence_set>& predecessors;
-
-			typedef std::vector<std::pair<Job_ref, Interval<Time>>> Suspensions_list;
-
 			// not touched after initialization
 			std::vector<Suspensions_list> _predecessors_suspensions;
-			std::vector<Suspensions_list> _successors;
+			std::vector<Suspensions_list> _successors_suspensions;
 
 			// list of actions when a job is aborted
 			std::vector<const Abort_action<Time>*> abort_actions;
@@ -69,8 +65,9 @@ namespace NP {
 			const By_time_map& successor_jobs_by_latest_arrival;
 			const By_time_map& sequential_source_jobs_by_latest_arrival;
 			const By_time_map& gang_source_jobs_by_latest_arrival;
+			const std::vector<Job_precedence_set>& predecessors;
 			const std::vector<Suspensions_list>& predecessors_suspensions;
-			const std::vector<Suspensions_list>& successors;
+			const std::vector<Suspensions_list>& successors_suspensions;
 
 			State_space_data(const Workload& jobs,
 				const Precedence_constraints& edges,
@@ -86,15 +83,15 @@ namespace NP {
 				, _predecessors(jobs.size())
 				, predecessors(_predecessors)
 				, _predecessors_suspensions(jobs.size())
-				, _successors(jobs.size())
+				, _successors_suspensions(jobs.size())
 				, predecessors_suspensions(_predecessors_suspensions)
-				, successors(_successors)
+				, successors_suspensions(_successors_suspensions)
 				, abort_actions(jobs.size(), NULL)
 			{
 				for (const auto& e : edges) {
 					_predecessors_suspensions[e.get_toIndex()].push_back({ &jobs[e.get_fromIndex()], e.get_suspension() });
 					_predecessors[e.get_toIndex()].push_back(e.get_fromIndex());
-					_successors[e.get_fromIndex()].push_back({ &jobs[e.get_toIndex()], e.get_suspension() });
+					_successors_suspensions[e.get_fromIndex()].push_back({ &jobs[e.get_toIndex()], e.get_suspension() });
 				}
 
 				for (const Job<Time>& j : jobs) {
