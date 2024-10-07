@@ -652,9 +652,9 @@ namespace NP {
 				}
 
 				Node& next_node = new_node(n, j, j.get_job_index(),
-					prob_data.earliest_possible_job_release(n, j),
-					prob_data.earliest_certain_source_job_release(n, j),
-					prob_data.earliest_certain_sequential_source_job_release(n, j));
+					state_space_data.earliest_possible_job_release(n, j),
+					state_space_data.earliest_certain_source_job_release(n, j),
+					state_space_data.earliest_certain_sequential_source_job_release(n, j));
 #endif
 
 				next_node.add_state(&st);
@@ -806,7 +806,7 @@ namespace NP {
 #else
 							// If be_naive, a new node and a new state should be created for each new job dispatch.
 							if (be_naive)
-								next = &(new_node(n, j, j.get_job_index(), prob_data.earliest_possible_job_release(n, j), prob_data.earliest_certain_source_job_release(n, j), prob_data.earliest_certain_sequential_source_job_release(n, j)));
+								next = &(new_node(n, j, j.get_job_index(), state_space_data.earliest_possible_job_release(n, j), state_space_data.earliest_certain_source_job_release(n, j), state_space_data.earliest_certain_sequential_source_job_release(n, j)));
 
 							// if we do not have a pointer to a node with the same set of scheduled job yet,
 							// try to find an existing node with the same set of scheduled jobs. Otherwise, create one.
@@ -826,7 +826,7 @@ namespace NP {
 								}
 								// If there is no node yet, create one.
 								if (next == nullptr)
-									next = &(new_node(n, j, j.get_job_index(), prob_data.earliest_possible_job_release(n, j), prob_data.earliest_certain_source_job_release(n, j), prob_data.earliest_certain_sequential_source_job_release(n, j)));
+									next = &(new_node(n, j, j.get_job_index(), state_space_data.earliest_possible_job_release(n, j), state_space_data.earliest_certain_source_job_release(n, j), state_space_data.earliest_certain_sequential_source_job_release(n, j)));
 							}
 #endif
 							// next should always exist at this point, possibly without states in it
@@ -1059,7 +1059,7 @@ namespace NP {
 						for (State* s : *n_states)
 						{
 							out << "[";
-							s->print_vertex_label(out, space.prob_data.jobs);
+							s->print_vertex_label(out, space.state_space_data.jobs);
 							//<< s->earliest_finish_time()
 							//<< ", "
 							//<< s->latest_finish_time()
