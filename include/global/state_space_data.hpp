@@ -21,7 +21,7 @@ namespace NP {
 		template<class Time> class Schedule_state;
 		template<class Time> class Schedule_node;
 
-		template<class Time> class Problem_data
+		template<class Time> class State_space_data
 		{
 		public:
 
@@ -72,7 +72,7 @@ namespace NP {
 			const std::vector<Suspensions_list>& predecessors_suspensions;
 			const std::vector<Suspensions_list>& successors;
 
-			Problem_data(const Workload& jobs,
+			State_space_data(const Workload& jobs,
 				const Precedence_constraints& edges,
 				const Abort_actions& aborts,
 				unsigned int num_cpus)

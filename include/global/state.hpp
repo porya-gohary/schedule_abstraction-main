@@ -13,7 +13,7 @@
 #include "jobs.hpp"
 #include "statistics.hpp"
 #include "util.hpp"
-#include "problem_data.hpp"
+#include "global/state_space_data.hpp"
 
 namespace NP {
 
@@ -22,7 +22,7 @@ namespace NP {
 		typedef Index_set Job_set;
 		typedef std::vector<Job_index> Job_precedence_set;
 
-		template<class Time> class Problem_data;
+		template<class Time> class State_space_data;
 
 		template<class Time> class Schedule_node;
 
@@ -72,11 +72,11 @@ namespace NP {
 		public:
 
 			// initial state -- nothing yet has finished, nothing is running
-			Schedule_state(const unsigned int num_processors, const Problem_data<Time>& prob_data)
+			Schedule_state(const unsigned int num_processors, const State_space_data<Time>& state_space_data)
 				: core_avail{ num_processors, Interval<Time>(Time(0), Time(0)) }
 				, certain_jobs{}
 				, earliest_certain_successor_job_disptach{ Time_model::constants<Time>::infinity() }
-				, earliest_certain_gang_source_job_disptach{ prob_data.get_earliest_certain_gang_source_job_release() }
+				, earliest_certain_gang_source_job_disptach{ state_space_data.get_earliest_certain_gang_source_job_release() }
 			{
 				assert(core_avail.size() > 0);
 			}
@@ -88,13 +88,13 @@ namespace NP {
 				Interval<Time> start_times,
 				Interval<Time> finish_times,
 				const Job_set& scheduled_jobs,
-				const Problem_data<Time>& prob_data,
+				const State_space_data<Time>& state_space_data,
 				Time next_source_job_rel,
 				unsigned int ncores = 1)
 			{
-				const Successors& successors_of = prob_data.successors;
-				const Predecessors& predecessors_of = prob_data.predecessors_suspensions;
-				const Job_precedence_set & predecessors = prob_data.predecessors_of(j);
+				const Successors& successors_of = state_space_data.successors;
+				const Predecessors& predecessors_of = state_space_data.predecessors_suspensions;
+				const Job_precedence_set & predecessors = state_space_data.predecessors_of(j);
 				// update the set of certainly running jobs
 				update_certainly_running_jobs(from, j, start_times, finish_times, ncores, predecessors);
 
@@ -107,7 +107,7 @@ namespace NP {
 				update_job_finish_times(from, j, start_times, finish_times, successors_of, predecessors_of, scheduled_jobs);
 
 				// NOTE: must be done after the core availabilities have been updated
-				update_earliest_certain_gang_source_job_disptach(next_source_job_rel, scheduled_jobs, prob_data);
+				update_earliest_certain_gang_source_job_disptach(next_source_job_rel, scheduled_jobs, state_space_data);
 
 				DM("*** new state: constructed " << *this << std::endl);
 			}
@@ -402,12 +402,12 @@ namespace NP {
 			void update_earliest_certain_gang_source_job_disptach(
 				Time after,
 				const Job_set& scheduled_jobs,
-				const Problem_data<Time>& prob_data)
+				const State_space_data<Time>& state_space_data)
 			{
 				earliest_certain_gang_source_job_disptach = Time_model::constants<Time>::infinity();
 
-				for (auto it = prob_data.gang_source_jobs_by_latest_arrival.lower_bound(after);
-					it != prob_data.gang_source_jobs_by_latest_arrival.end(); it++)
+				for (auto it = state_space_data.gang_source_jobs_by_latest_arrival.lower_bound(after);
+					it != state_space_data.gang_source_jobs_by_latest_arrival.end(); it++)
 				{
 					const Job<Time>* jp = it->second;
 					if (jp->latest_arrival() >= earliest_certain_gang_source_job_disptach)
@@ -692,18 +692,18 @@ namespace NP {
 			}
 
 			// initial node
-			Schedule_node (unsigned int num_cores, const Problem_data<Time>& prob_data)
+			Schedule_node (unsigned int num_cores, const State_space_data<Time>& state_space_data)
 				: lookup_key{ 0 }
 				, num_cpus(num_cores)
 				, finish_time{ 0,0 }
 				, a_max{ 0 }
 				, num_jobs_scheduled(0)
-				, earliest_pending_release{ prob_data.jobs_by_earliest_arrival.begin()->first }
+				, earliest_pending_release{ state_space_data.jobs_by_earliest_arrival.begin()->first }
 				, next_certain_successor_jobs_disptach{ Time_model::constants<Time>::infinity() }
-				, next_certain_sequential_source_job_release{ prob_data.get_earliest_certain_seq_source_job_release() }
+				, next_certain_sequential_source_job_release{ state_space_data.get_earliest_certain_seq_source_job_release() }
 				, next_certain_gang_source_job_disptach{ Time_model::constants<Time>::infinity() }
 			{
-				next_certain_source_job_release = std::min(next_certain_sequential_source_job_release, prob_data.get_earliest_certain_gang_source_job_release());
+				next_certain_source_job_release = std::min(next_certain_sequential_source_job_release, state_space_data.get_earliest_certain_gang_source_job_release());
 			}
 
 			// transition: new node by scheduling a job 'j' in an existing node 'from'

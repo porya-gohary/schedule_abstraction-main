@@ -22,7 +22,7 @@
 #endif
 
 #include "problem.hpp"
-#include "problem_data.hpp"
+#include "global/state_space_data.hpp"
 #include "clock.hpp"
 
 #include "global/state.hpp"
@@ -273,7 +273,7 @@ namespace NP {
 			const unsigned int num_cpus;
 			bool use_supernodes = true;
 
-			Problem_data<Time> prob_data;
+			State_space_data<Time> state_space_data;
 
 			State_space(const Workload& jobs,
 				const Precedence_constraints& edges,
@@ -283,7 +283,7 @@ namespace NP {
 				unsigned int max_depth = 0,
 				bool early_exit = true,
 				bool use_supernodes = true)
-				: prob_data(jobs, edges, aborts, num_cpus)
+				: state_space_data(jobs, edges, aborts, num_cpus)
 				, aborted(false)
 				, timed_out(false)
 				, observed_deadline_miss(false)
@@ -356,8 +356,8 @@ namespace NP {
 			{
 				// construct initial state
 				nodes_storage.emplace_back();
-				Node& n = new_node(num_cores, prob_data);
-				State& s = new_state(num_cores, prob_data);
+				Node& n = new_node(num_cores, state_space_data);
+				State& s = new_state(num_cores, state_space_data);
 				n.add_state(&s);
 				num_states++;
 			}
@@ -503,8 +503,8 @@ namespace NP {
 
 				// check if we skipped any jobs that are now guaranteed
 				// to miss their deadline
-				for (auto it = prob_data.jobs_by_deadline.lower_bound(check_from);
-					it != prob_data.jobs_by_deadline.end(); it++) {
+				for (auto it = state_space_data.jobs_by_deadline.lower_bound(check_from);
+					it != state_space_data.jobs_by_deadline.end(); it++) {
 					const Job<Time>& j = *(it->second);
 					auto pmin = j.get_min_parallelism();
 					auto earliest = new_n.get_last_state()->core_availability(pmin).min();
@@ -523,7 +523,7 @@ namespace NP {
 								Node& next =
 									new_node(new_n, j, j.get_job_index(), 0, 0, 0);
 								//const CoreAvailability empty_cav = {};
-								State& next_s = new_state(*new_n.get_last_state(), j.get_job_index(), frange, frange, new_n.get_scheduled_jobs(), prob_data, new_n.get_next_certain_source_job_release(), pmin);
+								State& next_s = new_state(*new_n.get_last_state(), j.get_job_index(), frange, frange, new_n.get_scheduled_jobs(), state_space_data, new_n.get_next_certain_source_job_release(), pmin);
 								next.add_state(&next_s);
 								num_states++;
 
@@ -546,12 +546,12 @@ namespace NP {
 			// Check wether a job is ready (not dspatched yet and all its predecessors are completed).
 			bool ready(const Node& n, const Job<Time>& j) const
 			{
-				return n.job_incomplete(j.get_job_index()) && n.job_ready(prob_data.predecessors_of(j));
+				return n.job_incomplete(j.get_job_index()) && n.job_ready(state_space_data.predecessors_of(j));
 			}
 
 			bool all_jobs_scheduled(const Node& n)
 			{
-				return (n.number_of_scheduled_jobs() == prob_data.num_jobs());
+				return (n.number_of_scheduled_jobs() == state_space_data.num_jobs());
 			}
 
 			// find next time by which a job is certainly ready in system state 's'
@@ -569,7 +569,7 @@ namespace NP {
 				const State& s, const Job<Time>& j, const Time t_wc, const Time t_high,
 				const Time t_avail, const unsigned int ncores = 1) const
 			{
-				auto rt = prob_data.earliest_ready_time(s, j);
+				auto rt = state_space_data.earliest_ready_time(s, j);
 				auto at = s.core_availability(ncores).min();
 				Time est = std::max(rt, at);
 
@@ -594,7 +594,7 @@ namespace NP {
 
 				// create a new state resulting from scheduling j in state s.
 				State& st = new_state(s, j.get_job_index(),
-					start_times, finish_times, sched_jobs, prob_data, n.get_next_certain_source_job_release(), ncores);
+					start_times, finish_times, sched_jobs, state_space_data, n.get_next_certain_source_job_release(), ncores);
 
 				bool found_match = false;
 				hash_value_t key = n.next_key(j);
@@ -628,9 +628,9 @@ namespace NP {
 
 				// if we reached here, we could not merge with an existing state and we have the lock on the hash map
 				Node& next_node = new_node_at(acc, n, j, j.get_job_index(),
-					prob_data.earliest_possible_job_release(n, j),
-					prob_data.earliest_certain_source_job_release(n, j),
-					prob_data.earliest_certain_sequential_source_job_release(n, j));
+					state_space_data.earliest_possible_job_release(n, j),
+					state_space_data.earliest_certain_source_job_release(n, j),
+					state_space_data.earliest_certain_sequential_source_job_release(n, j));
 #else
 				const auto pair_it = nodes_by_key.find(key);
 				if (pair_it != nodes_by_key.end())
@@ -675,7 +675,7 @@ namespace NP {
 			Interval<Time> calculate_abort_time(const Job<Time>& j, Time est, Time lst, Time eft, Time lft)
 			{
 				auto j_idx = j.get_job_index();
-				auto abort_action = prob_data.abort_action_of(j_idx);
+				auto abort_action = state_space_data.abort_action_of(j_idx);
 				if (abort_action) {
 					auto lt = abort_action->latest_trigger_time();
 					// Rule: if we're certainly past the trigger, the job is
@@ -724,8 +724,8 @@ namespace NP {
 						// Calculate t_wc and t_high
 						Time t_wc = std::max(s->core_availability().max(), next_certain_job_ready_time(n, *s));
 
-						Time t_high_succ = prob_data.next_certain_higher_priority_successor_job_ready_time(n, *s, j, p, t_wc + 1);
-						Time t_high_gang = prob_data.next_certain_higher_priority_gang_source_job_ready_time(n, *s, j, p, t_wc + 1);
+						Time t_high_succ = state_space_data.next_certain_higher_priority_successor_job_ready_time(n, *s, j, p, t_wc + 1);
+						Time t_high_gang = state_space_data.next_certain_higher_priority_gang_source_job_ready_time(n, *s, j, p, t_wc + 1);
 						Time t_high = std::min(t_high_wos, std::min(t_high_gang, t_high_succ));
 
 						// If j can execute on ncores+k cores, then 
@@ -773,7 +773,7 @@ namespace NP {
 									if (nodes_by_key.find(acc, next_key)) {
 										// If be_naive, a new node and a new state should be created for each new job dispatch.
 										if (be_naive) {
-											next = &(new_node_at(acc, n, j, j.get_job_index(), prob_data.earliest_possible_job_release(n, j), prob_data.earliest_certain_source_job_release(n, j), prob_data.earliest_certain_sequential_source_job_release(n, j)));
+											next = &(new_node_at(acc, n, j, j.get_job_index(), state_space_data.earliest_possible_job_release(n, j), state_space_data.earliest_certain_source_job_release(n, j), state_space_data.earliest_certain_sequential_source_job_release(n, j)));
 										}
 										else
 										{
@@ -785,13 +785,13 @@ namespace NP {
 												}
 											}
 											if (next == nullptr) {
-												next = &(new_node_at(acc, n, j, j.get_job_index(), prob_data.earliest_possible_job_release(n, j), prob_data.earliest_certain_source_job_release(n, j), prob_data.earliest_certain_sequential_source_job_release(n, j)));
+												next = &(new_node_at(acc, n, j, j.get_job_index(), state_space_data.earliest_possible_job_release(n, j), state_space_data.earliest_certain_source_job_release(n, j), state_space_data.earliest_certain_sequential_source_job_release(n, j)));
 											}
 										}
 									}
 									if (next == nullptr) {
 										if (nodes_by_key.insert(acc, next_key)) {
-											next = &(new_node_at(acc, n, j, j.get_job_index(), prob_data.earliest_possible_job_release(n, j), prob_data.earliest_certain_source_job_release(n, j), prob_data.earliest_certain_sequential_source_job_release(n, j)));
+											next = &(new_node_at(acc, n, j, j.get_job_index(), state_space_data.earliest_possible_job_release(n, j), state_space_data.earliest_certain_source_job_release(n, j), state_space_data.earliest_certain_sequential_source_job_release(n, j)));
 										}
 									}
 									// if we raced with concurrent creation, try again
@@ -800,7 +800,7 @@ namespace NP {
 							// If be_naive, a new node and a new state should be created for each new job dispatch.
 							else if (be_naive) {
 								// note that the accessor should be pointing on something at this point
-								next = &(new_node_at(acc, n, j, j.get_job_index(), prob_data.earliest_possible_job_release(n, j), prob_data.earliest_certain_source_job_release(n, j), prob_data.earliest_certain_sequential_source_job_release(n, j)));
+								next = &(new_node_at(acc, n, j, j.get_job_index(), state_space_data.earliest_possible_job_release(n, j), state_space_data.earliest_certain_source_job_release(n, j), state_space_data.earliest_certain_sequential_source_job_release(n, j)));
 							}
 							assert(!acc.empty());
 #else
@@ -832,7 +832,7 @@ namespace NP {
 							// next should always exist at this point, possibly without states in it
 							// create a new state resulting from scheduling j in state s on p cores and try to merge it with an existing state in node 'next'.							
 							new_or_merge_state(*next, *s, j.get_job_index(),
-								Interval<Time>{_st}, ftimes, next->get_scheduled_jobs(), prob_data, next->get_next_certain_source_job_release(), p);
+								Interval<Time>{_st}, ftimes, next->get_scheduled_jobs(), state_space_data, next->get_next_certain_source_job_release(), p);
 
 							// make sure we didn't skip any jobs which would then certainly miss its deadline
 							// only do that if we stop the analysis when a deadline miss is found 
@@ -880,8 +880,8 @@ namespace NP {
 					<< "upbnd_t_wc: " << upbnd_t_wc << std::endl);
 
 				//check all jobs that may be eligible to be dispatched next
-				for (auto it = prob_data.jobs_by_earliest_arrival.lower_bound(t_min);
-					it != prob_data.jobs_by_earliest_arrival.end();
+				for (auto it = state_space_data.jobs_by_earliest_arrival.lower_bound(t_min);
+					it != state_space_data.jobs_by_earliest_arrival.end();
 					it++)
 				{
 					const Job<Time>& j = *it->second;
@@ -898,7 +898,7 @@ namespace NP {
 					// be incomplete...
 					assert(unfinished(n, j));
 
-					Time t_high_wos = prob_data.next_certain_higher_priority_seq_source_job_release(n, j, upbnd_t_wc + 1);
+					Time t_high_wos = state_space_data.next_certain_higher_priority_seq_source_job_release(n, j, upbnd_t_wc + 1);
 					// if there is a higher priority job that is certainly ready before job j is released at the earliest, 
 					// then j will never be the next job dispached by the scheduler
 					if (t_high_wos <= j.earliest_arrival())
@@ -925,7 +925,7 @@ namespace NP {
 			{
 				make_initial_node(num_cpus);
 
-				while (current_job_count < prob_data.num_jobs()) {
+				while (current_job_count < state_space_data.num_jobs()) {
 					unsigned long n;
 #ifdef CONFIG_PARALLEL
 					const auto& new_nodes_part = nodes_storage.back();
