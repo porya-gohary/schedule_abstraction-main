@@ -114,7 +114,7 @@ namespace NP {
 				}
 			}
 
-			size_t num_jobs()
+			size_t num_jobs() const
 			{
 				return jobs.size();
 			}
@@ -352,15 +352,6 @@ namespace NP {
 				return when;
 			}
 
-			Time next_certain_higher_priority_successor_job_ready_time(
-				const Node& n,
-				const State& s,
-				const Job<Time>& reference_job,
-				Time until = Time_model::constants<Time>::infinity()) const
-			{
-				return next_certain_higher_priority_successor_job_ready_time(n, s, reference_job, 1, until);
-			}
-
 			// Find the earliest possible job release of all jobs in a node except for the ignored job
 			Time earliest_possible_job_release(
 				const Node& n,
@@ -389,7 +380,7 @@ namespace NP {
 				return Time_model::constants<Time>::infinity();
 			}
 
-			// Find the earliest possible certain job release of all sequential source jobs 
+			// Find the earliest certain job release of all sequential source jobs 
 			// (i.e., without predecessors and with minimum parallelism = 1) 
 			// in a node except for the ignored job
 			Time earliest_certain_sequential_source_job_release(
@@ -417,7 +408,7 @@ namespace NP {
 				return Time_model::constants<Time>::infinity();
 			}
 
-			// Find the earliest possible certain job release of all source jobs (i.e., without predecessors) 
+			// Find the earliest certain job release of all source jobs (i.e., without predecessors) 
 			// in a node except for the ignored job
 			Time earliest_certain_source_job_release(
 				const Node& n,
@@ -447,6 +438,9 @@ namespace NP {
 				return rmax;
 			}
 
+			// Find the earliest certain job release of all sequential source jobs
+			// (i.e., without predecessors and with minimum parallelism = 1) when
+			// the system starts
 			Time get_earliest_certain_seq_source_job_release() const
 			{
 				if (sequential_source_jobs_by_latest_arrival.empty())
@@ -455,6 +449,9 @@ namespace NP {
 					return sequential_source_jobs_by_latest_arrival.begin()->first;
 			}
 
+			// Find the earliest certain job release of all gang source jobs
+			// (i.e., without predecessors and with possible parallelism > 1) when
+			// the system starts
 			Time get_earliest_certain_gang_source_job_release() const
 			{
 				if (gang_source_jobs_by_latest_arrival.empty())
