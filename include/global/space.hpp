@@ -523,7 +523,7 @@ namespace NP {
 								Node& next =
 									new_node(new_n, j, j.get_job_index(), 0, 0, 0);
 								//const CoreAvailability empty_cav = {};
-								State& next_s = new_state(*new_n.get_last_state(), j.get_job_index(), frange, frange, new_n.get_scheduled_jobs(), prob_data, 0, pmin);
+								State& next_s = new_state(*new_n.get_last_state(), j.get_job_index(), frange, frange, new_n.get_scheduled_jobs(), prob_data, new_n.get_next_certain_source_job_release(), pmin);
 								next.add_state(&next_s);
 								num_states++;
 
@@ -594,7 +594,7 @@ namespace NP {
 
 				// create a new state resulting from scheduling j in state s.
 				State& st = new_state(s, j.get_job_index(),
-					start_times, finish_times, sched_jobs, prob_data, prob_data.earliest_certain_gang_source_job_disptach(n, s, j), ncores);
+					start_times, finish_times, sched_jobs, prob_data, n.get_next_certain_source_job_release(), ncores);
 
 				bool found_match = false;
 				hash_value_t key = n.next_key(j);
@@ -722,7 +722,7 @@ namespace NP {
 					{
 						unsigned int p = it->first;
 						// Calculate t_wc and t_high
-						Time t_wc = std::max(s->core_availability(p).max(), next_certain_job_ready_time(n, *s));
+						Time t_wc = std::max(s->core_availability().max(), next_certain_job_ready_time(n, *s));
 
 						Time t_high_succ = prob_data.next_certain_higher_priority_successor_job_ready_time(n, *s, j, p, t_wc + 1);
 						Time t_high_gang = prob_data.next_certain_higher_priority_gang_source_job_ready_time(n, *s, j, p, t_wc + 1);
@@ -832,7 +832,7 @@ namespace NP {
 							// next should always exist at this point, possibly without states in it
 							// create a new state resulting from scheduling j in state s on p cores and try to merge it with an existing state in node 'next'.							
 							new_or_merge_state(*next, *s, j.get_job_index(),
-								Interval<Time>{_st}, ftimes, next->get_scheduled_jobs(), prob_data, prob_data.earliest_certain_gang_source_job_disptach(n, *s, j), p);
+								Interval<Time>{_st}, ftimes, next->get_scheduled_jobs(), prob_data, next->get_next_certain_source_job_release(), p);
 
 							// make sure we didn't skip any jobs which would then certainly miss its deadline
 							// only do that if we stop the analysis when a deadline miss is found 

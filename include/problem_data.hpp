@@ -451,42 +451,6 @@ namespace NP {
 				return rmax;
 			}
 
-			// returns the earliest time a gang source job (i.e., a job without predecessors that requires more than one core to start executing)
-			// is certainly released and has enough cores available to start executing
-			Time earliest_certain_gang_source_job_disptach(
-				const Node& n,
-				const State& s,
-				const Job<Time>& ignored_job)
-			{
-				DM("      - looking for earliest certain source job release starting from: "
-					<< n.get_next_certain_source_job_release() << std::endl);
-
-				Time rmax = Time_model::constants<Time>::infinity();
-
-				for (auto it = gang_source_jobs_by_latest_arrival.lower_bound(n.get_next_certain_source_job_release());
-					it != gang_source_jobs_by_latest_arrival.end(); it++)
-				{
-					const Job<Time>* jp = it->second;
-					if (jp->latest_arrival() >= rmax)
-						break;
-
-					DM("         * looking at " << *jp << std::endl);
-
-					// skip if it is the one we're ignoring or the job was dispatched already
-					if (jp == &ignored_job || !unfinished(n, *jp))
-						continue;
-
-					DM("         * found it: " << jp->latest_arrival() << std::endl);
-					// it's incomplete and not ignored 
-					rmax = std::min(rmax,
-						std::max(jp->latest_arrival(),
-							s.core_availability(jp->get_min_parallelism()).max()));
-				}
-
-				DM("         * No more future releases" << std::endl);
-				return rmax;
-			}
-
 			Time get_earliest_certain_seq_source_job_release() const
 			{
 				if (sequential_source_jobs_by_latest_arrival.empty())

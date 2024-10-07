@@ -89,9 +89,8 @@ namespace NP {
 				Interval<Time> finish_times,
 				const Job_set& scheduled_jobs,
 				const Problem_data<Time>& prob_data,
-				const Time next_certain_gang_source_job_disptach,
+				Time next_source_job_rel,
 				unsigned int ncores = 1)
-				: earliest_certain_gang_source_job_disptach(next_certain_gang_source_job_disptach)
 			{
 				const Successors& successors_of = prob_data.successors;
 				const Predecessors& predecessors_of = prob_data.predecessors_suspensions;
@@ -106,6 +105,9 @@ namespace NP {
 
 				// save the job finish time of every job with a successor that is not executed yet in the current state
 				update_job_finish_times(from, j, start_times, finish_times, successors_of, predecessors_of, scheduled_jobs);
+
+				// NOTE: must be done after the core availabilities have been updated
+				update_earliest_certain_gang_source_job_disptach(next_source_job_rel, scheduled_jobs, prob_data);
 
 				DM("*** new state: constructed " << *this << std::endl);
 			}
@@ -395,6 +397,33 @@ namespace NP {
 				delete[] ca;
 			}
 
+			// finds the earliest time a gang source job (i.e., a job without predecessors that requires more than one core to start executing)
+			// is certainly released and has enough cores available to start executing at or after time `after`
+			void update_earliest_certain_gang_source_job_disptach(
+				Time after,
+				const Job_set& scheduled_jobs,
+				const Problem_data<Time>& prob_data)
+			{
+				earliest_certain_gang_source_job_disptach = Time_model::constants<Time>::infinity();
+
+				for (auto it = prob_data.gang_source_jobs_by_latest_arrival.lower_bound(after);
+					it != prob_data.gang_source_jobs_by_latest_arrival.end(); it++)
+				{
+					const Job<Time>* jp = it->second;
+					if (jp->latest_arrival() >= earliest_certain_gang_source_job_disptach)
+						break;
+
+					// skip if it is the one we're ignoring or the job was dispatched already
+					if (scheduled_jobs.contains(jp->get_job_index()))
+						continue;
+
+					// it's incomplete and not ignored 
+					earliest_certain_gang_source_job_disptach = std::min(earliest_certain_gang_source_job_disptach,
+						std::max(jp->latest_arrival(),
+							core_availability(jp->get_min_parallelism()).max()));
+				}
+			}
+
 			// update the list of finish times of jobs with successors w.r.t. the previous system state
 			// and calculate the earliest time a job with precedence constraints will become ready to dispatch
 			void update_job_finish_times(const Schedule_state& from,
@@ -671,7 +700,7 @@ namespace NP {
 				, num_jobs_scheduled(0)
 				, earliest_pending_release{ prob_data.jobs_by_earliest_arrival.begin()->first }
 				, next_certain_successor_jobs_disptach{ Time_model::constants<Time>::infinity() }
-				, next_certain_sequential_source_job_release{ prob_data.get_earliest_certain_gang_source_job_release() }
+				, next_certain_sequential_source_job_release{ prob_data.get_earliest_certain_seq_source_job_release() }
 				, next_certain_gang_source_job_disptach{ Time_model::constants<Time>::infinity() }
 			{
 				next_certain_source_job_release = std::min(next_certain_sequential_source_job_release, prob_data.get_earliest_certain_gang_source_job_release());
