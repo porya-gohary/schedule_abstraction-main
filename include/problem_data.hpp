@@ -34,8 +34,6 @@ namespace NP {
 			typedef typename std::vector<Interval<Time>> CoreAvailability;
 
 		private:
-			const Workload& jobs; 
-
 			typedef const Job<Time>* Job_ref;
 			typedef std::multimap<Time, Job_ref> By_time_map;
 			typedef std::vector<Job_index> Job_precedence_set;
@@ -65,6 +63,7 @@ namespace NP {
 		
 		public:
 			// use these const references to ensure read-only access
+			const Workload& jobs;
 			const By_time_map& jobs_by_earliest_arrival;
 			const By_time_map& jobs_by_deadline;
 			const By_time_map& successor_jobs_by_latest_arrival;

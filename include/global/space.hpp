@@ -628,9 +628,9 @@ namespace NP {
 
 				// if we reached here, we could not merge with an existing state and we have the lock on the hash map
 				Node& next_node = new_node_at(acc, n, j, j.get_job_index(),
-					earliest_possible_job_release(n, j),
-					earliest_certain_source_job_release(n, j),
-					earliest_certain_sequential_source_job_release(n, j));
+					prob_data.earliest_possible_job_release(n, j),
+					prob_data.earliest_certain_source_job_release(n, j),
+					prob_data.earliest_certain_sequential_source_job_release(n, j));
 #else
 				const auto pair_it = nodes_by_key.find(key);
 				if (pair_it != nodes_by_key.end())
@@ -773,7 +773,7 @@ namespace NP {
 									if (nodes_by_key.find(acc, next_key)) {
 										// If be_naive, a new node and a new state should be created for each new job dispatch.
 										if (be_naive) {
-											next = &(new_node_at(acc, n, j, j.get_job_index(), earliest_possible_job_release(n, j), earliest_certain_source_job_release(n, j), earliest_certain_sequential_source_job_release(n, j)));
+											next = &(new_node_at(acc, n, j, j.get_job_index(), prob_data.earliest_possible_job_release(n, j), prob_data.earliest_certain_source_job_release(n, j), prob_data.earliest_certain_sequential_source_job_release(n, j)));
 										}
 										else
 										{
@@ -785,13 +785,13 @@ namespace NP {
 												}
 											}
 											if (next == nullptr) {
-												next = &(new_node_at(acc, n, j, j.get_job_index(), earliest_possible_job_release(n, j), earliest_certain_source_job_release(n, j), earliest_certain_sequential_source_job_release(n, j)));
+												next = &(new_node_at(acc, n, j, j.get_job_index(), prob_data.earliest_possible_job_release(n, j), prob_data.earliest_certain_source_job_release(n, j), prob_data.earliest_certain_sequential_source_job_release(n, j)));
 											}
 										}
 									}
 									if (next == nullptr) {
 										if (nodes_by_key.insert(acc, next_key)) {
-											next = &(new_node_at(acc, n, j, j.get_job_index(), earliest_possible_job_release(n, j), earliest_certain_source_job_release(n, j), earliest_certain_sequential_source_job_release(n, j)));
+											next = &(new_node_at(acc, n, j, j.get_job_index(), prob_data.earliest_possible_job_release(n, j), prob_data.earliest_certain_source_job_release(n, j), prob_data.earliest_certain_sequential_source_job_release(n, j)));
 										}
 									}
 									// if we raced with concurrent creation, try again
@@ -800,7 +800,7 @@ namespace NP {
 							// If be_naive, a new node and a new state should be created for each new job dispatch.
 							else if (be_naive) {
 								// note that the accessor should be pointing on something at this point
-								next = &(new_node_at(acc, n, j, j.get_job_index(), earliest_possible_job_release(n, j), earliest_certain_source_job_release(n, j), earliest_certain_sequential_source_job_release(n, j)));
+								next = &(new_node_at(acc, n, j, j.get_job_index(), prob_data.earliest_possible_job_release(n, j), prob_data.earliest_certain_source_job_release(n, j), prob_data.earliest_certain_sequential_source_job_release(n, j)));
 							}
 							assert(!acc.empty());
 #else
@@ -1059,7 +1059,7 @@ namespace NP {
 						for (State* s : *n_states)
 						{
 							out << "[";
-							s->print_vertex_label(out, space.jobs);
+							s->print_vertex_label(out, space.prob_data.jobs);
 							//<< s->earliest_finish_time()
 							//<< ", "
 							//<< s->latest_finish_time()
