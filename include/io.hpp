@@ -59,6 +59,17 @@ namespace NP {
 		}
 	}
 
+	inline void next_field(std::istream& in, char field_delimiter)
+	{
+		while (in.good() && (in.peek() == field_delimiter || in.peek() == ' '))
+		{
+			// eat up any trailing spaces
+			skip_all(in, ' ');
+			// eat up field separator
+			skip_one(in, field_delimiter);
+		}
+	}
+
 	inline void next_line(std::istream& in)
 	{
 		skip_over(in, '\n');
@@ -72,6 +83,37 @@ namespace NP {
 		next_field(in);
 		in >> jid;
 		return JobID(jid, tid);
+	}
+
+	template<class Time>
+	void parse_job_cost(std::istream& in, std::map<unsigned int, Interval<Time>>& costs)
+	{
+		Time cost_min, cost_max;
+		skip_all(in, ' ');
+		if (in.peek() == '{') { // expected format: { paral:cost_min:cost_max; paral:cost_min:cost_max; ... }
+			unsigned int paral;
+
+			skip_one(in, '{');
+			skip_all(in, ' ');
+			while (in.peek() != '}') {
+				in >> paral;
+				next_field(in, ':');
+				in >> cost_min;
+				next_field(in, ':');
+				in >> cost_max;
+				costs.emplace(std::make_pair(paral, Interval<Time>{cost_min, cost_max}));
+				skip_all(in, ' ');
+				if (in.peek() == ';')
+					skip_one(in, ';');
+			}
+			skip_one(in, '}');
+		}
+		else { 
+			in >> cost_min;
+			next_field(in);
+			in >> cost_max;
+			costs.emplace(std::make_pair(1, Interval<Time>{ cost_min, cost_max }));
+		}			
 	}
 
 	//Functions that help parse selfsuspending tasks file
@@ -168,13 +210,15 @@ namespace NP {
 		return edges;
 	}
 
-	template<class Time> Job<Time> parse_job(std::istream& in, std::size_t idx)
+	template<class Time> 
+	Job<Time> parse_job(std::istream& in, std::size_t idx)
 	{
 		unsigned long tid, jid;
 
 		std::ios_base::iostate state_before = in.exceptions();
 
-		Time arr_min, arr_max, cost_min, cost_max, dl, prio;
+		Time arr_min, arr_max, dl, prio;
+		std::map<unsigned int, Interval<Time>> cost;
 
 		in.exceptions(std::istream::failbit | std::istream::badbit);
 
@@ -186,9 +230,7 @@ namespace NP {
 		next_field(in);
 		in >> arr_max;
 		next_field(in);
-		in >> cost_min;
-		next_field(in);
-		in >> cost_max;
+		parse_job_cost(in, cost);
 		next_field(in);
 		in >> dl;
 		next_field(in);
@@ -196,8 +238,8 @@ namespace NP {
 
 		in.exceptions(state_before);
 
-		return Job<Time>{jid, Interval<Time>{arr_min, arr_max},
-						Interval<Time>{cost_min, cost_max}, dl, prio, idx, tid};
+		return Job<Time> {jid, Interval<Time>{arr_min, arr_max},
+						cost, dl, prio, idx, tid};
 	}
 
 	template<class Time>

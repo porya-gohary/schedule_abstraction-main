@@ -360,7 +360,7 @@ int main(int argc, char** argv)
 	//all the options that could have been entered above are processed below and appropriate variables
 	// are assigned their respective values.
 
-	const std::string& time_model = (const std::string&) options.get("time_model");
+	std::string time_model = (const std::string&) options.get("time_model");
 	want_dense = time_model == "dense";
 
 	want_naive = options.get("naive");

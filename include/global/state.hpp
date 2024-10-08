@@ -13,6 +13,7 @@
 #include "jobs.hpp"
 #include "statistics.hpp"
 #include "util.hpp"
+#include "global/state_space_data.hpp"
 
 namespace NP {
 
@@ -20,6 +21,8 @@ namespace NP {
 
 		typedef Index_set Job_set;
 		typedef std::vector<Job_index> Job_precedence_set;
+
+		template<class Time> class State_space_data;
 
 		template<class Time> class Schedule_node;
 
@@ -69,11 +72,11 @@ namespace NP {
 		public:
 
 			// initial state -- nothing yet has finished, nothing is running
-			Schedule_state(const unsigned int num_processors, const Time next_certain_gang_source_job_disptach)
+			Schedule_state(const unsigned int num_processors, const State_space_data<Time>& state_space_data)
 				: core_avail{ num_processors, Interval<Time>(Time(0), Time(0)) }
 				, certain_jobs{}
 				, earliest_certain_successor_job_disptach{ Time_model::constants<Time>::infinity() }
-				, earliest_certain_gang_source_job_disptach{ next_certain_gang_source_job_disptach }
+				, earliest_certain_gang_source_job_disptach{ state_space_data.get_earliest_certain_gang_source_job_release() }
 			{
 				assert(core_avail.size() > 0);
 			}
@@ -82,16 +85,16 @@ namespace NP {
 			Schedule_state(
 				const Schedule_state& from,
 				Job_index j,
-				const Job_precedence_set& predecessors,
 				Interval<Time> start_times,
 				Interval<Time> finish_times,
 				const Job_set& scheduled_jobs,
-				const Successors& successors_of,
-				const Predecessors& predecessors_of,
-				const Time next_certain_gang_source_job_disptach,
+				const State_space_data<Time>& state_space_data,
+				Time next_source_job_rel,
 				unsigned int ncores = 1)
-				: earliest_certain_gang_source_job_disptach(next_certain_gang_source_job_disptach)
 			{
+				const Successors& successors_of = state_space_data.successors_suspensions;
+				const Predecessors& predecessors_of = state_space_data.predecessors_suspensions;
+				const Job_precedence_set & predecessors = state_space_data.predecessors_of(j);
 				// update the set of certainly running jobs
 				update_certainly_running_jobs(from, j, start_times, finish_times, ncores, predecessors);
 
@@ -102,6 +105,9 @@ namespace NP {
 
 				// save the job finish time of every job with a successor that is not executed yet in the current state
 				update_job_finish_times(from, j, start_times, finish_times, successors_of, predecessors_of, scheduled_jobs);
+
+				// NOTE: must be done after the core availabilities have been updated
+				update_earliest_certain_gang_source_job_disptach(next_source_job_rel, scheduled_jobs, state_space_data);
 
 				DM("*** new state: constructed " << *this << std::endl);
 			}
@@ -391,6 +397,33 @@ namespace NP {
 				delete[] ca;
 			}
 
+			// finds the earliest time a gang source job (i.e., a job without predecessors that requires more than one core to start executing)
+			// is certainly released and has enough cores available to start executing at or after time `after`
+			void update_earliest_certain_gang_source_job_disptach(
+				Time after,
+				const Job_set& scheduled_jobs,
+				const State_space_data<Time>& state_space_data)
+			{
+				earliest_certain_gang_source_job_disptach = Time_model::constants<Time>::infinity();
+
+				for (auto it = state_space_data.gang_source_jobs_by_latest_arrival.lower_bound(after);
+					it != state_space_data.gang_source_jobs_by_latest_arrival.end(); it++)
+				{
+					const Job<Time>* jp = it->second;
+					if (jp->latest_arrival() >= earliest_certain_gang_source_job_disptach)
+						break;
+
+					// skip if it is the one we're ignoring or the job was dispatched already
+					if (scheduled_jobs.contains(jp->get_job_index()))
+						continue;
+
+					// it's incomplete and not ignored 
+					earliest_certain_gang_source_job_disptach = std::min(earliest_certain_gang_source_job_disptach,
+						std::max(jp->latest_arrival(),
+							core_availability(jp->get_min_parallelism()).max()));
+				}
+			}
+
 			// update the list of finish times of jobs with successors w.r.t. the previous system state
 			// and calculate the earliest time a job with precedence constraints will become ready to dispatch
 			void update_job_finish_times(const Schedule_state& from,
@@ -643,24 +676,34 @@ namespace NP {
 
 		public:
 
-			// initial node
-			Schedule_node(
-				unsigned int num_cores,
-				const Time next_earliest_release = 0,
-				const Time next_certain_source_job_release = Time_model::constants<Time>::infinity(), // the next time a job without predecessor is certainly released
-				const Time next_certain_sequential_source_job_release = Time_model::constants<Time>::infinity() // the next time a job without predecessor that can execute on a single core is certainly released
-			)
+			// initial node (for convenience for unit tests)
+			Schedule_node(unsigned int num_cores)
 				: lookup_key{ 0 }
 				, num_cpus(num_cores)
 				, finish_time{ 0,0 }
 				, a_max{ 0 }
 				, num_jobs_scheduled(0)
-				, earliest_pending_release{ next_earliest_release }
+				, earliest_pending_release{ 0 }
+				, next_certain_source_job_release {Time_model::constants<Time>::infinity() }
 				, next_certain_successor_jobs_disptach{ Time_model::constants<Time>::infinity() }
-				, next_certain_source_job_release{ next_certain_source_job_release }
-				, next_certain_sequential_source_job_release{ next_certain_sequential_source_job_release }
+				, next_certain_sequential_source_job_release{ Time_model::constants<Time>::infinity() }
 				, next_certain_gang_source_job_disptach{ Time_model::constants<Time>::infinity() }
 			{
+			}
+
+			// initial node
+			Schedule_node (unsigned int num_cores, const State_space_data<Time>& state_space_data)
+				: lookup_key{ 0 }
+				, num_cpus(num_cores)
+				, finish_time{ 0,0 }
+				, a_max{ 0 }
+				, num_jobs_scheduled(0)
+				, earliest_pending_release{ state_space_data.jobs_by_earliest_arrival.begin()->first }
+				, next_certain_successor_jobs_disptach{ Time_model::constants<Time>::infinity() }
+				, next_certain_sequential_source_job_release{ state_space_data.get_earliest_certain_seq_source_job_release() }
+				, next_certain_gang_source_job_disptach{ Time_model::constants<Time>::infinity() }
+			{
+				next_certain_source_job_release = std::min(next_certain_sequential_source_job_release, state_space_data.get_earliest_certain_gang_source_job_release());
 			}
 
 			// transition: new node by scheduling a job 'j' in an existing node 'from'
