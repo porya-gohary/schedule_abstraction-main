@@ -355,7 +355,7 @@ namespace NP {
 			// Find the earliest possible job release of all jobs in a node except for the ignored job
 			Time earliest_possible_job_release(
 				const Node& n,
-				const Job<Time>& ignored_job)
+				const Job<Time>& ignored_job) const
 			{
 				DM("      - looking for earliest possible job release starting from: "
 					<< n.earliest_job_release() << std::endl);
@@ -385,7 +385,7 @@ namespace NP {
 			// in a node except for the ignored job
 			Time earliest_certain_sequential_source_job_release(
 				const Node& n,
-				const Job<Time>& ignored_job)
+				const Job<Time>& ignored_job) const
 			{
 				DM("      - looking for earliest certain source job release starting from: "
 					<< n.get_next_certain_source_job_release() << std::endl);
@@ -412,7 +412,7 @@ namespace NP {
 			// in a node except for the ignored job
 			Time earliest_certain_source_job_release(
 				const Node& n,
-				const Job<Time>& ignored_job)
+				const Job<Time>& ignored_job) const
 			{
 				DM("      - looking for earliest certain source job release starting from: "
 					<< n.get_next_certain_source_job_release() << std::endl);
@@ -471,6 +471,8 @@ namespace NP {
 			{
 				return n.job_incomplete(j.get_job_index());
 			}
+
+			State_space_data(const State_space_data& origin) = delete;
 		};
 	}
 }
