@@ -143,19 +143,33 @@ namespace NP {
 				return earliest_certain_successor_job_disptach;
 			}
 
-			bool core_avail_overlap(const CoreAvailability& other, bool conservative) const
+			// returns true if the availability inervals of one state overlaps with the other state.
+			// Conservative means that all the availability intervals of one state must be within 
+			// the interval of the other state.
+			// If conservative is false, the a simple overlap or contiguity between inverals is enough.
+			// If conservative is true, then sets `other_in_this` to true if all availability intervals
+			// of other are subintervals of this. Otherwise, `other_in_this` is set to false.
+			bool core_avail_overlap(const CoreAvailability& other, bool conservative, bool& other_in_this) const
 			{
 				assert(core_avail.size() == other.size());
+				other_in_this = false;
+				// Conservative means that all the availability intervals of one state must be within 
+				// the interval of the other state.
+				// If conservative is false, the a simple overlap or contiguity between inverals is enough
 				if (conservative) {
 					bool overlap = true;
+					// check if all availability intervals of other are within the intervals of this
 					for (int i = 0; i < core_avail.size(); i++) {
 						if (!core_avail[i].contains(other[i])) {
 							overlap = false;
 							break;
 						}
 					}
-					if (overlap == true)
+					if (overlap == true) {
+						other_in_this = true;
 						return true;
+					}
+					// check if all availability intervals of this are within the intervals of other
 					for (int i = 0; i < core_avail.size(); i++) {
 						if (!other[i].contains(core_avail[i])) {
 							return false;;
@@ -173,10 +187,11 @@ namespace NP {
 			// check if 'other' state can merge with this state
 			bool can_merge_with(const Schedule_state<Time>& other, bool conservative, bool useJobFinishTimes = false) const
 			{
-				if (core_avail_overlap(other.core_avail, conservative))
+				bool other_in_this;
+				if (core_avail_overlap(other.core_avail, conservative, other_in_this))
 				{
 					if (useJobFinishTimes)
-						return check_finish_times_overlap(other.job_finish_times, conservative);
+						return check_finish_times_overlap(other.job_finish_times, conservative, other_in_this);
 					else
 						return true;
 				}
@@ -554,54 +569,44 @@ namespace NP {
 			}
 
 			// Check whether the job_finish_times overlap.
-			bool check_finish_times_overlap(const JobFinishTimes& from_pwj, bool conservative = false) const
+			bool check_finish_times_overlap(const JobFinishTimes& other_ft, bool conservative = false, const bool other_in_this = false) const
 			{
 				bool allJobsIntersect = true;
-				int direction = 0; // if <0 means from must contain state, otherwise state must constain from
 				// The JobFinishTimes vectors are sorted.
 				// Check intersect for matching jobs.
-				auto from_it = from_pwj.begin();
+				auto other_it = other_ft.begin();
 				auto state_it = job_finish_times.begin();
-				while (from_it != from_pwj.end() &&
+				while (other_it != other_ft.end() &&
 					state_it != job_finish_times.end())
 				{
-					if (from_it->first == state_it->first)
+					if (other_it->first == state_it->first)
 					{
-						if(conservative) {
-							if (direction<0 && !from_it->second.contains(state_it->second))
+						if (conservative) {
+							if (other_in_this == false && !other_it->second.contains(state_it->second))
 							{
-								allJobsIntersect = false;
+								allJobsIntersect = false; // not all the finish time intervals of this are within those of other
 								break;
 							}
-							else if (direction>0 && !state_it->second.contains(from_it->second))
+							else if (other_in_this == true && !state_it->second.contains(other_it->second))
 							{
-								allJobsIntersect = false;
+								allJobsIntersect = false; // not all the finish time intervals of other are within those of this
 								break;
-							}
-							else if (direction == 0)
-							{
-								if (from_it->second.contains(state_it->second))
-									direction--;
-								else if (state_it->second.contains(from_it->second))
-									direction++;
-								else {
-									allJobsIntersect = false;
-									break;
-								}
 							}
 						}
 						else {
-							if (!from_it->second.intersects(state_it->second))
+							if (!other_it->second.intersects(state_it->second))
 							{
 								allJobsIntersect = false;
 								break;
 							}
 						}
-						from_it++;
+						other_it++;
 						state_it++;
 					}
-					else if (from_it->first < state_it->first)
-						from_it++;
+					else if (conservative)
+						return false; // the list of finish time intervals do not match
+					else if (other_it->first < state_it->first)
+						other_it++;
 					else
 						state_it++;
 				}
