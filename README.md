@@ -174,13 +174,6 @@ $ cat examples/fig1a.csv | grep -v '3, 9' | build/nptest
 -,  1,  8,  9,  8,  0,  0.000069,  816.000000,  0
 ```
 
-To activate an *idle-time insertion policy* (IIP, see paper for details), use the `-i` option. For example, to use the CW-EDF IIP, pass the `-i CW` option:
-
-```
-$ build/nptest -i CW examples/fig1a.csv 
-examples/fig1a.csv,  1,  9,  10,  9,  0,  0.000121,  848.000000,  0, 1
-```
-
 When analyzing a job set with **dense-time parameters** (i.e., time values specified as floating-point numbers), the option `-t dense` **must** be passed. 
 
 To use the multiprocessor analysis, use the `-m` option. 
@@ -259,6 +252,33 @@ If invoked on an input file named `foo.csv`, the completion times will be stored
 6. WCRT, the worst-case response time (relative to the minimum release time)
 
 Note that the analysis by default aborts after finding the first deadline miss, in which case some of the rows may report nonsensical default values.  To force the analysis to run to completion despite deadline misses, pass the `-c` flag to `nptest`.
+
+## Additional options
+
+### Merge aggressivity
+
+To curb the state space explosion inherent to reachability-based analyses, the SAG merges similar states together. For the analysis of self-suspending tasks and the analysis of multicore systems, merging states may result in losing information and thus reducing the accuracy of the analysis. The `--merge` option allows to define how aggressively should the tool try to merge state. A more aggressive merge reduces runtime but may reduce accuracy. A less aggressive merge may improve accuracy (up to exactness in some cases) but may sometimes have a high cost in terms of runtime.
+
+The option `--merge` can currently be set to 7 different levels:
++ `no`: de-activate merge. This leads to a rapid state-space explosion. It should only be used for very small examples.
++ `c1`: conservative merge level 1. Merge two states only if the availability intervals of one of them are sub-intervals of the other.
++ `c2`: conservative merge level 2. Merge two states only if the availability intervals and job finish time intervals recorded in one of them are sub-intervals of the other.
++ `l1`: lossy level 1. Merge two states if their availability intervals overlap or are contiguous.
++ `l2`; same as `l1` but try to merge up to three states (instead of just two) each time a new state is created.
++ `l3`; same as `l1` but try to merge up to four states (instead of just two) each time a new state is created.
++ `lmax`; same as `l1` but try to merge as many states as possible (instead of just two) each time a new state is created.
+
+By default the merge level is set to `l1`.
+  
+### Verbose
+
+If the flag `-v` is set when launching an analysis, the tool will show analysis progress in the terminal.
+
+### Evolution of the SAG width
+
+The `-r` option reports the response time bounds of every job but also reports the evolution of the width (in terms of nodes) of the SAG for each depth level.
+
+If invoked on an input file named `foo.csv`, the SAG width evolution will be stored in a file named `foo.width.csv`. 
 
 ## Questions, Patches, or Suggestions
 
