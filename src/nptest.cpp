@@ -136,11 +136,13 @@ static Analysis_result analyze(
 
 	auto width_stream = std::ostringstream();
 	if (want_width_file) {
-		width_stream << "Depth, Width" << std::endl;
-		const std::vector<unsigned long>& width = space->evolution_exploration_front_width();
+		width_stream << "Depth, Width (#Nodes), Width (#States)" << std::endl;
+		const std::vector<std::pair<unsigned long, unsigned long>>& width = space->evolution_exploration_front_width();
 		for (int d = 0; d < problem.jobs.size(); d++) {
 			width_stream << d << ", "
-					   << width[d] 
+					   << width[d].first
+					   << ", "
+					   << width[d].second
 					   << std::endl;
 		}
 	}

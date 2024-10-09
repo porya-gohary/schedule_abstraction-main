@@ -130,7 +130,7 @@ namespace NP {
 				return max_width;
 			}
 
-			const std::vector<unsigned long>& evolution_exploration_front_width() const
+			const std::vector<std::pair<unsigned long, unsigned long>>& evolution_exploration_front_width() const
 			{
 				return width;
 			}
@@ -278,7 +278,7 @@ namespace NP {
 #endif
 			// updated only by main thread
 			unsigned long current_job_count, max_width;
-			std::vector<unsigned long> width;
+			std::vector<std::pair<unsigned long, unsigned long>> width;
 
 #ifdef CONFIG_PARALLEL
 			tbb::enumerable_thread_specific<unsigned long> edge_counter;
@@ -313,7 +313,7 @@ namespace NP {
 				, num_states(0)
 				, num_edges(0)
 				, max_width(0)
-				, width(jobs.size(), 0)
+				, width(jobs.size(), { 0,0 })
 				, rta(jobs.size())
 				, current_job_count(0)
 				, num_cpus(num_cpus)
@@ -966,6 +966,7 @@ namespace NP {
 					target_depth = std::max((unsigned int)state_space_data.num_jobs(), max_depth);
 				}
 
+				int last_num_states = 0;
 				make_initial_node(num_cpus);
 
 				while (current_job_count < state_space_data.num_jobs()) {
@@ -990,7 +991,8 @@ namespace NP {
 
 					// keep track of exploration front width
 					max_width = std::max(max_width, n);
-					width[current_job_count] = n;
+					width[current_job_count] = { n, num_states - last_num_states };
+					last_num_states = num_states;
 
 					if (verbose) {
 						int time = get_cpu_time(); 
