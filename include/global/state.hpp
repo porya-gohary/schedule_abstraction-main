@@ -916,7 +916,8 @@ namespace NP {
 			// with pending successors must overlap to allow two states to merge. Setting it to true should 
 			// increase accurracy of the analysis but increases runtime significantly.
 			// The 'budget' defines how many states can be merged at once. If 'budget = -1', then there is no limit. 
-			bool merge_states(const Schedule_state<Time>& s, bool conservative, bool useJobFinishTimes = false, int budget = 1)
+			// Returns the number of existing states the new state was merged with.
+			int merge_states(const Schedule_state<Time>& s, bool conservative, bool useJobFinishTimes = false, int budget = 1)
 			{
 				// if we do not use a conservative merge, try to merge with up to 'budget' states if possible.
 				int merge_budget = conservative ? 1 : budget;
@@ -967,7 +968,10 @@ namespace NP {
 					}
 				}
 
-				return result;
+				if (conservative)
+					return result;
+				else
+					return (budget - merge_budget);
 			}
 		};
 

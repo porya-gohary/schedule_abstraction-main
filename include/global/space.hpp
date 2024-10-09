@@ -422,8 +422,18 @@ namespace NP {
 				State& new_s = new_state(std::forward<Args>(args)...);
 
 				// try to merge the new state with existing states in node n.
-				if (!(n.get_states()->empty()) && n.merge_states(new_s, merge_opts.conservative, merge_opts.use_finish_times, merge_opts.budget))
-					delete& new_s; // if we could merge no need to keep track of the new state anymore
+				if (!(n.get_states()->empty())) {
+					int n_states_merged = n.merge_states(new_s, merge_opts.conservative, merge_opts.use_finish_times, merge_opts.budget);
+					if (n_states_merged > 0) {
+						delete& new_s; // if we could merge no need to keep track of the new state anymore
+						num_states -= (n_states_merged - 1);
+					}
+					else
+					{
+						n.add_state(&new_s); // else add the new state to the node
+						num_states++;
+					}
+				}
 				else
 				{
 					n.add_state(&new_s); // else add the new state to the node
@@ -633,9 +643,11 @@ namespace NP {
 							// If we have reached here, it means that we have found an existing node with the same 
 							// set of scheduled jobs than the new state resuting from scheduling job j in system state s.
 							// Thus, our new state can be added to that existing node.
-							if (other->merge_states(st, merge_opts.conservative, merge_opts.use_finish_times, merge_opts.budget))
+							int num_states_merged = other->merge_states(st, merge_opts.conservative, merge_opts.use_finish_times, merge_opts.budget);
+							if (num_states_merged > 1)
 							{
 								delete& st;
+								num_states -= (num_states_merged - 1);
 								return *other;
 							}
 						}
@@ -663,9 +675,11 @@ namespace NP {
 						// If we have reached here, it means that we have found an existing node with the same 
 						// set of scheduled jobs than the new state resuting from scheduling job j in system state s.
 						// Thus, our new state can be added to that existing node.
-						if (other->merge_states(st, merge_opts.conservative, merge_opts.use_finish_times, merge_opts.budget))
+						int num_states_merged = other->merge_states(st, merge_opts.conservative, merge_opts.use_finish_times, merge_opts.budget);
+						if (num_states_merged>0)
 						{
 							delete& st;
+							num_states -= (num_states_merged - 1);
 							return *other;
 						}
 					}
