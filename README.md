@@ -272,7 +272,7 @@ By default the merge level is set to `l1`.
   
 ### Verbose
 
-If the flag `-v` is set when launching an analysis, the tool will show analysis progress in the terminal.
+If the flag `--verbose` is set when launching an analysis, the tool will show the analysis progress in the terminal.
 
 ### Evolution of the SAG width
 

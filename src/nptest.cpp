@@ -382,7 +382,7 @@ int main(int argc, char** argv)
 	      .action("store_const").set_const("1")
 	      .help("store the state graph in Graphviz dot format (default: off)");
 
-	parser.add_option("-v", "--verbose").dest("verbose").set_default("0")
+	parser.add_option("--verbose").dest("verbose").set_default("0")
 		.action("store_const").set_const("1")
 		.help("show the current status of the analysis (default: off)");
 
