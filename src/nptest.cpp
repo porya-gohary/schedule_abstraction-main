@@ -335,6 +335,12 @@ int main(int argc, char** argv)
 	parser.description("Exact NP Schedulability Tester");
 	parser.usage("usage: %prog [OPTIONS]... [JOB SET FILES]...");
 
+	// add an option to show the version
+	parser.add_option("-v", "--version").dest("version")
+		.action("store_true").set_default("0")
+		.help("show program's version number and exit");
+
+
 	parser.add_option("--merge").dest("merge_opts")
 		.metavar("MERGE-LEVEL")
 		.choices({ "no", "c1", "c2", "l1", "l2", "l3", "lmax"}).choices({ "no", "c1", "c2","l1","l2","l3","lmax"}).set_default("l1")
@@ -403,6 +409,14 @@ int main(int argc, char** argv)
 	auto options = parser.parse_args(argc, argv);
 	//all the options that could have been entered above are processed below and appropriate variables
 	// are assigned their respective values.
+
+	if(options.get("version")){
+		std::cout << parser.prog() <<" version "
+				  	<< VERSION_MAJOR << "."
+					<< VERSION_MINOR << "."
+					<< VERSION_PATCH << std::endl;
+		return 0;
+	}
 
 	std::string merge_opts = (const std::string&)options.get("merge_opts");
 	want_naive = (merge_opts == "no");
