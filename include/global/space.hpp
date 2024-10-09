@@ -48,9 +48,14 @@ namespace NP {
 				const Problem& prob,
 				const Analysis_options& opts)
 			{
+				if (opts.verbose)
+					std::cout << "Starting" << std::endl;
+
 				State_space* s = new State_space(prob.jobs, prob.prec, prob.aborts, prob.num_processors, 
-					opts.timeout, opts.max_depth, opts.early_exit, opts.use_supernodes);
+					{ opts.merge_conservative, opts.merge_use_job_finish_times, opts.merge_depth }, opts.timeout, opts.max_depth, opts.early_exit, opts.verbose, opts.use_supernodes);
 				s->be_naive = opts.be_naive;
+				if (opts.verbose)
+					std::cout << "Analysing" << std::endl;
 				s->cpu_time.start();
 				s->explore();
 				s->cpu_time.stop();
@@ -121,6 +126,11 @@ namespace NP {
 			}
 
 			unsigned long max_exploration_front_width() const
+			{
+				return max_width;
+			}
+
+			const std::vector<std::pair<unsigned long, unsigned long>>& evolution_exploration_front_width() const
 			{
 				return width;
 			}
@@ -232,8 +242,6 @@ namespace NP {
 			};
 			typedef std::vector<Response_time_item> Response_times;
 
-
-
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
 			std::deque<Edge> edges;
 #endif
@@ -244,7 +252,7 @@ namespace NP {
 #ifdef CONFIG_PARALLEL
 			tbb::enumerable_thread_specific<Response_times> partial_rta;
 #endif
-
+			bool verbose;
 			bool aborted;
 			bool timed_out;
 			bool observed_deadline_miss;
@@ -254,6 +262,12 @@ namespace NP {
 
 			bool be_naive;
 
+			struct Merge_options {
+				bool conservative; 
+				bool use_finish_times; 
+				int budget;
+			};
+			const Merge_options merge_opts;
 			Nodes_storage nodes_storage;
 			Nodes_map nodes_by_key;
 
@@ -263,7 +277,8 @@ namespace NP {
 			unsigned long num_nodes, num_states, num_edges;
 #endif
 			// updated only by main thread
-			unsigned long current_job_count, width;
+			unsigned long current_job_count, max_width;
+			std::vector<std::pair<unsigned long, unsigned long>> width;
 
 #ifdef CONFIG_PARALLEL
 			tbb::enumerable_thread_specific<unsigned long> edge_counter;
@@ -279,9 +294,11 @@ namespace NP {
 				const Precedence_constraints& edges,
 				const Abort_actions& aborts,
 				unsigned int num_cpus,
+				Merge_options merge_options,
 				double max_cpu_time = 0,
 				unsigned int max_depth = 0,
 				bool early_exit = true,
+				bool verbose = false,
 				bool use_supernodes = true)
 				: state_space_data(jobs, edges, aborts, num_cpus)
 				, aborted(false)
@@ -290,10 +307,13 @@ namespace NP {
 				, be_naive(false)		
 				, timeout(max_cpu_time)
 				, max_depth(max_depth)
+				, merge_opts(merge_options)
+				, verbose(verbose)
 				, num_nodes(0)
 				, num_states(0)
 				, num_edges(0)
-				, width(0)
+				, max_width(0)
+				, width(jobs.size(), { 0,0 })
 				, rta(jobs.size())
 				, current_job_count(0)
 				, num_cpus(num_cpus)
@@ -402,8 +422,18 @@ namespace NP {
 				State& new_s = new_state(std::forward<Args>(args)...);
 
 				// try to merge the new state with existing states in node n.
-				if (!(n.get_states()->empty()) && n.merge_states(new_s, false))
-					delete& new_s; // if we could merge no need to keep track of the new state anymore
+				if (!(n.get_states()->empty())) {
+					int n_states_merged = n.merge_states(new_s, merge_opts.conservative, merge_opts.use_finish_times, merge_opts.budget);
+					if (n_states_merged > 0) {
+						delete& new_s; // if we could merge no need to keep track of the new state anymore
+						num_states -= (n_states_merged - 1);
+					}
+					else
+					{
+						n.add_state(&new_s); // else add the new state to the node
+						num_states++;
+					}
+				}
 				else
 				{
 					n.add_state(&new_s); // else add the new state to the node
@@ -613,9 +643,11 @@ namespace NP {
 							// If we have reached here, it means that we have found an existing node with the same 
 							// set of scheduled jobs than the new state resuting from scheduling job j in system state s.
 							// Thus, our new state can be added to that existing node.
-							if (other->merge_states(st, false))
+							int num_states_merged = other->merge_states(st, merge_opts.conservative, merge_opts.use_finish_times, merge_opts.budget);
+							if (num_states_merged > 1)
 							{
 								delete& st;
+								num_states -= (num_states_merged - 1);
 								return *other;
 							}
 						}
@@ -643,9 +675,11 @@ namespace NP {
 						// If we have reached here, it means that we have found an existing node with the same 
 						// set of scheduled jobs than the new state resuting from scheduling job j in system state s.
 						// Thus, our new state can be added to that existing node.
-						if (other->merge_states(st, false))
+						int num_states_merged = other->merge_states(st, merge_opts.conservative, merge_opts.use_finish_times, merge_opts.budget);
+						if (num_states_merged>0)
 						{
 							delete& st;
+							num_states -= (num_states_merged - 1);
 							return *other;
 						}
 					}
@@ -923,6 +957,16 @@ namespace NP {
 
 			void explore()
 			{
+				int last_time;
+				unsigned int target_depth;
+				
+				if (verbose) {
+					std::cout << "0%";
+					last_time = get_cpu_time();
+					target_depth = std::max((unsigned int)state_space_data.num_jobs(), max_depth);
+				}
+
+				int last_num_states = 0;
 				make_initial_node(num_cpus);
 
 				while (current_job_count < state_space_data.num_jobs()) {
@@ -946,7 +990,17 @@ namespace NP {
 					nodes_storage.emplace_back();
 
 					// keep track of exploration front width
-					width = std::max(width, n);
+					max_width = std::max(max_width, n);
+					width[current_job_count] = { n, num_states - last_num_states };
+					last_num_states = num_states;
+
+					if (verbose) {
+						int time = get_cpu_time(); 
+						if (time > last_time+4) { // update progress information approxmately every 4 seconds of runtime
+							std::cout << "\r" << (int)(((double)current_job_count / target_depth) * 100) << "%";
+							last_time = time;
+						}
+					}
 
 					check_depth_abort();
 					check_cpu_timeout();
@@ -998,6 +1052,8 @@ namespace NP {
 #endif
 
 				}
+				if (verbose)
+					std::cout << "\r100%" << std::endl << "Terminating" << std::endl;
 
 #ifdef CONFIG_PARALLEL
 				// propagate any updates to the response-time estimates
@@ -1023,7 +1079,6 @@ namespace NP {
 					nodes_storage.pop_front();
 				}
 #endif
-
 
 #ifdef CONFIG_PARALLEL
 				for (auto& c : edge_counter)
