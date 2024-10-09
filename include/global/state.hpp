@@ -30,15 +30,15 @@ namespace NP {
 		{
 		private:
 
-			typedef std::vector<std::pair<Job_index, Interval<Time>>> JobFinishTimes;
-			typedef std::vector<Interval<Time>> CoreAvailability;
+			typedef std::vector<std::pair<Job_index, Interval<Time>>> Job_finish_times;
+			typedef std::vector<Interval<Time>> Core_availability;
 			typedef std::vector<std::pair<const Job<Time>*, Interval<Time>>> Susp_list;
 			typedef std::vector<Susp_list> Successors;
 			typedef std::vector<Susp_list> Predecessors;
 			typedef Interval<unsigned int> Parallelism;
 
 			// system availability intervals
-			CoreAvailability core_avail;
+			Core_availability core_avail;
 
 			// keeps track of the earliest time a job with at least one predecessor is certainly ready and certainly has enough free cores to start executing
 			Time earliest_certain_successor_job_disptach;
@@ -67,7 +67,7 @@ namespace NP {
 			std::vector<Running_job> certain_jobs;
 
 			// job_finish_times holds the finish times of all the jobs that still have an unscheduled successor
-			JobFinishTimes job_finish_times;
+			Job_finish_times job_finish_times;
 
 		public:
 
@@ -155,7 +155,7 @@ namespace NP {
 			// If conservative is false, the a simple overlap or contiguity between inverals is enough.
 			// If conservative is true, then sets `other_in_this` to true if all availability intervals
 			// of other are subintervals of this. Otherwise, `other_in_this` is set to false.
-			bool core_avail_overlap(const CoreAvailability& other, bool conservative, bool& other_in_this) const
+			bool core_avail_overlap(const Core_availability& other, bool conservative, bool& other_in_this) const
 			{
 				assert(core_avail.size() == other.size());
 				other_in_this = false;
@@ -191,12 +191,12 @@ namespace NP {
 			}
 
 			// check if 'other' state can merge with this state
-			bool can_merge_with(const Schedule_state<Time>& other, bool conservative, bool useJobFinishTimes = false) const
+			bool can_merge_with(const Schedule_state<Time>& other, bool conservative, bool use_job_finish_times = false) const
 			{
 				bool other_in_this;
 				if (core_avail_overlap(other.core_avail, conservative, other_in_this))
 				{
-					if (useJobFinishTimes)
+					if (use_job_finish_times)
 						return check_finish_times_overlap(other.job_finish_times, conservative, other_in_this);
 					else
 						return true;
@@ -205,11 +205,11 @@ namespace NP {
 					return false;
 			}
 
-			bool can_merge_with(const CoreAvailability& cav, const JobFinishTimes& jft, bool conservative, bool useJobFinishTimes = false) const
+			bool can_merge_with(const Core_availability& cav, const Job_finish_times& jft, bool conservative, bool use_job_finish_times = false) const
 			{
 				if (core_avail_overlap(cav, conservative))
 				{
-					if (useJobFinishTimes)
+					if (use_job_finish_times)
 						return check_finish_times_overlap(jft, conservative);
 					else
 						return true;
@@ -219,9 +219,9 @@ namespace NP {
 			}
 
 			// first check if 'other' state can merge with this state, then, if yes, merge 'other' with this state.
-			bool try_to_merge(const Schedule_state<Time>& other, bool conservative, bool useJobFinishTimes = false)
+			bool try_to_merge(const Schedule_state<Time>& other, bool conservative, bool use_job_finish_times = false)
 			{
-				if (!can_merge_with(other, conservative, useJobFinishTimes))
+				if (!can_merge_with(other, conservative, use_job_finish_times))
 					return false;
 
 				merge(other.core_avail, other.job_finish_times, other.certain_jobs, other.earliest_certain_successor_job_disptach);
@@ -231,8 +231,8 @@ namespace NP {
 			}
 
 			void merge(
-				const CoreAvailability& cav,
-				const JobFinishTimes& jft,
+				const Core_availability& cav,
+				const Job_finish_times& jft,
 				const std::vector<Running_job>& cert_j,
 				Time ecsj_ready_time)
 			{
@@ -602,10 +602,10 @@ namespace NP {
 			}
 
 			// Check whether the job_finish_times overlap.
-			bool check_finish_times_overlap(const JobFinishTimes& other_ft, bool conservative = false, const bool other_in_this = false) const
+			bool check_finish_times_overlap(const Job_finish_times& other_ft, bool conservative = false, const bool other_in_this = false) const
 			{
-				bool allJobsIntersect = true;
-				// The JobFinishTimes vectors are sorted.
+				bool all_jobs_intersect = true;
+				// The Job_finish_times vectors are sorted.
 				// Check intersect for matching jobs.
 				auto other_it = other_ft.begin();
 				auto state_it = job_finish_times.begin();
@@ -617,19 +617,19 @@ namespace NP {
 						if (conservative) {
 							if (other_in_this == false && !other_it->second.contains(state_it->second))
 							{
-								allJobsIntersect = false; // not all the finish time intervals of this are within those of other
+								all_jobs_intersect = false; // not all the finish time intervals of this are within those of other
 								break;
 							}
 							else if (other_in_this == true && !state_it->second.contains(other_it->second))
 							{
-								allJobsIntersect = false; // not all the finish time intervals of other are within those of this
+								all_jobs_intersect = false; // not all the finish time intervals of other are within those of this
 								break;
 							}
 						}
 						else {
 							if (!other_it->second.intersects(state_it->second))
 							{
-								allJobsIntersect = false;
+								all_jobs_intersect = false;
 								break;
 							}
 						}
@@ -643,12 +643,12 @@ namespace NP {
 					else
 						state_it++;
 				}
-				return allJobsIntersect;
+				return all_jobs_intersect;
 			}
 
-			void widen_finish_times(const JobFinishTimes& from_pwj)
+			void widen_finish_times(const Job_finish_times& from_pwj)
 			{
-				// The JobFinishTimes vectors are sorted.
+				// The Job_finish_times vectors are sorted.
 				// Assume check_overlap() is true.
 				auto from_it = from_pwj.begin();
 				auto state_it = job_finish_times.begin();
@@ -668,7 +668,7 @@ namespace NP {
 				}
 			}
 
-			// Find the offset in the JobFinishTimes vector where the index j should be located.
+			// Find the offset in the Job_finish_times vector where the index j should be located.
 			int jft_find(const Job_index j) const
 			{
 				int start = 0;
@@ -693,7 +693,7 @@ namespace NP {
 		{
 		private:
 
-			typedef typename std::vector<Interval<Time>> CoreAvailability;
+			typedef typename std::vector<Interval<Time>> Core_availability;
 			Time earliest_pending_release;
 			Time next_certain_successor_jobs_disptach;
 			Time next_certain_source_job_release;
@@ -912,12 +912,12 @@ namespace NP {
 			// The option 'conservative' allow a merge of twos states to happen only if the availability 
 			// intervals of one state are constained in the availability intervals of the other state. If
 			// the conservative option is used, the budget parameter is ignored.
-			// The option 'useJobFinishTimes' controls whether or not the job finish time intervals of jobs 
+			// The option 'use_job_finish_times' controls whether or not the job finish time intervals of jobs 
 			// with pending successors must overlap to allow two states to merge. Setting it to true should 
 			// increase accurracy of the analysis but increases runtime significantly.
 			// The 'budget' defines how many states can be merged at once. If 'budget = -1', then there is no limit. 
 			// Returns the number of existing states the new state was merged with.
-			int merge_states(const Schedule_state<Time>& s, bool conservative, bool useJobFinishTimes = false, int budget = 1)
+			int merge_states(const Schedule_state<Time>& s, bool conservative, bool use_job_finish_times = false, int budget = 1)
 			{
 				// if we do not use a conservative merge, try to merge with up to 'budget' states if possible.
 				int merge_budget = conservative ? 1 : budget;
@@ -929,7 +929,7 @@ namespace NP {
 					State* state = *it;
 					if (result == false)
 					{
-						if (state->try_to_merge(s, conservative, useJobFinishTimes))
+						if (state->try_to_merge(s, conservative, use_job_finish_times))
 						{
 							// Update the node finish_time
 							finish_time.widen(s.core_availability());
@@ -951,7 +951,7 @@ namespace NP {
 					}
 					else // if we already merged with one state at least
 					{
-						if (last_state_merged->try_to_merge(*state, conservative, useJobFinishTimes))
+						if (last_state_merged->try_to_merge(*state, conservative, use_job_finish_times))
 						{
 							// the state was merged => we can thus remove the old one from the list of states
 							it = states.erase(it);
