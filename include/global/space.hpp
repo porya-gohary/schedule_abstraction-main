@@ -1384,9 +1384,14 @@ namespace NP {
 
 			void explore()
 			{
-				int last_time = get_cpu_time();
-				if (verbose)
+				int last_time;
+				unsigned int target_depth;
+				
+				if (verbose) {
 					std::cout << "0%";
+					last_time = get_cpu_time();
+					target_depth = std::max((unsigned int)jobs.size(), max_depth);
+				}
 
 				make_initial_node(num_cpus);
 
@@ -1416,8 +1421,8 @@ namespace NP {
 
 					if (verbose) {
 						int time = get_cpu_time(); 
-						if (time > last_time) {
-							std::cout << "\r" << (int)(((double)current_job_count / jobs.size()) * 100) << "%";
+						if (time > last_time+4) { // update progress information approxmately every 4 seconds of runtime
+							std::cout << "\r" << (int)(((double)current_job_count / target_depth) * 100) << "%";
 							last_time = time;
 						}
 					}

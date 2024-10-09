@@ -334,9 +334,9 @@ int main(int argc, char** argv)
 	parser.usage("usage: %prog [OPTIONS]... [JOB SET FILES]...");
 
 	parser.add_option("--merge").dest("merge_opts")
-		.metavar("MERGE-OPTION")
-		.choices({ "no", "c1", "c2", "l1", "l2", "l3", "lmax"}).set_default("l1")
-		.help("choose type of state merging approach used during the analysis. 'no': no merging, 'cx': conservative, 'lx': lossy with depth=x, 'lmax': lossy with max depth (default: l1)");
+		.metavar("MERGE-LEVEL")
+		.choices({ "no", "c1", "c2", "l1", "l2", "l3", "lmax"}).choices({ "no", "c1", "c2","l1","l2","l3","lmax"}).set_default("l1")
+		.help("choose type of state merging approach used during the analysis. 'no': no merging, 'c1': conservative level 1, 'c2': conservative level 2, 'lx': lossy with depth=x, 'lmax': lossy with max depth. (default: l1)");
 
 	parser.add_option("-t", "--time").dest("time_model")
 	      .metavar("TIME-MODEL")
