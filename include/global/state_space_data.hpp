@@ -100,11 +100,12 @@ namespace NP {
 					}
 					else if (j.get_min_parallelism() == 1) {
 						_sequential_source_jobs_by_latest_arrival.insert({ j.latest_arrival(), &j });
+						_jobs_by_earliest_arrival.insert({ j.earliest_arrival(), &j });
 					}
 					else {
 						_gang_source_jobs_by_latest_arrival.insert({ j.latest_arrival(), &j });
-					}
-					_jobs_by_earliest_arrival.insert({ j.earliest_arrival(), &j });
+						_jobs_by_earliest_arrival.insert({ j.earliest_arrival(), &j });
+					}					
 					_jobs_by_deadline.insert({ j.get_deadline(), &j });
 				}
 
@@ -253,7 +254,7 @@ namespace NP {
 						break; // yep, nothing can lower 'when' at this point
 
 					// j is not relevant if it is already scheduled or not of higher priority
-					if (ready(n, j) && j.higher_priority_than(reference_job))
+					if (unfinished(n, j) && j.higher_priority_than(reference_job))
 					{
 						when = j.latest_arrival();
 						// Jobs are ordered by latest_arrival, so next jobs are later. 
@@ -291,7 +292,7 @@ namespace NP {
 						break; // yep, nothing can lower 'when' at this point
 
 					// j is not relevant if it is already scheduled or not of higher priority
-					if (ready(n, j) && j.higher_priority_than(reference_job))
+					if (unfinished(n, j) && j.higher_priority_than(reference_job))
 					{
 						// if the minimum parallelism of j is more than ncores, then 
 						// for j to be released and have its successors completed 
@@ -331,18 +332,20 @@ namespace NP {
 
 				// a higer priority successor job cannot be ready before 
 				// a job of any priority is released
-				Time t_earliest = n.earliest_job_release();
-				for (auto it = successor_jobs_by_latest_arrival.lower_bound(t_earliest);
-					it != successor_jobs_by_latest_arrival.end(); it++)
+				//Time t_earliest = n.earliest_job_release();
+				//for (auto it = successor_jobs_by_latest_arrival.lower_bound(t_earliest);
+				//	it != successor_jobs_by_latest_arrival.end(); it++)
+				for (auto it = n.get_ready_successor_jobs().begin();
+					it != n.get_ready_successor_jobs().end(); it++)
 				{
-					const Job<Time>& j = *(it->second);
+					const Job<Time>& j = **it;
 
 					// check if we can stop looking
-					if (when < j.latest_arrival())
-						break; // yep, nothing can lower 'when' at this point
+					//if (when < j.latest_arrival())
+					//	break; // yep, nothing can lower 'when' at this point
 
 					// j is not relevant if it is already scheduled or not of higher priority
-					if (ready(n, j) && j.higher_priority_than(reference_job)) {
+					if (j.higher_priority_than(reference_job)) {
 						// does it beat what we've already seen?
 						when = std::min(when,
 							latest_ready_time(s, ready_min, j, reference_job, ncores));
@@ -436,6 +439,14 @@ namespace NP {
 
 				DM("         * No more future releases" << std::endl);
 				return rmax;
+			}
+
+			Time get_earliest_job_arrival() const
+			{
+				if (jobs_by_earliest_arrival.empty())
+					return Time_model::constants<Time>::infinity();
+				else
+					return jobs_by_earliest_arrival.begin()->first;
 			}
 
 			// Find the earliest certain job release of all sequential source jobs
