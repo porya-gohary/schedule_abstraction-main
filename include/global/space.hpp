@@ -573,12 +573,6 @@ namespace NP {
 				}
 			}
 
-			// Check wether a job is ready (not dspatched yet and all its predecessors are completed).
-			bool ready(const Node& n, const Job<Time>& j) const
-			{
-				return n.job_incomplete(j.get_job_index()) && n.job_ready(state_space_data.predecessors_of(j));
-			}
-
 			bool all_jobs_scheduled(const Node& n)
 			{
 				return (n.number_of_scheduled_jobs() == state_space_data.num_jobs());

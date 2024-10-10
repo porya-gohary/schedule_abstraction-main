@@ -472,11 +472,6 @@ namespace NP {
 			}
 
 		private:
-			// Check wether a job is ready (not dspatched yet and all its predecessors are completed).
-			bool ready(const Node& n, const Job<Time>& j) const
-			{
-				return n.job_incomplete(j.get_job_index()) && n.job_ready(predecessors_of(j));
-			}
 
 			bool unfinished(const Node& n, const Job<Time>& j) const
 			{
