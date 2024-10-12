@@ -852,7 +852,7 @@ namespace NP {
 			}
 
 			// try to merge state 's' with up to 'budget' states already recorded in this node. 
-			// The option 'conservative' allow a merge of twos states to happen only if the availability 
+			// The option 'conservative' allow a merge of two states to happen only if the availability 
 			// intervals of one state are constained in the availability intervals of the other state. If
 			// the conservative option is used, the budget parameter is ignored.
 			// The option 'use_job_finish_times' controls whether or not the job finish time intervals of jobs 
@@ -912,7 +912,7 @@ namespace NP {
 				}
 
 				if (conservative)
-					return result;
+					return result ? 1:0;
 				else
 					return (budget - merge_budget);
 			}

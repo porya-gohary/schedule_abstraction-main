@@ -52,7 +52,7 @@ namespace NP {
 					std::cout << "Starting" << std::endl;
 
 				State_space* s = new State_space(prob.jobs, prob.prec, prob.aborts, prob.num_processors, 
-					{ opts.merge_conservative, opts.merge_use_job_finish_times, opts.merge_depth }, opts.timeout, opts.max_depth, opts.early_exit, opts.verbose, opts.use_supernodes);
+					{ opts.merge_conservative, opts.merge_use_job_finish_times, opts.merge_depth }, opts.timeout, opts.max_depth, opts.early_exit, opts.verbose);
 				s->be_naive = opts.be_naive;
 				if (opts.verbose)
 					std::cout << "Analysing" << std::endl;
@@ -286,7 +286,6 @@ namespace NP {
 			Processor_clock cpu_time;
 			const double timeout;
 			const unsigned int num_cpus;
-			bool use_supernodes = true;
 
 			State_space_data<Time> state_space_data;
 
@@ -298,8 +297,7 @@ namespace NP {
 				double max_cpu_time = 0,
 				unsigned int max_depth = 0,
 				bool early_exit = true,
-				bool verbose = false,
-				bool use_supernodes = true)
+				bool verbose = false)
 				: state_space_data(jobs, edges, aborts, num_cpus)
 				, aborted(false)
 				, timed_out(false)
@@ -318,7 +316,6 @@ namespace NP {
 				, current_job_count(0)
 				, num_cpus(num_cpus)
 				, early_exit(early_exit)
-				, use_supernodes(use_supernodes)
 #ifdef CONFIG_PARALLEL
 				, partial_rta(jobs.size())
 #endif
@@ -443,8 +440,6 @@ namespace NP {
 
 
 #ifdef CONFIG_PARALLEL
-			//warning  "Parallel code is not updated for supernodes."
-
 			// make node available for fast lookup
 			void insert_cache_node(Nodes_map_accessor& acc, Node_ref n)
 			{
@@ -609,88 +604,6 @@ namespace NP {
 				return { est, lst };
 			}
 
-			// Create a new state st, try to merge st in an existing node. If the merge is unsuccessful, create a new node and add st
-			Node& dispatch_wo_supernodes(const Node& n, const State& s, const Job<Time>& j,
-				const Interval<Time> start_times, const Interval<Time> finish_times, const unsigned int ncores)
-			{
-				// update the set of scheduled jobs
-				Job_set sched_jobs{ n.get_scheduled_jobs(), j.get_job_index() };
-				bool found_match = false;
-				hash_value_t key = n.next_key(j);
-				Node* next_node = NULL;
-#ifdef CONFIG_PARALLEL
-				Nodes_map_accessor acc;
-				while (true)
-				{
-					// check if key exists
-					if (nodes_by_key.find(acc, key))
-					{
-						for (Node_ref other : acc->second)
-						{
-							if (other->get_scheduled_jobs() != sched_jobs)
-								continue;
-
-							next_node = other;
-							break;
-						}
-					}
-					else if (nodes_by_key.insert(acc, key))
-						break;
-
-					// if we raced with concurrent creation, try again
-				}
-#else
-				const auto pair_it = nodes_by_key.find(key);
-				if (pair_it != nodes_by_key.end())
-				{
-					for (Node_ref other : pair_it->second)
-					{
-						if (other->get_scheduled_jobs() != sched_jobs)
-							continue;
-
-						next_node = other;
-						break;
-					}
-				}
-
-#endif
-				State* st = NULL;
-				if (next_node != NULL)
-				{
-					// If we have reached here, it means that we have found an existing node with the same 
-					// set of scheduled jobs than the new state resuting from scheduling job j in system state s.
-					// our new state can be added to that existing node.
-					// create a new state resulting from scheduling j in state s.
-					st = &new_state(s, j.get_job_index(),
-						start_times, finish_times, sched_jobs,
-						next_node->get_jobs_with_pending_successors(), next_node->get_ready_successor_jobs(),
-						state_space_data, n.get_next_certain_source_job_release(), ncores);
-					int num_states_merged = next_node->merge_states(*st, merge_opts.conservative, merge_opts.use_finish_times, merge_opts.budget);
-					if (num_states_merged > 0)
-					{
-						delete& st;
-						num_states -= (num_states_merged - 1);
-						return *next_node;
-					}
-				}
-				
-				next_node = &new_node(n, j, j.get_job_index(), state_space_data,
-					state_space_data.earliest_possible_job_release(n, j),
-					state_space_data.earliest_certain_source_job_release(n, j),
-					state_space_data.earliest_certain_sequential_source_job_release(n, j));
-					
-				if (st == NULL) {
-					st = &new_state(s, j.get_job_index(),
-						start_times, finish_times, sched_jobs,
-						next_node->get_jobs_with_pending_successors(), next_node->get_ready_successor_jobs(),
-						state_space_data, n.get_next_certain_source_job_release(), ncores);
-				}
-					
-				next_node->add_state(st);
-				num_states++;
-				return *next_node;
-			}
-
 			Time earliest_job_abortion(const Abort_action<Time>& a)
 			{
 				return a.earliest_trigger_time() + a.least_cleanup_cost();
@@ -783,91 +696,84 @@ namespace NP {
 						// update finish-time estimates
 						update_finish_times(j, ftimes);
 
-						if (use_supernodes == false)
-						{
-							next = &(dispatch_wo_supernodes(n, *s, j, Interval<Time>{_st}, ftimes, p));
-						}
-						else
-						{
 #ifdef CONFIG_PARALLEL
-							// if we do not have a pointer to a node with the same set of scheduled job yet,
-							// try to find an existing node with the same set of scheduled jobs. Otherwise, create one.
-							if (next == nullptr || acc.empty())
-							{
-								auto next_key = n.next_key(j);
-								Job_set new_sched_jobs{ n.get_scheduled_jobs(), j.get_job_index() };
+						// if we do not have a pointer to a node with the same set of scheduled job yet,
+						// try to find an existing node with the same set of scheduled jobs. Otherwise, create one.
+						if (next == nullptr || acc.empty())
+						{
+							auto next_key = n.next_key(j);
+							Job_set new_sched_jobs{ n.get_scheduled_jobs(), j.get_job_index() };
 
-								while (next == nullptr || acc.empty()) {
-									// check if key exists
-									if (nodes_by_key.find(acc, next_key)) {
-										// If be_naive, a new node and a new state should be created for each new job dispatch.
-										if (be_naive) {
-											next = &(new_node_at(acc, n, j, j.get_job_index(), state_space_data.earliest_possible_job_release(n, j), state_space_data.earliest_certain_source_job_release(n, j), state_space_data.earliest_certain_sequential_source_job_release(n, j)));
-										}
-										else
-										{
-											for (Node_ref other : acc->second) {
-												if (other->get_scheduled_jobs() == new_sched_jobs) {
-													next = other;
-													DM("=== dispatch: next exists." << std::endl);
-													break;
-												}
-											}
-											if (next == nullptr) {
-												next = &(new_node_at(acc, n, j, j.get_job_index(), state_space_data.earliest_possible_job_release(n, j), state_space_data.earliest_certain_source_job_release(n, j), state_space_data.earliest_certain_sequential_source_job_release(n, j)));
-											}
-										}
+							while (next == nullptr || acc.empty()) {
+								// check if key exists
+								if (nodes_by_key.find(acc, next_key)) {
+									// If be_naive, a new node and a new state should be created for each new job dispatch.
+									if (be_naive) {
+										next = &(new_node_at(acc, n, j, j.get_job_index(), state_space_data.earliest_possible_job_release(n, j), state_space_data.earliest_certain_source_job_release(n, j), state_space_data.earliest_certain_sequential_source_job_release(n, j)));
 									}
-									if (next == nullptr) {
-										if (nodes_by_key.insert(acc, next_key)) {
+									else
+									{
+										for (Node_ref other : acc->second) {
+											if (other->get_scheduled_jobs() == new_sched_jobs) {
+												next = other;
+												DM("=== dispatch: next exists." << std::endl);
+												break;
+											}
+										}
+										if (next == nullptr) {
 											next = &(new_node_at(acc, n, j, j.get_job_index(), state_space_data.earliest_possible_job_release(n, j), state_space_data.earliest_certain_source_job_release(n, j), state_space_data.earliest_certain_sequential_source_job_release(n, j)));
 										}
 									}
-									// if we raced with concurrent creation, try again
 								}
+								if (next == nullptr) {
+									if (nodes_by_key.insert(acc, next_key)) {
+										next = &(new_node_at(acc, n, j, j.get_job_index(), state_space_data.earliest_possible_job_release(n, j), state_space_data.earliest_certain_source_job_release(n, j), state_space_data.earliest_certain_sequential_source_job_release(n, j)));
+									}
+								}
+								// if we raced with concurrent creation, try again
 							}
-							// If be_naive, a new node and a new state should be created for each new job dispatch.
-							else if (be_naive) {
-								// note that the accessor should be pointing on something at this point
-								next = &(new_node_at(acc, n, j, j.get_job_index(), state_space_data.earliest_possible_job_release(n, j), state_space_data.earliest_certain_source_job_release(n, j), state_space_data.earliest_certain_sequential_source_job_release(n, j)));
-							}
-							assert(!acc.empty());
+						}
+						// If be_naive, a new node and a new state should be created for each new job dispatch.
+						else if (be_naive) {
+							// note that the accessor should be pointing on something at this point
+							next = &(new_node_at(acc, n, j, j.get_job_index(), state_space_data.earliest_possible_job_release(n, j), state_space_data.earliest_certain_source_job_release(n, j), state_space_data.earliest_certain_sequential_source_job_release(n, j)));
+						}
+						assert(!acc.empty());
 #else
-							// If be_naive, a new node and a new state should be created for each new job dispatch.
-							if (be_naive)
-								next = &(new_node(n, j, j.get_job_index(), state_space_data, state_space_data.earliest_possible_job_release(n, j), state_space_data.earliest_certain_source_job_release(n, j), state_space_data.earliest_certain_sequential_source_job_release(n, j)));
+						// If be_naive, a new node and a new state should be created for each new job dispatch.
+						if (be_naive)
+							next = &(new_node(n, j, j.get_job_index(), state_space_data, state_space_data.earliest_possible_job_release(n, j), state_space_data.earliest_certain_source_job_release(n, j), state_space_data.earliest_certain_sequential_source_job_release(n, j)));
 
-							// if we do not have a pointer to a node with the same set of scheduled job yet,
-							// try to find an existing node with the same set of scheduled jobs. Otherwise, create one.
-							if (next == nullptr)
-							{
-								const auto pair_it = nodes_by_key.find(n.next_key(j));
-								if (pair_it != nodes_by_key.end()) {
-									Job_set new_sched_jobs{ n.get_scheduled_jobs(), j.get_job_index() };
-									for (Node_ref other : pair_it->second) {
-										if (other->get_scheduled_jobs() == new_sched_jobs)
-										{
-											next = other;
-											DM("=== dispatch: next exists." << std::endl);
-											break;
-										}
+						// if we do not have a pointer to a node with the same set of scheduled job yet,
+						// try to find an existing node with the same set of scheduled jobs. Otherwise, create one.
+						if (next == nullptr)
+						{
+							const auto pair_it = nodes_by_key.find(n.next_key(j));
+							if (pair_it != nodes_by_key.end()) {
+								Job_set new_sched_jobs{ n.get_scheduled_jobs(), j.get_job_index() };
+								for (Node_ref other : pair_it->second) {
+									if (other->get_scheduled_jobs() == new_sched_jobs)
+									{
+										next = other;
+										DM("=== dispatch: next exists." << std::endl);
+										break;
 									}
 								}
-								// If there is no node yet, create one.
-								if (next == nullptr)
-									next = &(new_node(n, j, j.get_job_index(), state_space_data, state_space_data.earliest_possible_job_release(n, j), state_space_data.earliest_certain_source_job_release(n, j), state_space_data.earliest_certain_sequential_source_job_release(n, j)));
 							}
+							// If there is no node yet, create one.
+							if (next == nullptr)
+								next = &(new_node(n, j, j.get_job_index(), state_space_data, state_space_data.earliest_possible_job_release(n, j), state_space_data.earliest_certain_source_job_release(n, j), state_space_data.earliest_certain_sequential_source_job_release(n, j)));
+						}
 #endif
-							// next should always exist at this point, possibly without states in it
-							// create a new state resulting from scheduling j in state s on p cores and try to merge it with an existing state in node 'next'.							
-							new_or_merge_state(*next, *s, j.get_job_index(),
-								Interval<Time>{_st}, ftimes, next->get_scheduled_jobs(), next->get_jobs_with_pending_successors(), next->get_ready_successor_jobs(), state_space_data, next->get_next_certain_source_job_release(), p);
+						// next should always exist at this point, possibly without states in it
+						// create a new state resulting from scheduling j in state s on p cores and try to merge it with an existing state in node 'next'.							
+						new_or_merge_state(*next, *s, j.get_job_index(),
+							Interval<Time>{_st}, ftimes, next->get_scheduled_jobs(), next->get_jobs_with_pending_successors(), next->get_ready_successor_jobs(), state_space_data, next->get_next_certain_source_job_release(), p);
 
-							// make sure we didn't skip any jobs which would then certainly miss its deadline
-							// only do that if we stop the analysis when a deadline miss is found 
-							if (be_naive && early_exit) {
-								check_for_deadline_misses(n, *next);
-							}
+						// make sure we didn't skip any jobs which would then certainly miss its deadline
+						// only do that if we stop the analysis when a deadline miss is found 
+						if (be_naive && early_exit) {
+							check_for_deadline_misses(n, *next);
 						}
 
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
