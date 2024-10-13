@@ -815,7 +815,7 @@ namespace NP {
 					<< "upbnd_t_wc: " << upbnd_t_wc << std::endl);
 
 				//check all jobs that may be eligible to be dispatched next
-				// part 1
+				// part 1: check source jobs (i.e., jobs without prcedence constraints) that are potentially eligible
 				for (auto it = state_space_data.jobs_by_earliest_arrival.lower_bound(t_min);
 					it != state_space_data.jobs_by_earliest_arrival.end();
 					it++)
@@ -836,7 +836,7 @@ namespace NP {
 						continue;
 					found_one |= dispatch(n, j, upbnd_t_wc, t_high_wos);
 				}
-				// part 2
+				// part 2: check ready successor jobs (i.e., jobs with precedence constraints that are completed) that are potentially eligible
 				for (auto it = n.get_ready_successor_jobs().begin();
 					it != n.get_ready_successor_jobs().end();
 					it++)

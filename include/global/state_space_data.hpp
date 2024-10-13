@@ -145,8 +145,6 @@ namespace NP {
 					auto pred_idx = pred.first->get_job_index();
 					auto pred_susp = pred.second;
 					Interval<Time> ft{ 0, 0 };
-					//if (!s.get_finish_times(pred_idx, ft))
-					//	ft = get_finish_times(jobs[pred_idx]);
 					s.get_finish_times(pred_idx, ft);
 					r.lower_bound(ft.min() + pred_susp.min());
 					r.extend_to(ft.max() + pred_susp.max());
@@ -193,8 +191,6 @@ namespace NP {
 					else
 					{
 						Interval<Time> ft{ 0, 0 };
-						//if (!s.get_finish_times(pred_idx, ft))
-						//	ft = get_finish_times(jobs[pred_idx]);
 						s.get_finish_times(pred_idx, ft);
 						r.lower_bound(ft.min() + pred_susp.min());
 						r.extend_to(ft.max() + pred_susp.max());
@@ -332,17 +328,10 @@ namespace NP {
 
 				// a higer priority successor job cannot be ready before 
 				// a job of any priority is released
-				//Time t_earliest = n.earliest_job_release();
-				//for (auto it = successor_jobs_by_latest_arrival.lower_bound(t_earliest);
-				//	it != successor_jobs_by_latest_arrival.end(); it++)
 				for (auto it = n.get_ready_successor_jobs().begin();
 					it != n.get_ready_successor_jobs().end(); it++)
 				{
 					const Job<Time>& j = **it;
-
-					// check if we can stop looking
-					//if (when < j.latest_arrival())
-					//	break; // yep, nothing can lower 'when' at this point
 
 					// j is not relevant if it is already scheduled or not of higher priority
 					if (j.higher_priority_than(reference_job)) {
