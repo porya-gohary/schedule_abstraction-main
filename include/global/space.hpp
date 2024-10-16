@@ -709,7 +709,7 @@ namespace NP {
 								if (nodes_by_key.find(acc, next_key)) {
 									// If be_naive, a new node and a new state should be created for each new job dispatch.
 									if (be_naive) {
-										next = &(new_node_at(acc, n, j, j.get_job_index(), state_space_data.earliest_possible_job_release(n, j), state_space_data.earliest_certain_source_job_release(n, j), state_space_data.earliest_certain_sequential_source_job_release(n, j)));
+										next = &(new_node_at(acc, n, j, j.get_job_index(), state_space_data, state_space_data.earliest_possible_job_release(n, j), state_space_data.earliest_certain_source_job_release(n, j), state_space_data.earliest_certain_sequential_source_job_release(n, j)));
 									}
 									else
 									{
@@ -721,13 +721,13 @@ namespace NP {
 											}
 										}
 										if (next == nullptr) {
-											next = &(new_node_at(acc, n, j, j.get_job_index(), state_space_data.earliest_possible_job_release(n, j), state_space_data.earliest_certain_source_job_release(n, j), state_space_data.earliest_certain_sequential_source_job_release(n, j)));
+											next = &(new_node_at(acc, n, j, j.get_job_index(), state_space_data, state_space_data.earliest_possible_job_release(n, j), state_space_data.earliest_certain_source_job_release(n, j), state_space_data.earliest_certain_sequential_source_job_release(n, j)));
 										}
 									}
 								}
 								if (next == nullptr) {
 									if (nodes_by_key.insert(acc, next_key)) {
-										next = &(new_node_at(acc, n, j, j.get_job_index(), state_space_data.earliest_possible_job_release(n, j), state_space_data.earliest_certain_source_job_release(n, j), state_space_data.earliest_certain_sequential_source_job_release(n, j)));
+										next = &(new_node_at(acc, n, j, j.get_job_index(), state_space_data, state_space_data.earliest_possible_job_release(n, j), state_space_data.earliest_certain_source_job_release(n, j), state_space_data.earliest_certain_sequential_source_job_release(n, j)));
 									}
 								}
 								// if we raced with concurrent creation, try again
@@ -736,7 +736,7 @@ namespace NP {
 						// If be_naive, a new node and a new state should be created for each new job dispatch.
 						else if (be_naive) {
 							// note that the accessor should be pointing on something at this point
-							next = &(new_node_at(acc, n, j, j.get_job_index(), state_space_data.earliest_possible_job_release(n, j), state_space_data.earliest_certain_source_job_release(n, j), state_space_data.earliest_certain_sequential_source_job_release(n, j)));
+							next = &(new_node_at(acc, n, j, j.get_job_index(), state_space_data, state_space_data.earliest_possible_job_release(n, j), state_space_data.earliest_certain_source_job_release(n, j), state_space_data.earliest_certain_sequential_source_job_release(n, j)));
 						}
 						assert(!acc.empty());
 #else
