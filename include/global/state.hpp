@@ -97,11 +97,12 @@ namespace NP {
 				const Successors& successors_of = state_space_data.successors_suspensions;
 				const Predecessors& predecessors_of = state_space_data.predecessors_suspensions;
 				const Job_precedence_set & predecessors = state_space_data.predecessors_of(j);
-				// update the set of certainly running jobs
-				update_certainly_running_jobs(from, j, start_times, finish_times, ncores, predecessors);
+				// update the set of certainly running jobs and
+				// get the number of cores certainly used by active predecessors
+				int n_prec= update_certainly_running_jobs_and_get_num_prec(from, j, start_times, finish_times, ncores, predecessors);
 
 				// calculate the cores availability intervals resulting from dispatching job j on ncores in state 'from'
-				update_core_avail(from, j, predecessors, start_times, finish_times, ncores);
+				update_core_avail(from, j, predecessors, n_prec, start_times, finish_times, ncores);
 
 				assert(core_avail.size() > 0);
 
@@ -312,7 +313,7 @@ namespace NP {
 
 		private:
 			// update the list of jobs that are certainly running in the current system state
-			void update_certainly_running_jobs(const Schedule_state& from,
+			int update_certainly_running_jobs_and_get_num_prec(const Schedule_state& from,
 				Job_index j, Interval<Time> start_times,
 				Interval<Time> finish_times, unsigned int ncores,
 				const Job_precedence_set& predecessors)
@@ -332,7 +333,7 @@ namespace NP {
 					{
 						n_prec += rj.parallelism.min(); // keep track of the number of predecessors of j that are certainly running
 					}
-					else if (lst <= rj.finish_time.min())
+					else if (lst < rj.finish_time.min())
 					{
 						if (!added_j && running_job > j)
 						{
@@ -350,11 +351,13 @@ namespace NP {
 					Parallelism p(ncores, ncores);
 					certain_jobs.emplace_back(j, p, finish_times);
 				}
+				
+				return n_prec;
 			}
 
 			// update the core availability resulting from scheduling job j on m cores in state 'from'
 			void update_core_avail(const Schedule_state& from, const Job_index j, const Job_precedence_set& predecessors,
-				const Interval<Time> start_times, const Interval<Time> finish_times, const unsigned int m)
+				int n_prec, const Interval<Time> start_times, const Interval<Time> finish_times, const unsigned int m)
 			{
 				int n_cores = from.core_avail.size();
 				core_avail.reserve(n_cores);
@@ -363,16 +366,7 @@ namespace NP {
 				auto lst = start_times.max();
 				auto eft = finish_times.min();
 				auto lft = finish_times.max();
-
-				int n_prec = 0;
-
-				// Compute the number of cores certainly used by active predecessors.
-				// certain_jobs is sorted. If predecessors is sorted, some improvement is possible.
-				for (const auto& rj : certain_jobs) {
-					if (contains(predecessors, rj.idx)) {
-						n_prec += rj.parallelism.min();
-					}
-				}
+				
 
 				// compute the cores availability intervals
 				Time* ca = new Time[n_cores];
