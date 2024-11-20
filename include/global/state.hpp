@@ -312,7 +312,8 @@ namespace NP {
 			}
 
 		private:
-			// update the list of jobs that are certainly running in the current system state
+			// update the list of jobs that are certainly running in the current system state 
+			// and returns the number of predecessors of job `j` that were certainly running on cores in the previous system state
 			int update_certainly_running_jobs_and_get_num_prec(const Schedule_state& from,
 				Job_index j, Interval<Time> start_times,
 				Interval<Time> finish_times, unsigned int ncores,
