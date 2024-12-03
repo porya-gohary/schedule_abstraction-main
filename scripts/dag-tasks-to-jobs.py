@@ -5,11 +5,9 @@ import argparse
 import csv
 import re
 
-from math import ceil, floor, log10
+from math import ceil, floor, log10, gcd
 
 from collections import defaultdict
-
-import fractions
 
 US_TO_NS = 1000
 MS_TO_US = 1000
@@ -21,7 +19,7 @@ def ms2us(x):
     return int(ceil(MS_TO_US * x))
 
 def lcm(a,b):
-    return abs(a * b) // fractions.gcd(a,b) if a and b else 0
+    return abs(a * b) // gcd(a,b) if a and b else 0
 
 def hyperperiod(periods):
     h = 1
