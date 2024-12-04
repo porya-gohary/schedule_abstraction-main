@@ -5,7 +5,7 @@ import argparse
 import csv
 import re
 
-from math import ceil, floor, log10, gcd
+from math import ceil, floor, log10, lcm
 
 from collections import defaultdict
 
@@ -18,14 +18,8 @@ def next_power_of_10(x):
 def ms2us(x):
     return int(ceil(MS_TO_US * x))
 
-def lcm(a,b):
-    return abs(a * b) // gcd(a,b) if a and b else 0
-
 def hyperperiod(periods):
-    h = 1
-    for p in periods:
-        h = lcm(h, p)
-    return h
+    return lcm(*periods)
 
 def parse_dag_task_file(fname, scale=ms2us):
     f = open(fname, 'r')
@@ -90,7 +84,7 @@ def parse_dag_task_file(fname, scale=ms2us):
 
             nodes[tid].append((vid, r_min, r_max, bcet, wcet, preds))
         else:
-            print(row)
+            print(fname, row)
             assert False # badly formatted input???
 
     return (periods, deadlines, nodes)

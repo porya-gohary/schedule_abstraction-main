@@ -5,16 +5,11 @@ import argparse
 import csv
 import re
 
-from math import ceil,floor
-
-import fractions
+from math import ceil, floor, lcm
 
 from collections import namedtuple
 
 US_TO_NS = 1000
-
-def lcm(a,b):
-    return abs(a * b) / fractions.gcd(a,b) if a and b else 0
 
 def parse_range(s):
     m = re.fullmatch('uniform params: \[([0-9.]+) to ([0-9.]+)\]', s)
@@ -63,10 +58,7 @@ def parse_task_set(fname):
         yield Task(id, period, phase, deadline, wcet_range, jitter_range)
 
 def hyperperiod(tasks):
-    h = 1
-    for t in tasks:
-        h = lcm(h, t.period)
-    return h
+    return lcm(*[t.period for t in tasks])
 
 def generate_jobs(t, hyperperiod):
     assert t.phase == 0 # can't yet handle non-zero phase
