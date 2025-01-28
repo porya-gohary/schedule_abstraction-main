@@ -760,6 +760,7 @@ namespace NP {
 				num_cpus = num_cores;
 				finish_time = { 0,0 };
 				a_max = 0;
+				scheduled_jobs.clear();
 				num_jobs_scheduled = 0;
 				states.clear();
 				earliest_pending_release = state_space_data.get_earliest_job_arrival();
@@ -781,8 +782,7 @@ namespace NP {
 			)
 			{
 				states.clear();
-				scheduled_jobs = from.scheduled_jobs; 
-				scheduled_jobs.add(idx);
+				scheduled_jobs.set(from.scheduled_jobs, idx);
 				lookup_key = from.next_key(j);
 				num_cpus = from.num_cpus;
 				num_jobs_scheduled = from.num_jobs_scheduled + 1;
