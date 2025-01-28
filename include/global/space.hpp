@@ -960,12 +960,18 @@ namespace NP {
 						check_cpu_timeout();
 						if (aborted)
 							break;
-
+#ifndef CONFIG_COLLECT_SCHEDULE_GRAPH
+						// If we don't need to collect all nodes, we can remove
+						// all those that we are done with, which saves a lot of
+						// memory.
+#ifndef CONFIG_PARALLEL
 						auto states = n->get_states();
 						for (auto s = states->begin(); s != states->end(); s++ ) {
 							release_state(*s); 
 						}
 						release_node(n); 
+#endif
+#endif
 					}
 #endif
 
