@@ -26,6 +26,7 @@
 #include "clock.hpp"
 
 #include "global/state.hpp"
+#include "object_pool.hpp"
 
 namespace NP {
 
@@ -140,7 +141,7 @@ namespace NP {
 				return cpu_time;
 			}
 
-			typedef std::deque<Node> Nodes;
+			typedef std::deque<Node*> Nodes;
 			typedef std::deque<State> States;
 
 #ifdef CONFIG_PARALLEL
@@ -270,6 +271,8 @@ namespace NP {
 			const Merge_options merge_opts;
 			Nodes_storage nodes_storage;
 			Nodes_map nodes_by_key;
+			Object_pool<Node> node_pool;
+			Object_pool<State> state_pool;
 
 #ifdef CONFIG_PARALLEL
 			std::atomic_ulong num_nodes, num_states, num_edges;
@@ -391,8 +394,8 @@ namespace NP {
 			template <typename... Args>
 			Node_ref alloc_node(Args&&... args)
 			{
-				nodes().emplace_back(std::forward<Args>(args)...);
-				Node_ref n = &(*(--nodes().end()));
+				Node_ref n = node_pool.acquire(std::forward<Args>(args)...);
+				nodes().push_back(n);
 
 				// make sure we didn't screw up...
 				auto njobs = n->number_of_scheduled_jobs();
@@ -408,7 +411,7 @@ namespace NP {
 			template <typename... Args>
 			State& new_state(Args&&... args)
 			{
-				return *(new State(std::forward<Args>(args)...));
+				return *(state_pool.acquire(std::forward<Args>(args)...));
 			}
 
 
@@ -422,7 +425,7 @@ namespace NP {
 				if (!(n.get_states()->empty())) {
 					int n_states_merged = n.merge_states(new_s, merge_opts.conservative, merge_opts.use_finish_times, merge_opts.budget);
 					if (n_states_merged > 0) {
-						delete& new_s; // if we could merge no need to keep track of the new state anymore
+						release_state(&new_s); // if we could merge no need to keep track of the new state anymore
 						num_states -= (n_states_merged - 1);
 					}
 					else
@@ -436,6 +439,16 @@ namespace NP {
 					n.add_state(&new_s); // else add the new state to the node
 					num_states++;
 				}
+			}
+
+			void release_state(State* s)
+			{
+				state_pool.release(s);
+			}
+
+			void release_node(Node* n)
+			{
+				node_pool.release(n);
 			}
 
 
@@ -942,11 +955,17 @@ namespace NP {
 						});
 
 #else
-					for (const Node& n : exploration_front) {
-						explore(n);
+					for (Node_ref n : exploration_front) {
+						explore(*n);
 						check_cpu_timeout();
 						if (aborted)
 							break;
+
+						auto states = n->get_states();
+						for (auto s = states->begin(); s != states->end(); s++ ) {
+							release_state(*s); 
+						}
+						release_node(n); 
 					}
 #endif
 

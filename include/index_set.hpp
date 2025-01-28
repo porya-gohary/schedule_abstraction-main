@@ -29,6 +29,14 @@ namespace NP {
 					the_set[i] = a.the_set[i] & ~b.the_set[i];
 			}
 
+			Index_set& operator=(const Index_set& other)
+			{
+				if (this != &other) {
+					the_set = other.the_set;
+				}
+				return *this;
+			}
+
 			bool operator==(const Index_set &other) const
 			{
 				return the_set == other.the_set;
