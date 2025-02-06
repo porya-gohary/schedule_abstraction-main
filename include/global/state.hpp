@@ -15,6 +15,10 @@
 #include "util.hpp"
 #include "global/state_space_data.hpp"
 
+#ifdef CONFIG_PARALLEL
+#include <tbb/mutex.h>
+#endif
+
 namespace NP {
 
 	namespace Global {
@@ -526,8 +530,10 @@ namespace NP {
 						// Note that if `job` has non-completed successors in the new state,
 						// it must have had non-completed successors in the previous state too, 
 						// thus there is no risk to reach the end iterator
-						while (it->first != job) 
+						while (it->first != job) {
+							assert(it != from.job_finish_times.end());
 							it++;
+						}
 						Time job_eft = it->second.min();
 						Time job_lft = it->second.max();
 						// if there is a single core, then we know that 
@@ -693,6 +699,9 @@ namespace NP {
 				}
 			};
 
+#ifdef CONFIG_PARALLEL
+			tbb::mutex mtx;
+#endif
 			typedef typename std::multiset<State*, eft_compare> State_ref_queue;
 			State_ref_queue states;
 
@@ -874,7 +883,7 @@ namespace NP {
 			//     earliest and latest core availability for core 0.
 			//     whenever a state is changed (through merge) or added,
 			//     that interval should be adjusted.
-			const Interval<Time>& finish_range() const
+			Interval<Time> finish_range() const
 			{
 				return finish_time;
 			}
@@ -884,22 +893,13 @@ namespace NP {
 				return a_max;
 			}
 
+
 			void add_state(State* s)
 			{
-				// Update finish_time
-				Interval<Time> ft = s->core_availability();
-				if (states.empty()) {
-					finish_time = ft;
-					a_max = s->core_availability(num_cpus).max();
-					next_certain_successor_jobs_disptach = s->next_certain_successor_jobs_disptach();
-					next_certain_gang_source_job_disptach = s->next_certain_gang_source_job_disptach();
-				}
-				else {
-					finish_time.widen(ft);
-					a_max = std::max(a_max, s->core_availability(num_cpus).max());
-					next_certain_successor_jobs_disptach = std::max(next_certain_successor_jobs_disptach, s->next_certain_successor_jobs_disptach());
-					next_certain_gang_source_job_disptach = std::max(next_certain_gang_source_job_disptach, s->next_certain_gang_source_job_disptach());
-				}
+#ifdef CONFIG_PARALLEL
+				tbb::mutex::scoped_lock lock(mtx);
+#endif
+				update_internal_variables(s);
 				states.insert(s);
 			}
 
@@ -944,6 +944,9 @@ namespace NP {
 			// Returns the number of existing states the new state was merged with.
 			int merge_states(const Schedule_state<Time>& s, bool conservative, bool use_job_finish_times = false, int budget = 1)
 			{
+#ifdef CONFIG_PARALLEL
+				tbb::mutex::scoped_lock lock(mtx);
+#endif
 				// if we do not use a conservative merge, try to merge with up to 'budget' states if possible.
 				int merge_budget = conservative ? 1 : budget;
 
@@ -1000,6 +1003,23 @@ namespace NP {
 			}
 
 		private:
+			void update_internal_variables(const State* s)
+			{
+				Interval<Time> ft = s->core_availability();
+				if (states.empty()) {
+					finish_time = ft;
+					a_max = s->core_availability(num_cpus).max();
+					next_certain_successor_jobs_disptach = s->next_certain_successor_jobs_disptach();
+					next_certain_gang_source_job_disptach = s->next_certain_gang_source_job_disptach();
+				}
+				else {
+					finish_time.widen(ft);
+					a_max = std::max(a_max, s->core_availability(num_cpus).max());
+					next_certain_successor_jobs_disptach = std::max(next_certain_successor_jobs_disptach, s->next_certain_successor_jobs_disptach());
+					next_certain_gang_source_job_disptach = std::max(next_certain_gang_source_job_disptach, s->next_certain_gang_source_job_disptach());
+				}
+			}
+
 			// update the list of jobs that have all their predecessors completed and were not dispatched yet
 			void update_ready_successors(const Schedule_node& from,
 				Job_index j, const Successors& successors_of,

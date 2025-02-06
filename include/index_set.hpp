@@ -23,6 +23,7 @@ namespace NP {
 			// derive a new set by "cloning" an existing set and adding an index
 			void set(const Index_set& from, std::size_t idx)
 			{
+				the_set.clear();
 				the_set.resize(std::max(from.the_set.size(), (idx / 64) + 1));
 				std::copy(from.the_set.begin(), from.the_set.end(), the_set.begin());
 				set_bit(idx, true);

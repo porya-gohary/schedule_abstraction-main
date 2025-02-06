@@ -429,9 +429,8 @@ namespace NP {
 			{
 				// create a new state.
 				State& new_s = new_state(std::forward<Args>(args)...);
-
 				// try to merge the new state with existing states in node n.
-				if (!(n.get_states()->empty())) {
+				//if (!(n.get_states()->empty())) {
 					int n_states_merged = n.merge_states(new_s, merge_opts.conservative, merge_opts.use_finish_times, merge_opts.budget);
 					if (n_states_merged > 0) {
 						release_state(&new_s); // if we could merge no need to keep track of the new state anymore
@@ -450,7 +449,7 @@ namespace NP {
 						num_states++;
 #endif
 					}
-				}
+				/* }
 				else
 				{
 					n.add_state(&new_s); // else add the new state to the node
@@ -459,7 +458,7 @@ namespace NP {
 #else
 					num_states++;
 #endif
-				}
+				}*/
 			}
 
 			void release_state(State* s)
@@ -694,9 +693,7 @@ namespace NP {
 
 				// loop over all states in the node n
 				const auto* n_states = n.get_states();
-#ifdef CONFIG_PARALLEL
-				Nodes_map_accessor acc;
-#endif
+
 				for (State* s : *n_states)
 				{
 					const auto& costs = j.get_all_costs();
@@ -741,8 +738,9 @@ namespace NP {
 #ifdef CONFIG_PARALLEL
 						// if we do not have a pointer to a node with the same set of scheduled jobs yet,
 						// try to find an existing node with the same set of scheduled jobs. Otherwise, create one.
-						if (next == nullptr || acc.empty())
+						if (next == nullptr)
 						{
+							Nodes_map_accessor acc;
 							auto next_key = n.next_key(j);
 							Job_set new_sched_jobs{ n.get_scheduled_jobs(), j.get_job_index() };
 
@@ -776,11 +774,11 @@ namespace NP {
 							}
 						}
 						// If be_naive, a new node and a new state should be created for each new job dispatch.
-						else if (be_naive) {
+						/*else if (be_naive) {
 							// note that the accessor should be pointing on something at this point
 							next = &(new_node_at(1, acc, n, j, j.get_job_index(), state_space_data, state_space_data.earliest_possible_job_release(n, j), state_space_data.earliest_certain_source_job_release(n, j), state_space_data.earliest_certain_sequential_source_job_release(n, j)));
 						}
-						assert(!acc.empty());
+						assert(!acc.empty());*/
 #else
 						// If be_naive, a new node and a new state should be created for each new job dispatch.
 						if (be_naive)
@@ -812,11 +810,13 @@ namespace NP {
 						new_or_merge_state(*next, *s, j.get_job_index(),
 							Interval<Time>{_st}, ftimes, next->get_scheduled_jobs(), next->get_jobs_with_pending_successors(), next->get_ready_successor_jobs(), state_space_data, next->get_next_certain_source_job_release(), p);
 
+#ifndef CONFIG_PARALLEL
 						// make sure we didn't skip any jobs which would then certainly miss its deadline
 						// only do that if we stop the analysis when a deadline miss is found 
 						if (be_naive && early_exit) {
 							check_for_deadline_misses(n, *next);
 						}
+#endif
 
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
 						edges.emplace_back(&j, &n, next, ftimes);
@@ -825,11 +825,13 @@ namespace NP {
 					}
 				}
 
+#ifndef CONFIG_PARALLEL
 				// if we stop the analysis when a deadline miss is found, then check whether a job will certainly miss 
 				// its deadline because of when the processors become free next.
 				// if we are not using the naive exploration, we check for deadline misses only once per job dispatched
 				if (early_exit && !be_naive && next != nullptr)
 					check_for_deadline_misses(n, *next);
+#endif
 
 				return dispatched_one;
 			}
@@ -929,7 +931,9 @@ namespace NP {
 
 				int last_num_states = 0;
 				make_initial_node(num_cpus);
+#ifdef CONFIG_PARALLEL
 				tbb::task_group tg;
+#endif
 
 				while (current_job_count < state_space_data.num_jobs()) {
 					Nodes& exploration_front = nodes();
@@ -953,7 +957,7 @@ namespace NP {
 					if (verbose) {
 						int time = get_cpu_time(); 
 						if (time > last_time+4) { // update progress information approxmately every 4 seconds of runtime
-							std::cout << "\r" << (int)(((double)current_job_count / target_depth) * 100) << "%";
+							std::cout << "\r" << (int)(((double)current_job_count / target_depth) * 100) << "% (" << current_job_count <<"/"<< target_depth<<")";
 							last_time = time;
 						}
 					}
@@ -967,6 +971,7 @@ namespace NP {
 					Node_ref node;
 					while (exploration_front.try_pop(node)) {
 						tg.run([=] { 
+							//node->consolidate(merge_opts.conservative, merge_opts.use_finish_times, merge_opts.budget);
 							explore(*node); 
 #ifndef CONFIG_COLLECT_SCHEDULE_GRAPH
 							// If we don't need to collect all nodes, we can remove
