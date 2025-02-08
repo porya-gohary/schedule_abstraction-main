@@ -430,7 +430,9 @@ namespace NP {
 				// create a new state.
 				State& new_s = new_state(std::forward<Args>(args)...);
 				// try to merge the new state with existing states in node n.
-				//if (!(n.get_states()->empty())) {
+#ifndef CONFIG_PARALLEL
+				if (!(n.get_states()->empty())) {
+#endif
 					int n_states_merged = n.merge_states(new_s, merge_opts.conservative, merge_opts.use_finish_times, merge_opts.budget);
 					if (n_states_merged > 0) {
 						release_state(&new_s); // if we could merge no need to keep track of the new state anymore
@@ -449,16 +451,15 @@ namespace NP {
 						num_states++;
 #endif
 					}
-				/* }
+#ifndef CONFIG_PARALLEL
+				}
 				else
 				{
 					n.add_state(&new_s); // else add the new state to the node
-#ifdef CONFIG_PARALLEL
-					states_counter.local()++;
-#else
 					num_states++;
+
+				}
 #endif
-				}*/
 			}
 
 			void release_state(State* s)
