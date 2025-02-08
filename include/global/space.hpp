@@ -1039,40 +1039,27 @@ namespace NP {
 				std::map<const Schedule_node<Time>*, unsigned int> node_id;
 				unsigned int i = 0;
 				out << "digraph {" << std::endl;
-#ifdef CONFIG_PARALLEL
-				for (const Split_nodes& nodes : space.get_nodes()) {
-					for (const Schedule_node<Time>& n : tbb::flattened2d<Split_nodes>(nodes)) {
-#else
 				for (const auto& front : space.get_nodes()) {
-					for (const Schedule_node<Time>& n : front) {
-#endif
-						/*node_id[&n] = i++;
-						out << "\tS" << node_id[&n]
-							<< "[label=\"S" << node_id[&n] << ": ";
-						n.print_vertex_label(out, space.jobs);
-						out << "\"];" << std::endl;*/
-						node_id[&n] = i++;
-						out << "\tN" << node_id[&n]
-							<< "[label=\"N" << node_id[&n] << ": {";
-						const auto* n_states = n.get_states();
+					for (auto n : front) {
+						node_id[n] = i++;
+						out << "\tN" << node_id[n]
+							<< "[label=\"N" << node_id[n] << ": {";
+						const auto* n_states = n->get_states();
 
 						for (State* s : *n_states)
 						{
 							out << "[";
 							s->print_vertex_label(out, space.state_space_data.jobs);
-							//<< s->earliest_finish_time()
-							//<< ", "
-							//<< s->latest_finish_time()
 							out << "]\\n";
 						}
 						out << "}"
 							<< "\\nER=";
-						if (n.earliest_job_release() ==
+						if (n->earliest_job_release() ==
 							Time_model::constants<Time>::infinity()) {
 							out << "N/A";
 						}
 						else {
-							out << n.earliest_job_release();
+							out << n->earliest_job_release();
 						}
 						out << "\"];"
 							<< std::endl;
