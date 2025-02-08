@@ -747,22 +747,15 @@ namespace NP {
 							while (next == nullptr || acc.empty()) {
 								// check if key exists
 								if (nodes_by_key.find(acc, next_key)) {
-									// If be_naive, a new node and a new state should be created for each new job dispatch.
-									if (be_naive) {
-										next = &(new_node_at(1, acc, n, j, j.get_job_index(), state_space_data, state_space_data.earliest_possible_job_release(n, j), state_space_data.earliest_certain_source_job_release(n, j), state_space_data.earliest_certain_sequential_source_job_release(n, j)));
+									for (Node_ref other : acc->second) {
+										if (other->get_scheduled_jobs() == new_sched_jobs) {
+											next = other;
+											DM("=== dispatch: next exists." << std::endl);
+											break;
+										}
 									}
-									else
-									{
-										for (Node_ref other : acc->second) {
-											if (other->get_scheduled_jobs() == new_sched_jobs) {
-												next = other;
-												DM("=== dispatch: next exists." << std::endl);
-												break;
-											}
-										}
-										if (next == nullptr) {
-											next = &(new_node_at(1, acc, n, j, j.get_job_index(), state_space_data, state_space_data.earliest_possible_job_release(n, j), state_space_data.earliest_certain_source_job_release(n, j), state_space_data.earliest_certain_sequential_source_job_release(n, j)));
-										}
+									if (next == nullptr) {
+										next = &(new_node_at(1, acc, n, j, j.get_job_index(), state_space_data, state_space_data.earliest_possible_job_release(n, j), state_space_data.earliest_certain_source_job_release(n, j), state_space_data.earliest_certain_sequential_source_job_release(n, j)));
 									}
 								}
 								if (next == nullptr) {
@@ -773,12 +766,6 @@ namespace NP {
 								// if we raced with concurrent creation, try again
 							}
 						}
-						// If be_naive, a new node and a new state should be created for each new job dispatch.
-						/*else if (be_naive) {
-							// note that the accessor should be pointing on something at this point
-							next = &(new_node_at(1, acc, n, j, j.get_job_index(), state_space_data, state_space_data.earliest_possible_job_release(n, j), state_space_data.earliest_certain_source_job_release(n, j), state_space_data.earliest_certain_sequential_source_job_release(n, j)));
-						}
-						assert(!acc.empty());*/
 #else
 						// If be_naive, a new node and a new state should be created for each new job dispatch.
 						if (be_naive)

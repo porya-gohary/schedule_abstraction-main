@@ -364,10 +364,6 @@ int main(int argc, char** argv)
 	      .help("abort graph exploration after reaching given depth (>= 2)")
 	      .set_default("0");
 
-	/*parser.add_option("-n", "--naive").dest("naive").set_default("0")
-	      .action("store_const").set_const("1")
-	      .help("use the naive exploration method (default: merging)");*/
-
 	parser.add_option("-p", "--precedence").dest("precedence_file")
 	      .help("name of the file that contains the job set's precedence DAG")
 	      .set_default("");
@@ -421,6 +417,13 @@ int main(int argc, char** argv)
 	}
 
 	std::string merge_opts = (const std::string&)options.get("merge_opts");
+#ifdef CONFIG_PARALLEL
+	if (merge_opts == "no") {
+		std::cerr << "Error: parallel analysis (CONFIG_PARALLEL=ON) is incompatible with naive exploration."
+			<< std::endl;
+		return 3;
+	}
+#endif
 	want_naive = (merge_opts == "no");
 	if (merge_opts == "c1") {
 		merge_conservative = true;
@@ -430,7 +433,7 @@ int main(int argc, char** argv)
 		merge_conservative = true;
 		merge_use_job_finish_times = true;
 	}
-	if (merge_opts == "l2")
+	else if (merge_opts == "l2")
 		merge_depth = 2;
 	else if (merge_opts == "l3")
 		merge_depth = 3;
@@ -441,8 +444,6 @@ int main(int argc, char** argv)
 
 	std::string time_model = (const std::string&)options.get("time_model");
 	want_dense = time_model == "dense";
-
-	//want_naive = options.get("naive");
 
 	timeout = options.get("timeout");
 
