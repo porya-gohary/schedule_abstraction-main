@@ -22,6 +22,15 @@ namespace NP {
 				set_bit(idx, true);
 			}
 
+			// derive a new set by "cloning" an existing set and adding an index
+			void set(const Index_set& from, std::size_t idx)
+			{
+				the_set.clear();
+				the_set.resize(std::max(from.the_set.size(), (idx / 64) + 1));
+				std::copy(from.the_set.begin(), from.the_set.end(), the_set.begin());
+				set_bit(idx, true);
+			}
+
 			// create the diff of two job sets (intended for debugging only)
 			Index_set(const Index_set &a, const Index_set &b)
 					: the_set(std::max(a.the_set.size(), b.the_set.size()), 0)
@@ -29,6 +38,14 @@ namespace NP {
 				auto limit = std::min(a.the_set.size(), b.the_set.size());
 				for (std::size_t i = 0; i < limit; ++i)
 					the_set[i] = a.the_set[i] & ~b.the_set[i];
+			}
+
+			Index_set& operator=(const Index_set& other)
+			{
+				if (this != &other) {
+					the_set = other.the_set;
+				}
+				return *this;
 			}
 
 			bool operator==(const Index_set &other) const
@@ -84,6 +101,11 @@ namespace NP {
 				if (idx / 64 >= the_set.size())
 					the_set.resize((idx / 64) + 1, 0);
 				set_bit(idx, true);
+			}
+
+			void clear()
+			{
+				the_set.clear();
 			}
 
 			friend std::ostream& operator<< (std::ostream& stream,

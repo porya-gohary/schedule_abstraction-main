@@ -15,6 +15,10 @@
 #include "util.hpp"
 #include "global/state_space_data.hpp"
 
+#ifdef CONFIG_PARALLEL
+#include <tbb/mutex.h>
+#endif
+
 namespace NP {
 
 	namespace Global {
@@ -107,6 +111,54 @@ namespace NP {
 				assert(core_avail.size() > 0);
 
 				// save the job finish time of every job with a successor that is not executed yet in the current state
+				update_job_finish_times(from, j, start_times, finish_times, jobs_with_pending_succ);
+
+				// NOTE: must be done after the finish times and core availabilities have been updated
+				updated_earliest_certain_successor_job_disptach(ready_succ_jobs, predecessors_of);
+
+				// NOTE: must be done after the core availabilities have been updated
+				update_earliest_certain_gang_source_job_disptach(next_source_job_rel, scheduled_jobs, state_space_data);
+
+				DM("*** new state: constructed " << *this << std::endl);
+			}
+
+			// initial state -- nothing yet has finished, nothing is running
+			void reset(const unsigned int num_processors, const State_space_data<Time>& state_space_data)
+			{
+				core_avail = Core_availability(num_processors, Interval<Time>(Time(0), Time(0)));
+				earliest_certain_successor_job_disptach = Time_model::constants<Time>::infinity();
+				earliest_certain_gang_source_job_disptach = state_space_data.get_earliest_certain_gang_source_job_release();
+				assert(core_avail.size() > 0);
+			}
+
+			void reset(
+				const Schedule_state& from,
+				Job_index j,
+				Interval<Time> start_times,
+				Interval<Time> finish_times,
+				const Job_set& scheduled_jobs,
+				const std::vector<Job_index>& jobs_with_pending_succ,
+				const std::vector<const Job<Time>*>& ready_succ_jobs,
+				const State_space_data<Time>& state_space_data,
+				Time next_source_job_rel,
+				unsigned int ncores = 1)
+			{
+				const Successors& successors_of = state_space_data.successors_suspensions;
+				const Predecessors& predecessors_of = state_space_data.predecessors_suspensions;
+				const Job_precedence_set& predecessors = state_space_data.predecessors_of(j);
+				// update the set of certainly running jobs and
+				// get the number of cores certainly used by active predecessors
+				certain_jobs.clear();
+				int n_prec = update_certainly_running_jobs_and_get_num_prec(from, j, start_times, finish_times, ncores, predecessors);
+
+				// calculate the cores availability intervals resulting from dispatching job j on ncores in state 'from'
+				core_avail.clear();
+				update_core_avail(from, j, predecessors, n_prec, start_times, finish_times, ncores);
+
+				assert(core_avail.size() > 0);
+
+				// save the job finish time of every job with a successor that is not executed yet in the current state
+				job_finish_times.clear();
 				update_job_finish_times(from, j, start_times, finish_times, jobs_with_pending_succ);
 
 				// NOTE: must be done after the finish times and core availabilities have been updated
@@ -478,8 +530,10 @@ namespace NP {
 						// Note that if `job` has non-completed successors in the new state,
 						// it must have had non-completed successors in the previous state too, 
 						// thus there is no risk to reach the end iterator
-						while (it->first != job) 
+						while (it->first != job) {
+							assert(it != from.job_finish_times.end());
 							it++;
+						}
 						Time job_eft = it->second.min();
 						Time job_lft = it->second.max();
 						// if there is a single core, then we know that 
@@ -645,6 +699,9 @@ namespace NP {
 				}
 			};
 
+#ifdef CONFIG_PARALLEL
+			tbb::mutex mtx;
+#endif
 			typedef typename std::multiset<State*, eft_compare> State_ref_queue;
 			State_ref_queue states;
 
@@ -706,10 +763,49 @@ namespace NP {
 				update_jobs_with_pending_succ(from, idx, state_space_data.successors_suspensions, state_space_data.predecessors_suspensions, this->scheduled_jobs);
 			}
 
-			~Schedule_node()
+			void reset(unsigned int num_cores, const State_space_data<Time>& state_space_data)
 			{
-				for (State* s : states)
-					delete s;
+				lookup_key = 0;
+				num_cpus = num_cores;
+				finish_time = { 0,0 };
+				a_max = 0;
+				scheduled_jobs.clear();
+				num_jobs_scheduled = 0;
+				states.clear();
+				earliest_pending_release = state_space_data.get_earliest_job_arrival();
+				next_certain_successor_jobs_disptach = Time_model::constants<Time>::infinity();
+				next_certain_sequential_source_job_release = state_space_data.get_earliest_certain_seq_source_job_release();
+				next_certain_gang_source_job_disptach = Time_model::constants<Time>::infinity();
+				next_certain_source_job_release = std::min(next_certain_sequential_source_job_release, state_space_data.get_earliest_certain_gang_source_job_release());
+			}
+
+			// transition: new node by scheduling a job 'j' in an existing node 'from'
+			void reset(
+				const Schedule_node& from,
+				const Job<Time>& j,
+				std::size_t idx,
+				const State_space_data<Time>& state_space_data,
+				const Time next_earliest_release,
+				const Time next_certain_source_job_release, // the next time a job without predecessor is certainly released
+				const Time next_certain_sequential_source_job_release // the next time a job without predecessor that can execute on a single core is certainly released
+			)
+			{
+				states.clear();
+				scheduled_jobs.set(from.scheduled_jobs, idx);
+				lookup_key = from.next_key(j);
+				num_cpus = from.num_cpus;
+				num_jobs_scheduled = from.num_jobs_scheduled + 1;
+				finish_time = {0, Time_model::constants<Time>::infinity()};
+				a_max = Time_model::constants<Time>::infinity();
+				earliest_pending_release = next_earliest_release;
+				this->next_certain_source_job_release = next_certain_source_job_release;
+				next_certain_successor_jobs_disptach = Time_model::constants<Time>::infinity();
+				this->next_certain_sequential_source_job_release = next_certain_sequential_source_job_release;
+				ready_successor_jobs.clear();
+				jobs_with_pending_succ.clear();
+				next_certain_gang_source_job_disptach = Time_model::constants<Time>::infinity();
+				update_ready_successors(from, idx, state_space_data.successors_suspensions, state_space_data.predecessors_suspensions, this->scheduled_jobs);
+				update_jobs_with_pending_succ(from, idx, state_space_data.successors_suspensions, state_space_data.predecessors_suspensions, this->scheduled_jobs);
 			}
 
 			const unsigned int number_of_scheduled_jobs() const
@@ -787,7 +883,7 @@ namespace NP {
 			//     earliest and latest core availability for core 0.
 			//     whenever a state is changed (through merge) or added,
 			//     that interval should be adjusted.
-			const Interval<Time>& finish_range() const
+			Interval<Time> finish_range() const
 			{
 				return finish_time;
 			}
@@ -797,22 +893,13 @@ namespace NP {
 				return a_max;
 			}
 
+
 			void add_state(State* s)
 			{
-				// Update finish_time
-				Interval<Time> ft = s->core_availability();
-				if (states.empty()) {
-					finish_time = ft;
-					a_max = s->core_availability(num_cpus).max();
-					next_certain_successor_jobs_disptach = s->next_certain_successor_jobs_disptach();
-					next_certain_gang_source_job_disptach = s->next_certain_gang_source_job_disptach();
-				}
-				else {
-					finish_time.widen(ft);
-					a_max = std::max(a_max, s->core_availability(num_cpus).max());
-					next_certain_successor_jobs_disptach = std::max(next_certain_successor_jobs_disptach, s->next_certain_successor_jobs_disptach());
-					next_certain_gang_source_job_disptach = std::max(next_certain_gang_source_job_disptach, s->next_certain_gang_source_job_disptach());
-				}
+#ifdef CONFIG_PARALLEL
+				tbb::mutex::scoped_lock lock(mtx);
+#endif
+				update_internal_variables(s);
 				states.insert(s);
 			}
 
@@ -857,6 +944,9 @@ namespace NP {
 			// Returns the number of existing states the new state was merged with.
 			int merge_states(const Schedule_state<Time>& s, bool conservative, bool use_job_finish_times = false, int budget = 1)
 			{
+#ifdef CONFIG_PARALLEL
+				tbb::mutex::scoped_lock lock(mtx);
+#endif
 				// if we do not use a conservative merge, try to merge with up to 'budget' states if possible.
 				int merge_budget = conservative ? 1 : budget;
 
@@ -913,6 +1003,23 @@ namespace NP {
 			}
 
 		private:
+			void update_internal_variables(const State* s)
+			{
+				Interval<Time> ft = s->core_availability();
+				if (states.empty()) {
+					finish_time = ft;
+					a_max = s->core_availability(num_cpus).max();
+					next_certain_successor_jobs_disptach = s->next_certain_successor_jobs_disptach();
+					next_certain_gang_source_job_disptach = s->next_certain_gang_source_job_disptach();
+				}
+				else {
+					finish_time.widen(ft);
+					a_max = std::max(a_max, s->core_availability(num_cpus).max());
+					next_certain_successor_jobs_disptach = std::max(next_certain_successor_jobs_disptach, s->next_certain_successor_jobs_disptach());
+					next_certain_gang_source_job_disptach = std::max(next_certain_gang_source_job_disptach, s->next_certain_gang_source_job_disptach());
+				}
+			}
+
 			// update the list of jobs that have all their predecessors completed and were not dispatched yet
 			void update_ready_successors(const Schedule_node& from,
 				Job_index j, const Successors& successors_of,
