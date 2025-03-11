@@ -556,7 +556,7 @@ namespace NP {
 
 			bool unfinished(const Node& n, const Job<Time>& j) const
 			{
-				return n.job_incomplete(j.get_job_index());
+				return n.job_not_dispatched(j.get_job_index());
 			}
 
 			// Check if any job is guaranteed to miss its deadline in any state in node new_n
@@ -731,7 +731,7 @@ namespace NP {
 						Interval<Time> ftimes = calculate_abort_time(j, _st.first, _st.second, eft, lft);
 
 						// yep, job j is a feasible successor in state s
-						dispatched_one = true;						
+						dispatched_one = true;
 
 						// update finish-time estimates
 						update_finish_times(j, ftimes);
