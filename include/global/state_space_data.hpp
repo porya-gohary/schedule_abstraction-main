@@ -168,15 +168,15 @@ namespace NP {
 			Time conditional_latest_ready_time(
 				const Node& n, const State& s,
 				const Job<Time>& j_high, const Job_index j_low,
-				const unsigned int ncores = 1) const
+				const unsigned int j_low_required_cores = 1) const
 			{
 				Time latest_ready_high = j_high.arrival_window().max();
 
-				// if the minimum parallelism of j is more than ncores, then 
-				// for j to be released and have its successors completed 
+				// if the minimum parallelism of j_high is more than j_low_required_cores, then
+				// for j to be released and have its successors completed
 				// is not enough to interfere with a lower priority job.
 				// It must also have enough cores free.
-				if (j_high.get_min_parallelism() > ncores)
+				if (j_high.get_min_parallelism() > j_low_required_cores)
 				{
 					// max {rj_max,Amax(sjmin)}
 					latest_ready_high = std::max(latest_ready_high, s.core_availability(j_high.get_min_parallelism()).max());
@@ -190,6 +190,9 @@ namespace NP {
 					const auto high_suspension = pred.second;
 					auto pred_idx = pred.first->get_job_index();
 
+					Interval<Time> ft{ 0, 0 };
+					s.get_finish_times(pred_idx, ft);
+
 					// If the suspension is 0 and j_pred is certainly finished when j_low is dispatched, then j_pred cannot postpone
 					// the (latest) ready time of j_high.
 					if (high_suspension.max() == 0) {
@@ -197,6 +200,36 @@ namespace NP {
 						// If there is a single core, all predecessors of `j_high` must have finished when the core becomes available,
 						// since we assumed that all predecessors of `j_high` were already dispatched.
 						if (num_cpus == 1) continue;
+
+						// The optimization above can be generalized to multiple cores, using the following knowledge:
+						// (1) When j_pred cannot postpone the ready time of j_high to a time instant *later than* the moment j_low can start,
+						//     we can safely disregard j_pred.
+						// (2) j_low cannot start until at least 1 core is available.
+						// (3) So if all cores are certainly occupied until j_pred is finished, we can disregard j_pred.
+						//
+						// We will prove the following claim: (ft(j) denotes finish time ofj and ca(n) denotes core_availability(n))
+						// (4) If ft(j_pred).min() <= ca(1).min && ft(j_pred).max() <= ca(2).min() then no core can be available
+						//     before j_pred is finished.
+						// Proof:
+						// (A) Assume for a contradiction that a core becomes available at time T before j_pred is finished at time F > T.
+						//
+						// (B) Since a core became available at time T, it must hold that ca(1).min <= T <= ca(1).max().
+						//
+						// (C) Since j_pred finishes at time F > T, we know that at least 2 cores must be available at time F:
+						//     - the one that became available at time T, and
+						//     - the one used by j_pred
+						//
+						// (D) So ca(2).min() <= F <= ft(j_pred).max() hence ca(2).min() <= ft(j_pred).max().
+						//
+						// (E) From the condition ft(j_pred).max() <= ca(2).min(), it follows that ft(j_pred).max() == ft(j_pred).min() == F.
+						//
+						// (F) Since ca(1).min() <= T < F == ft(j_pred).min(), it follows that ca(1).min() < ft(j_pred).min(),
+						//     which contradicts the condition that ft(j_pred).min() <= ca(1).min().
+						if (ft.min() <= s.core_availability(1).min() && ft.max() <= s.core_availability(2).min()) continue;
+
+						// Alternatively, if we check that `ft(j_pred).max() < ca(2).min()` (strictly smaller),
+						// we would already derive a contradiction at (E) since ca(2).min() <= ft(j_pred).max() contradicts ft(j_pred).max() < ca(2).min()
+						if (ft.max() < s.core_availability(2).min()) continue;
 
 						// If at least one successor of j_pred has already been dispatched, then j_pred must have finished already.
 						bool can_disregard = false;
@@ -239,8 +272,6 @@ namespace NP {
 						continue;
 					}
 
-					Interval<Time> ft{ 0, 0 };
-					s.get_finish_times(pred_idx, ft);
 					latest_ready_high = std::max(latest_ready_high, ft.max() + high_suspension.max());
 				}
 				return latest_ready_high;
