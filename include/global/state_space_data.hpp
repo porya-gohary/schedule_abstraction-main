@@ -166,7 +166,7 @@ namespace NP {
 			// hence `j_low` cannot be dispatched next. In this case, the exact value of `latest_ready_high` is meaningless,
 			// except that it must be at most `ready_low`. After all, it was computed under an assumption that cannot happen.
 			Time conditional_latest_ready_time(
-				const State& s,
+				const Node& n, const State& s,
 				const Job<Time>& j_high, const Job_index j_low,
 				const unsigned int ncores = 1) const
 			{
@@ -188,13 +188,26 @@ namespace NP {
 				for (const auto& pred : predecessors_suspensions[j_high.get_job_index()])
 				{
 					const auto high_suspension = pred.second;
-
-					// If there is a single core, all predecessors of `j_high` must have finished when the core becomes available,
-					// since we assumed that all predecessors of `j_high` were already dispatched. If also the suspension is 0,
-					// this predecessor cannot postpone the ready time of `j_high`.
-					if (num_cpus == 1 && high_suspension.max() == 0) continue;
-
 					auto pred_idx = pred.first->get_job_index();
+
+					// If the suspension is 0 and j_pred is certainly finished when j_low is dispatched, then j_pred cannot postpone
+					// the (latest) ready time of j_high.
+					if (high_suspension.max() == 0) {
+
+						// If there is a single core, all predecessors of `j_high` must have finished when the core becomes available,
+						// since we assumed that all predecessors of `j_high` were already dispatched.
+						if (num_cpus == 1) continue;
+
+						// If at least one successor of j_pred has already been dispatched, then j_pred must have finished already.
+						bool can_disregard = false;
+						for (const auto &successor_suspension : successors_suspensions[pred_idx]) {
+							if (dispatched(n, *successor_suspension.first)) {
+								can_disregard = true;
+								break;
+							}
+						}
+						if (can_disregard) continue;
+					}
 
 					// If j_pred is a predecessor of both j_high and j_low, we can disregard it if the maximum suspension from j_pred to j_high
 					// is at most the minimum suspension from j_pred to j_low: susp_max(j_pred -> j_high) <= susp_min(j_pred -> j_low).
@@ -265,7 +278,7 @@ namespace NP {
 						break; // yep, nothing can lower 'when' at this point
 
 					// j is not relevant if it is already scheduled or not of higher priority
-					if (unfinished(n, j) && j.higher_priority_than(reference_job))
+					if (not_dispatched(n, j) && j.higher_priority_than(reference_job))
 					{
 						when = j.latest_arrival();
 						// Jobs are ordered by latest_arrival, so next jobs are later. 
@@ -303,7 +316,7 @@ namespace NP {
 						break; // yep, nothing can lower 'when' at this point
 
 					// j is not relevant if it is already scheduled or not of higher priority
-					if (unfinished(n, j) && j.higher_priority_than(reference_job))
+					if (not_dispatched(n, j) && j.higher_priority_than(reference_job))
 					{
 						// if the minimum parallelism of j is more than ncores, then 
 						// for j to be released and have its successors completed 
@@ -356,7 +369,7 @@ namespace NP {
 					// j_high is not relevant if it is already scheduled or not of higher priority
 					if (j_high.higher_priority_than(reference_job)) {
 						// does it beat what we've already seen?
-						latest_ready_high = std::min(latest_ready_high, conditional_latest_ready_time(s, j_high, reference_job.get_job_index(), ncores));
+						latest_ready_high = std::min(latest_ready_high, conditional_latest_ready_time(n, s, j_high, reference_job.get_job_index(), ncores));
 						if (latest_ready_high <= ready_min) break;
 					}
 				}
@@ -379,7 +392,7 @@ namespace NP {
 					DM("         * looking at " << j << std::endl);
 
 					// skip if it is the one we're ignoring or if it was dispatched already
-					if (&j == &ignored_job || !unfinished(n, j))
+					if (&j == &ignored_job || dispatched(n, j))
 						continue;
 
 					DM("         * found it: " << j.earliest_arrival() << std::endl);
@@ -408,7 +421,7 @@ namespace NP {
 					DM("         * looking at " << *jp << std::endl);
 
 					// skip if it is the one we're ignoring or the job was dispatched already
-					if (jp == &ignored_job || !unfinished(n, *jp))
+					if (jp == &ignored_job || dispatched(n, *jp))
 						continue;
 
 					DM("         * found it: " << jp->latest_arrival() << std::endl);
@@ -437,7 +450,7 @@ namespace NP {
 					DM("         * looking at " << *jp << std::endl);
 
 					// skip if it is the one we're ignoring or the job was dispatched already
-					if (jp == &ignored_job || !unfinished(n, *jp))
+					if (jp == &ignored_job || dispatched(n, *jp))
 						continue;
 
 					DM("         * found it: " << jp->latest_arrival() << std::endl);
@@ -481,9 +494,14 @@ namespace NP {
 
 		private:
 
-			bool unfinished(const Node& n, const Job<Time>& j) const
+			bool not_dispatched(const Node& n, const Job<Time>& j) const
 			{
-				return n.job_incomplete(j.get_job_index());
+				return n.job_not_dispatched(j.get_job_index());
+			}
+
+			bool dispatched(const Node& n, const Job<Time>& j) const
+			{
+				return n.job_dispatched(j.get_job_index());
 			}
 
 			State_space_data(const State_space_data& origin) = delete;

@@ -223,3 +223,48 @@ TEST_CASE("[global-prec] taskset-6 false negative") {
 	CHECK(!space->is_schedulable());
 	delete space;
 }
+
+// Core 2 is continuously occupied by T99J99, so only core 1 is interesting
+// The only possible job ordering on core 1 is:
+// - J68 starts at time 0
+// - J72 starts right after J68 is finished somewhere between [10, 50]
+// - J69 starts right after J72 is finished somewhere between [20, 60]
+// - J64 starts right after J69 is finished somewhere between [30, 70]
+// - J44 starts right after J64 is finished somewhere between [40, 80]
+const std::string ts21_jobs =
+"Task ID, Job ID, Arrival min, Arrival max, Cost min, Cost max, Deadline, Priority \n"
+"     65,     68,           0,           0,       10,       50,       50,        0 \n"
+"     65,     72,           0,           0,       10,       10,       60,        1 \n"
+"     65,     69,           0,           0,       10,       10,       81,        2 \n"
+"     65,     64,           0,           0,       10,       10,       81,        3 \n"
+"     65,     44,           0,           0,       50,       50,      130,        4 \n"
+"     99,     99,           0,           0,      200,      200,      200,        0 \n"
+;
+
+const std::string ts21_edges =
+"From TID, From JID,   To TID,   To JID \n"
+"      65,       68,       65,       72 \n"
+"      65,       72,       65,       69 \n"
+"      65,       69,       65,       44 \n"
+"      65,       68,       65,       64 \n"
+;
+
+TEST_CASE("[global-prec] taskset-21 check transitivity pessimism (5)") {
+	auto dag_in = std::istringstream(ts21_edges);
+	auto prec = NP::parse_precedence_file<dtime_t>(dag_in);
+	auto in = std::istringstream(ts21_jobs);
+	auto jobs = NP::parse_csv_job_file<dtime_t>(in);
+	NP::Scheduling_problem<dtime_t> prob{jobs, prec, 2};
+
+	auto space = NP::Global::State_space<dtime_t>::explore(prob, {});
+	CHECK(space->is_schedulable());
+	delete space;
+
+	// By adding a suspension delay of 21 time units between J68 and J64, it becomes possible that J44 is ready *before* J64,
+	// causing J64 to miss its deadline.
+	prob.prec[3] = NP::Precedence_constraint<dtime_t>(jobs[0].get_id(), jobs[3].get_id(), Interval<dtime_t>(0, 21));
+	validate_prec_cstrnts(prob.prec, prob.jobs);
+	space = NP::Global::State_space<dtime_t>::explore(prob, {});
+	CHECK(!space->is_schedulable());
+	delete space;
+}

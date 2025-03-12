@@ -855,9 +855,14 @@ namespace NP {
 				return scheduled_jobs;
 			}
 
-			const bool job_incomplete(Job_index j) const
+			const bool job_not_dispatched(Job_index j) const
 			{
 				return !scheduled_jobs.contains(j);
+			}
+
+			const bool job_dispatched(Job_index j) const
+			{
+				return scheduled_jobs.contains(j);
 			}
 
 			const bool job_ready(const Job_precedence_set& predecessors) const
