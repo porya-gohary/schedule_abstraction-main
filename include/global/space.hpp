@@ -847,7 +847,7 @@ namespace NP {
 					<< "upbnd_t_wc: " << upbnd_t_wc << std::endl);
 
 				//check all jobs that may be eligible to be dispatched next
-				// part 1: check source jobs (i.e., jobs without prcedence constraints) that are potentially eligible
+				// part 1: check source jobs (i.e., jobs without precedence constraints) that are potentially eligible
 				for (auto it = state_space_data.jobs_by_earliest_arrival.lower_bound(t_min);
 					it != state_space_data.jobs_by_earliest_arrival.end();
 					it++)
@@ -858,7 +858,13 @@ namespace NP {
 					if (j.earliest_arrival() > upbnd_t_wc)
 						break;
 
+					// if it was dispatched already, it will not be dispatched again
 					if (!unfinished(n, j))
+						continue;
+
+					// if its priority is lower than than the minimum priority of the next dispatched job, it will not be dispatched next
+					// (remember that lower number means higher priority)
+					if (j.get_priority() > n.get_min_successor_priority())
 						continue;
 
 					Time t_high_wos = state_space_data.next_certain_higher_priority_seq_source_job_release(n, j, upbnd_t_wc + 1);
@@ -875,7 +881,12 @@ namespace NP {
 				{
 					const Job<Time>& j = **it;
 					DM(j << " (" << j.get_job_index() << ")" << std::endl);
-					// stop looking once we've left the window of interest
+					// if the job priority is lower than than the minimum priority of the next dispatched job, it will not be dispatched next
+					// (remember that lower number means higher priority)
+					if (j.get_priority() > n.get_min_successor_priority())
+						continue;
+
+					// don't look outside the window of interest
 					if (j.earliest_arrival() > upbnd_t_wc)
 						continue;
 

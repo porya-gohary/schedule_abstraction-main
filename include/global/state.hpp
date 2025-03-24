@@ -686,6 +686,11 @@ namespace NP {
 			unsigned int num_cpus;
 			unsigned int num_jobs_scheduled;
 
+			typedef typename Job<Time>::Priority Priority;
+			typedef std::pair<Priority, Job_index> Succ_priority;
+			std::vector<Succ_priority> ready_successor_jobs_prio;
+			Priority min_succ_prio;
+
 			// no accidental copies
 			Schedule_node(const Schedule_node& origin) = delete;
 
@@ -719,6 +724,7 @@ namespace NP {
 				, next_certain_successor_jobs_disptach{ Time_model::constants<Time>::infinity() }
 				, next_certain_sequential_source_job_release{ Time_model::constants<Time>::infinity() }
 				, next_certain_gang_source_job_disptach{ Time_model::constants<Time>::infinity() }
+				, min_succ_prio{ Time_model::constants<Time>::infinity() }
 			{
 			}
 
@@ -733,6 +739,7 @@ namespace NP {
 				, next_certain_successor_jobs_disptach{ Time_model::constants<Time>::infinity() }
 				, next_certain_sequential_source_job_release{ state_space_data.get_earliest_certain_seq_source_job_release() }
 				, next_certain_gang_source_job_disptach{ Time_model::constants<Time>::infinity() }
+				, min_succ_prio{ Time_model::constants<Time>::infinity() }
 			{
 				next_certain_source_job_release = std::min(next_certain_sequential_source_job_release, state_space_data.get_earliest_certain_gang_source_job_release());
 			}
@@ -759,6 +766,7 @@ namespace NP {
 				, next_certain_sequential_source_job_release{ next_certain_sequential_source_job_release }
 				, next_certain_gang_source_job_disptach{ Time_model::constants<Time>::infinity() }
 			{
+				update_ready_successor_jobs_prio(from, j, state_space_data.successors_suspensions, state_space_data.predecessors_suspensions, this->scheduled_jobs);
 				update_ready_successors(from, idx, state_space_data.successors_suspensions, state_space_data.predecessors_suspensions, this->scheduled_jobs);
 				update_jobs_with_pending_succ(from, idx, state_space_data.successors_suspensions, state_space_data.predecessors_suspensions, this->scheduled_jobs);
 			}
@@ -777,6 +785,8 @@ namespace NP {
 				next_certain_sequential_source_job_release = state_space_data.get_earliest_certain_seq_source_job_release();
 				next_certain_gang_source_job_disptach = Time_model::constants<Time>::infinity();
 				next_certain_source_job_release = std::min(next_certain_sequential_source_job_release, state_space_data.get_earliest_certain_gang_source_job_release());
+				ready_successor_jobs_prio.clear();
+				min_succ_prio = Time_model::constants<Time>::infinity();
 			}
 
 			// transition: new node by scheduling a job 'j' in an existing node 'from'
@@ -804,6 +814,8 @@ namespace NP {
 				ready_successor_jobs.clear();
 				jobs_with_pending_succ.clear();
 				next_certain_gang_source_job_disptach = Time_model::constants<Time>::infinity();
+				ready_successor_jobs_prio.clear();
+				update_ready_successor_jobs_prio(from, j, state_space_data.successors_suspensions, state_space_data.predecessors_suspensions, this->scheduled_jobs);
 				update_ready_successors(from, idx, state_space_data.successors_suspensions, state_space_data.predecessors_suspensions, this->scheduled_jobs);
 				update_jobs_with_pending_succ(from, idx, state_space_data.successors_suspensions, state_space_data.predecessors_suspensions, this->scheduled_jobs);
 			}
@@ -811,6 +823,11 @@ namespace NP {
 			const unsigned int number_of_scheduled_jobs() const
 			{
 				return num_jobs_scheduled;
+			}
+
+			Priority get_min_successor_priority() const
+			{
+				return min_succ_prio;
 			}
 
 			Time earliest_job_release() const
@@ -1055,6 +1072,8 @@ namespace NP {
 					if (ready)
 						ready_successor_jobs.push_back(succ.first);
 				}
+
+				assert(ready_successor_jobs_prio.size() <= ready_successor_jobs.size());
 			}
 
 			// update the list of jobs with non-dispatched successors 
@@ -1088,6 +1107,56 @@ namespace NP {
 
 				if (!added_j)
 					jobs_with_pending_succ.push_back(j);
+			}
+
+			void update_ready_successor_jobs_prio(const Schedule_node& from,
+				const Job<Time>& j, const Successors& successors_of,
+				const Predecessors& predecessors_of,
+				const Job_set& scheduled_jobs)
+			{
+				ready_successor_jobs_prio.reserve(from.ready_successor_jobs_prio.size() + 1);
+				Job_index j_idx = j.get_job_index();
+
+				bool job_to_insert = false;
+				Priority max_prio = Time_model::constants<Time>::infinity();
+				size_t job_id;
+
+				// find the highest priority successor of j that that will be ready as soon as j finishes its execution
+				for (auto s : successors_of[j_idx]) {
+					Job_index succ_id = s.first->get_job_index();
+					// if `s` was not dispatched yet, can execute on a single core, is released right after `j` finishes, and has no other predecessor than `j`
+					if (!scheduled_jobs.contains(succ_id)
+						&& s.first->get_min_parallelism() == 1 
+						&& s.second.max() == 0 && s.first->latest_arrival() <= (j.earliest_arrival()+j.least_exec_time())
+						&& predecessors_of[succ_id].size() == 1) 
+					{
+						if (max_prio > s.first->get_priority()) {
+							job_to_insert = true;
+							max_prio = s.first->get_priority();
+							job_id = s.first->get_job_index();
+						}
+					}
+				}
+
+				// copy the ready successor jobs priorities, remove the job `j` that was just scheduled and add the prio of the successor job of `j`
+				for (Succ_priority sp : from.ready_successor_jobs_prio) {
+					if (sp.second != j_idx) {
+						if (job_to_insert && sp.first > max_prio) {
+							ready_successor_jobs_prio.push_back({ max_prio, job_id });
+							job_to_insert = false;
+						}
+						ready_successor_jobs_prio.push_back(sp);
+					}
+				}
+
+				if (job_to_insert)
+					ready_successor_jobs_prio.push_back({ max_prio, job_id });
+
+				// calculate the minimum priority of the new job to be dispatched
+				if(ready_successor_jobs_prio.size() < num_cpus)
+					min_succ_prio = Time_model::constants<Time>::infinity();
+				else
+					min_succ_prio = ready_successor_jobs_prio[num_cpus - 1].first;
 			}
 		};
 
