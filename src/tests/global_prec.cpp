@@ -268,3 +268,125 @@ TEST_CASE("[global-prec] taskset-21 check transitivity pessimism (5)") {
 	CHECK(!space->is_schedulable());
 	delete space;
 }
+
+// The correct and only possible order on core 1 is J68 -> J72 -> J64
+// Core 2 is continuously occupied by T99J99
+const std::string ts22_jobs =
+"Task ID, Job ID, Arrival min, Arrival max, Cost min, Cost max, Deadline, Priority \n"
+"     65,     68,           0,           0,       10,       50,       50,        0 \n"
+"     65,     72,           0,           0,       10,       10,       60,        1 \n"
+"     65,     64,           0,           0,       10,       10,       80,        3 \n"
+"     99,     99,           0,           0,       99,       99,       99,        0 \n"
+;
+
+const std::string ts22_edges =
+"From TID, From JID,   To TID,   To JID,    Sus. min, Sus. max \n"
+"      65,       68,       65,       72,           0,        0 \n"
+;
+
+TEST_CASE("[global-prec] taskset-22 check 2-core pessimism (1)") {
+	auto dag_in = std::istringstream(ts22_edges);
+	auto prec = NP::parse_precedence_file<dtime_t>(dag_in);
+
+	auto in = std::istringstream(ts22_jobs);
+	auto jobs = NP::parse_csv_job_file<dtime_t>(in);
+
+	NP::Scheduling_problem<dtime_t> prob{jobs, prec, 2};
+
+	auto space = NP::Global::State_space<dtime_t>::explore(prob, {});
+	CHECK(space->is_schedulable());
+	delete space;
+
+	prob.prec[0] = NP::Precedence_constraint<dtime_t>(jobs[0].get_id(), jobs[1].get_id(), Interval<dtime_t>(0, 1));
+	validate_prec_cstrnts(prob.prec, prob.jobs);
+
+	space = NP::Global::State_space<dtime_t>::explore(prob, {});
+	CHECK(!space->is_schedulable());
+	delete space;
+}
+
+// Job 0 is always dispatched first at time 0.
+// Ideally, job 1 and job 2 would start right after job 0 is finished.
+// However, job 3 will start in the meantime, blocking one of them for too long!
+const std::string ts23_jobs =
+"Task ID, Job ID, Arrival min, Arrival max, Cost min, Cost max, Deadline, Priority \n"
+"     0,     0,           0,           0,       50,       50,       50,        0 \n"
+"     1,     1,           0,           0,       10,       10,       60,        1 \n"
+"     2,     2,           0,           0,       10,       10,       60,        2 \n"
+"     3,     3,           0,           0,      100,      100,      200,        3 \n"
+;
+
+const std::string ts23_edges =
+"From TID, From JID,   To TID,   To JID \n"
+"      0,       0,       1,       1,    \n"
+"      0,       0,       2,       2,    \n"
+;
+
+TEST_CASE("[global-prec] taskset-23 check 2-core optimism (1)") {
+	auto dag_in = std::istringstream(ts23_edges);
+	auto prec = NP::parse_precedence_file<dtime_t>(dag_in);
+
+	auto in = std::istringstream(ts23_jobs);
+	auto jobs = NP::parse_csv_job_file<dtime_t>(in);
+
+	NP::Scheduling_problem<dtime_t> prob{jobs, prec, 2};
+
+	auto space = NP::Global::State_space<dtime_t>::explore(prob, {});
+	CHECK(!space->is_schedulable());
+	CHECK(space->get_finish_times(3).min() == 100);
+	delete space;
+}
+
+const std::string ts24_jobs =
+"Task ID, Job ID, Arrival min, Arrival max, Cost min, Cost max, Deadline, Priority \n"
+"     0,     0,           0,           0,       49,       50,       50,        0 \n"
+"     1,     1,           0,           0,       10,       10,       60,        1 \n"
+"     2,     2,           0,           0,       10,       10,       60,        2 \n"
+"     3,     3,           0,           0,      100,      100,      200,        3 \n"
+;
+
+TEST_CASE("[global-prec] taskset-24 check 2-core optimism (2)") {
+	auto dag_in = std::istringstream(ts23_edges);
+	auto prec = NP::parse_precedence_file<dtime_t>(dag_in);
+
+	auto in = std::istringstream(ts24_jobs);
+	auto jobs = NP::parse_csv_job_file<dtime_t>(in);
+
+	NP::Scheduling_problem<dtime_t> prob{jobs, prec, 2};
+
+	auto space = NP::Global::State_space<dtime_t>::explore(prob, {});
+	CHECK(!space->is_schedulable());
+	CHECK(space->get_finish_times(3).min() == 100);
+	delete space;
+}
+
+// The correct and only possible order on core 1 is J0 -> J68 -> J72 -> J64
+// Core 2 is continuously occupied by T99J99
+const std::string ts25_jobs =
+"Task ID, Job ID, Arrival min, Arrival max, Cost min, Cost max, Deadline, Priority \n"
+"     65,      0,           0,           0,        0,      100,       100,        0 \n"
+"     65,     68,           0,           0,       50,       50,       150,        1 \n"
+"     65,     72,           0,           0,       10,       10,       160,        2 \n"
+"     65,     64,           0,           0,       10,       10,       180,        3 \n"
+"     99,     99,           0,           0,      199,      199,       199,        0 \n"
+;
+
+const std::string ts25_edges =
+"From TID, From JID,   To TID,   To JID \n"
+"      65,        0,       65,       68 \n"
+"      65,        0,       65,       72 \n"
+;
+
+TEST_CASE("[global-prec] taskset-25 check 2-core pessimism (2)") {
+	auto dag_in = std::istringstream(ts25_edges);
+	auto prec = NP::parse_precedence_file<dtime_t>(dag_in);
+
+	auto in = std::istringstream(ts25_jobs);
+	auto jobs = NP::parse_csv_job_file<dtime_t>(in);
+
+	NP::Scheduling_problem<dtime_t> prob{jobs, prec, 2};
+
+	auto space = NP::Global::State_space<dtime_t>::explore(prob, {});
+	CHECK(space->is_schedulable());
+	delete space;
+}
