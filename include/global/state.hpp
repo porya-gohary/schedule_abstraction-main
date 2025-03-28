@@ -582,7 +582,35 @@ namespace NP {
 							if (job_lft > lst)
 								job_lft = lst;
 						}
-						bool is_certainly_finished = single_core || job.is_certainly_finished || job_lft <= start_times.min();
+						
+						// Assuming:
+						// (1) j_low cannot start until at least 1 core is available.
+						// (2) So if all cores are certainly occupied until j_pred is finished, we can disregard j_pred.
+						//
+						// We will prove the following claim: 
+						// (4) If ft(j).min() <= ca(1).min && ft(j).max() <= ca(2).min() then no core can be available
+						//     before j is finished.
+						// where ft(j) denotes finish time of j and ca(n) denotes core_availability(n)
+						// Proof:
+						// (A) Assume for a contradiction that a core becomes available at time T before j is finished at time F > T.
+						//
+						// (B) Since a core became available at time T, it must hold that ca(1).min <= T <= ca(1).max().
+						//
+						// (C) Since j_pred finishes at time F > T, we know that at least 2 cores must be available at time F:
+						//     - the one that became available at time T, and
+						//     - the one used by j_pred
+						//
+						// (D) So ca(2).min() <= F <= ft(j).max() hence ca(2).min() <= ft(j).max().
+						//
+						// (E) From the condition ft(j).max() <= ca(2).min(), it follows that ft(j).max() == ft(j).min() == F.
+						//
+						// (F) Since ca(1).min() <= T < F == ft(j).min(), it follows that ca(1).min() < ft(j).min(),
+						//     which contradicts the condition that ft(j).min() <= ca(1).min().
+						// Alternatively, if we check that `ft(j_pred).max() < ca(2).min()` (strictly smaller),
+						// we would already derive a contradiction at (E) since ca(2).min() <= ft(j_pred).max() contradicts ft(j_pred).max() < ca(2).min()
+
+						// we use this property to decide whether `j` is certainly finished before dispatching any future job on the platform
+						bool is_certainly_finished = single_core || job.is_certainly_finished || job_lft < core_avail[1].min() || (job_lft <= core_avail[1].min() && job_eft <= core_avail[0].min());
 						job_finish_times.emplace_back(job.job_idx, Interval<Time>{ job_eft, job_lft }, is_certainly_finished);
 					}
 				}
