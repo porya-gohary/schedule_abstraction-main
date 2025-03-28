@@ -756,8 +756,9 @@ namespace NP {
 
 			typedef typename Job<Time>::Priority Priority;
 			typedef std::pair<Priority, Job_index> Succ_priority;
+			// for each job `j` in `jobs_with_pending_succ`, `ready_successor_jobs_prio` contains the priority of the smallest priority job that is certainly ready right after `j` completes its execution
 			std::vector<Succ_priority> ready_successor_jobs_prio;
-			Priority min_succ_prio;
+			Priority min_next_prio; // the minimum priority of the first job disptached after the current state
 
 			// no accidental copies
 			Schedule_node(const Schedule_node& origin) = delete;
@@ -792,7 +793,7 @@ namespace NP {
 				, next_certain_successor_jobs_disptach{ Time_model::constants<Time>::infinity() }
 				, next_certain_sequential_source_job_release{ Time_model::constants<Time>::infinity() }
 				, next_certain_gang_source_job_disptach{ Time_model::constants<Time>::infinity() }
-				, min_succ_prio{ Time_model::constants<Time>::infinity() }
+				, min_next_prio{ Time_model::constants<Time>::infinity() }
 			{
 			}
 
@@ -807,7 +808,7 @@ namespace NP {
 				, next_certain_successor_jobs_disptach{ Time_model::constants<Time>::infinity() }
 				, next_certain_sequential_source_job_release{ state_space_data.get_earliest_certain_seq_source_job_release() }
 				, next_certain_gang_source_job_disptach{ Time_model::constants<Time>::infinity() }
-				, min_succ_prio{ Time_model::constants<Time>::infinity() }
+				, min_next_prio{ Time_model::constants<Time>::infinity() }
 			{
 				next_certain_source_job_release = std::min(next_certain_sequential_source_job_release, state_space_data.get_earliest_certain_gang_source_job_release());
 			}
@@ -855,7 +856,7 @@ namespace NP {
 				next_certain_gang_source_job_disptach = Time_model::constants<Time>::infinity();
 				next_certain_source_job_release = std::min(next_certain_sequential_source_job_release, state_space_data.get_earliest_certain_gang_source_job_release());
 				ready_successor_jobs_prio.clear();
-				min_succ_prio = Time_model::constants<Time>::infinity();
+				min_next_prio = Time_model::constants<Time>::infinity();
 			}
 
 			// transition: new node by scheduling a job 'j' in an existing node 'from'
@@ -897,7 +898,7 @@ namespace NP {
 
 			Priority get_min_successor_priority() const
 			{
-				return min_succ_prio;
+				return min_next_prio;
 			}
 
 			Time earliest_job_release() const
@@ -1246,9 +1247,9 @@ namespace NP {
 
 				// calculate the minimum priority of the new job to be dispatched
 				if(ready_successor_jobs_prio.size() < num_cpus)
-					min_succ_prio = Time_model::constants<Time>::infinity();
+					min_next_prio = Time_model::constants<Time>::infinity();
 				else
-					min_succ_prio = ready_successor_jobs_prio[num_cpus - 1].first;
+					min_next_prio = ready_successor_jobs_prio[num_cpus - 1].first;
 
 				assert(ready_successor_jobs_prio.size() <= ready_successor_jobs.size());
 			}
