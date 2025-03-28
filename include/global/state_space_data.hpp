@@ -190,24 +190,14 @@ namespace NP {
 					const auto high_suspension = pred.second;
 					auto pred_idx = pred.first->get_job_index();
 
+					Interval<Time> ft{ 0, 0 };
+					bool is_cert_finished;
+					s.get_finish_times(pred_idx, ft, is_cert_finished);
+
 					// If the suspension is 0 and j_pred is certainly finished when j_low is dispatched, then j_pred cannot postpone
 					// the (latest) ready time of j_high.
-					if (high_suspension.max() == 0) {
-
-						// If there is a single core, all predecessors of `j_high` must have finished when the core becomes available,
-						// since we assumed that all predecessors of `j_high` were already dispatched.
-						if (num_cpus == 1) continue;
-
-						// If at least one successor of j_pred has already been dispatched, then j_pred must have finished already.
-						bool can_disregard = false;
-						for (const auto &successor_suspension : successors_suspensions[pred_idx]) {
-							if (dispatched(n, *successor_suspension.first)) {
-								can_disregard = true;
-								break;
-							}
-						}
-						if (can_disregard) continue;
-					}
+					if (high_suspension.max() == 0 && is_cert_finished) 
+						continue;
 
 					// If j_pred is a predecessor of both j_high and j_low, we can disregard it if the maximum suspension from j_pred to j_high
 					// is at most the minimum suspension from j_pred to j_low: susp_max(j_pred -> j_high) <= susp_min(j_pred -> j_low).
@@ -238,9 +228,7 @@ namespace NP {
 						// are disregarded.
 						continue;
 					}
-
-					Interval<Time> ft{ 0, 0 };
-					s.get_finish_times(pred_idx, ft);
+					
 					latest_ready_high = std::max(latest_ready_high, ft.max() + high_suspension.max());
 				}
 				return latest_ready_high;
