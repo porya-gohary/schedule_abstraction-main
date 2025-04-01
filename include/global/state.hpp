@@ -1137,6 +1137,11 @@ namespace NP {
 
 				for (const auto& p : predecessors_of[succ]) // check if all other predecessors of `succ` are certainly finished or that they have no other successors than `succ`
 				{
+					// if `succ` is not directly ready after `p` completes (i.e., there is a suspension delay between the completion of `p` and start of `succ`), 
+					// then `succ` is not certainly ready when `pred` finishes 
+					if (p.second.max() > 0)
+						return false;
+
 					Job_index j_idx = p.first->get_job_index();
 					// if `p` was not dispatched yet, then `succ` cannot be ready
 					if (!scheduled_jobs.contains(j_idx))
