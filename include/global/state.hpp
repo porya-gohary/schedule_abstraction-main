@@ -1140,6 +1140,10 @@ namespace NP {
 					Job_index j_idx = p.first->get_job_index();
 					if (j_idx != pred)
 					{
+						// if `p` was not dispatched yet, then `succ` cannot be ready
+						if (!scheduled_jobs.contains(j_idx))
+							return false;
+
 						//  if `p` has a single successor, then we disregard it
 						if (successors_of[j_idx].size() == 1)
 							continue;
