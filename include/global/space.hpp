@@ -864,7 +864,7 @@ namespace NP {
 
 					// if its priority is lower than than the minimum priority of the next dispatched job, it will not be dispatched next
 					// (remember that lower number means higher priority)
-					if (j.get_priority() > n.get_min_successor_priority())
+					if (j.get_priority() > n.get_next_dispatched_job_min_priority())
 						continue;
 
 					Time t_high_wos = state_space_data.next_certain_higher_priority_seq_source_job_release(n, j, upbnd_t_wc + 1);
@@ -883,7 +883,7 @@ namespace NP {
 					DM(j << " (" << j.get_job_index() << ")" << std::endl);
 					// if the job priority is lower than than the minimum priority of the next dispatched job, it will not be dispatched next
 					// (remember that lower number means higher priority)
-					if (j.get_priority() > n.get_min_successor_priority())
+					if (j.get_priority() > n.get_next_dispatched_job_min_priority())
 						continue;
 
 					// don't look outside the window of interest

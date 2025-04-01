@@ -191,7 +191,7 @@ namespace NP {
 				return core_avail[0].min();
 			}
 
-			// return true if the finish time interval the job `j` is known. If so, it writes the finish time interval in `ftimes` 
+			// return true if the finish time interval of the job `j` is known. If so, it writes the finish time interval in `ftimes` 
 			bool get_finish_times(Job_index j, Interval<Time>& ftimes) const
 			{
 				int offset = jft_find(j);
@@ -840,7 +840,7 @@ namespace NP {
 				return num_jobs_scheduled;
 			}
 
-			Priority get_min_successor_priority() const
+			Priority get_next_dispatched_job_min_priority() const
 			{
 				return min_next_prio;
 			}
@@ -1097,28 +1097,29 @@ namespace NP {
 			{
 				jobs_with_pending_succ.reserve(from.jobs_with_pending_succ.size() + 1);
 				bool added_j = successors_of[j].empty(); // we only need to add j if it has successors
-				for (const Job_index& job : from.jobs_with_pending_succ)
+				for (Job_index job : from.jobs_with_pending_succ)
 				{					
 					if (!added_j && job > j)
 					{
-						jobs_with_pending_succ.emplace_back(j);
+						jobs_with_pending_succ.push_back(j);
 						added_j = true;
 					}
 
 					bool successor_pending = false;
 					for (const auto& succ : successors_of[job]) {
 						auto to_job = succ.first->get_job_index();
-						if (!scheduled_jobs.contains(to_job)) {
+						if (!scheduled_jobs.contains(to_job)) 
+						{
 							successor_pending = true;
 							break;
 						}
 					}
 					if (successor_pending)
-						jobs_with_pending_succ.emplace_back(job);
+						jobs_with_pending_succ.push_back(job);
 				}
 
 				if (!added_j)
-					jobs_with_pending_succ.emplace_back(j);
+					jobs_with_pending_succ.push_back(j);
 			}
 
 			// checks that `pred` is the only predecessor of `succ` that is not certainly finished
