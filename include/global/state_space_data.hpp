@@ -274,7 +274,7 @@ namespace NP {
 					}
 
 					Interval<Time> ft{ 0, 0 };
-					s.get_finish_times(pred_idx, ft);					
+					s.get_finish_times(pred_idx, ft);
 					latest_ready_high = std::max(latest_ready_high, ft.max() + high_suspension.max());
 				}
 				return latest_ready_high;

@@ -532,7 +532,7 @@ namespace NP {
 				job_finish_times.reserve(jobs_with_pending_succ.size());
 
 				auto it = from.job_finish_times.begin();
-				for (const Job_index& job : jobs_with_pending_succ)
+				for (Job_index job : jobs_with_pending_succ)
 				{
 					if (job == j)
 						job_finish_times.emplace_back(job, finish_times);
@@ -1086,7 +1086,7 @@ namespace NP {
 					}
 					if (ready)
 						ready_successor_jobs.push_back(succ.first);
-				}				
+				}
 			}
 
 			// update the list of jobs with non-dispatched successors 
@@ -1108,7 +1108,7 @@ namespace NP {
 					bool successor_pending = false;
 					for (const auto& succ : successors_of[job]) {
 						auto to_job = succ.first->get_job_index();
-						if (!scheduled_jobs.contains(to_job)) 
+						if (!scheduled_jobs.contains(to_job))
 						{
 							successor_pending = true;
 							break;
@@ -1123,17 +1123,28 @@ namespace NP {
 			}
 
 			// checks that `pred` is the only predecessor of `succ` that is not certainly finished
+			// or that `succ` is the only successor of all succ's predecessors except `pred` (i.e., 
+			// the sum of all the successors of all predecessors of `succ` minus the successors of `pred` is equal to 1)
 			bool succ_ready_right_after_pred(const Job_index pred, const Job_index succ, const Successors& successors_of, const Predecessors& predecessors_of)
 			{
-				if (num_cpus == 1 || predecessors_of[succ].size() == 1)
+				// if there is only one core then there is at most one job that is not certainly finished
+				if (num_cpus == 1)
 					return true;
 
-				for (const auto& p : predecessors_of[succ]) // check if all other predecessors of `s` are certainly finished
+				// if `succ` has a single predecessors, then àt most one predecessor may not be finished
+				if (predecessors_of[succ].size() == 1)
+					return true;
+
+				for (const auto& p : predecessors_of[succ]) // check if all other predecessors of `succ` are certainly finished or that they have no other successors than `succ`
 				{
 					Job_index j_idx = p.first->get_job_index();
 					if (j_idx != pred)
 					{
-						// If at least one successor of p has already been dispatched, then p must have finished already.
+						//  if `p` has a single successor, then we disregard it
+						if (successors_of[j_idx].size() == 1)
+							continue;
+
+						// If at least one successor of `p` has already been dispatched, then `p` must have finished already.
 						bool is_finished = false;
 						for (const auto& succ_of_pred : successors_of[j_idx])
 						{
@@ -1159,13 +1170,13 @@ namespace NP {
 
 				bool job_to_insert = false;
 				Priority max_prio = Time_model::constants<Time>::infinity();
-				size_t job_id;
+				Job_index job_id;
 
 				// find the highest priority successor of j that that will be ready as soon as j finishes its execution
-				for (auto s : successors_of[j_idx]) {
+				for (const auto& s : successors_of[j_idx]) {
 					Job_index succ_id = s.first->get_job_index();
 
-					// if `s` was not dispatched yet, can execute on a single core, is released right after `j` finishes, and has no other predecessor than `j` or all other successors certainly finished
+					// if `s` was not dispatched yet, can execute on a single core, is ready right after `j` finishes, and has no other predecessor than `j` or all other predecessors certainly finished
 					if (!scheduled_jobs.contains(succ_id)
 						&& s.first->get_min_parallelism() == 1 
 						&& s.second.max() == 0 && s.first->latest_arrival() <= (j.earliest_arrival()+j.least_exec_time())
@@ -1182,9 +1193,15 @@ namespace NP {
 				// copy the ready successor jobs priorities, remove the job `j` that was just scheduled and add the prio of the successor job of `j`
 				for (Succ_priority sp : from.ready_successor_jobs_prio) {
 					if (sp.second != j_idx) {
-						if (job_to_insert && sp.first > max_prio) {
-							ready_successor_jobs_prio.push_back({ max_prio, job_id });
-							job_to_insert = false;
+						if (job_to_insert) {
+							// if the job to insert is already in the list, we do not insert it a second time
+							if (sp.second == job_id)
+								job_to_insert = false;
+
+							if (sp.first > max_prio) {
+								ready_successor_jobs_prio.push_back({ max_prio, job_id });
+								job_to_insert = false;
+							}
 						}
 						ready_successor_jobs_prio.push_back(sp);
 					}
