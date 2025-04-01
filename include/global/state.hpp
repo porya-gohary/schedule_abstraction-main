@@ -1123,8 +1123,8 @@ namespace NP {
 			}
 
 			// checks that `pred` is the only predecessor of `succ` that is not certainly finished
-			// or that `succ` is the only successor of all succ's predecessors except `pred` (i.e., 
-			// the sum of all the successors of all predecessors of `succ` minus the successors of `pred` is equal to 1)
+			// or that `succ` is the only successor of all succ's predecessors (i.e., 
+			// the sum of all the successors of all predecessors of `succ` is equal to 1)
 			bool succ_ready_right_after_pred(const Job_index pred, const Job_index succ, const Successors& successors_of, const Predecessors& predecessors_of)
 			{
 				// if there is only one core then there is at most one job that is not certainly finished
@@ -1138,16 +1138,16 @@ namespace NP {
 				for (const auto& p : predecessors_of[succ]) // check if all other predecessors of `succ` are certainly finished or that they have no other successors than `succ`
 				{
 					Job_index j_idx = p.first->get_job_index();
+					// if `p` was not dispatched yet, then `succ` cannot be ready
+					if (!scheduled_jobs.contains(j_idx))
+						return false;
+
+					//  if `p` has a single successor, then we disregard it
+					if (successors_of[j_idx].size() == 1)
+						continue;
+
 					if (j_idx != pred)
 					{
-						// if `p` was not dispatched yet, then `succ` cannot be ready
-						if (!scheduled_jobs.contains(j_idx))
-							return false;
-
-						//  if `p` has a single successor, then we disregard it
-						if (successors_of[j_idx].size() == 1)
-							continue;
-
 						// If at least one successor of `p` has already been dispatched, then `p` must have finished already.
 						bool is_finished = false;
 						for (const auto& succ_of_pred : successors_of[j_idx])
