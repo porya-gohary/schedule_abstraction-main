@@ -697,6 +697,11 @@ namespace NP {
 
 				for (State* s : *n_states)
 				{
+					// if the job priority is lower than than the minimum priority of the next dispatched job, it will not be dispatched next
+					// (remember that lower number means higher priority)
+					if (j.get_priority() > s->get_next_dispatched_job_min_priority())
+						continue;
+
 					const auto& costs = j.get_all_costs();
 					// check for all possible parallelism levels of the moldable gang job j (if j is not gang or not moldable than min_paralellism = max_parallelism and costs only constains a single element).
 					//for (unsigned int p = j.get_max_parallelism(); p >= j.get_min_parallelism(); p--)
@@ -862,11 +867,6 @@ namespace NP {
 					if (!unfinished(n, j))
 						continue;
 
-					// if its priority is lower than than the minimum priority of the next dispatched job, it will not be dispatched next
-					// (remember that lower number means higher priority)
-					if (j.get_priority() > n.get_next_dispatched_job_min_priority())
-						continue;
-
 					Time t_high_wos = state_space_data.next_certain_higher_priority_seq_source_job_release(n, j, upbnd_t_wc + 1);
 					// if there is a higher priority job that is certainly ready before job j is released at the earliest, 
 					// then j will never be the next job dispached by the scheduler
@@ -881,10 +881,6 @@ namespace NP {
 				{
 					const Job<Time>& j = **it;
 					DM(j << " (" << j.get_job_index() << ")" << std::endl);
-					// if the job priority is lower than than the minimum priority of the next dispatched job, it will not be dispatched next
-					// (remember that lower number means higher priority)
-					if (j.get_priority() > n.get_next_dispatched_job_min_priority())
-						continue;
 
 					// don't look outside the window of interest
 					if (j.earliest_arrival() > upbnd_t_wc)
