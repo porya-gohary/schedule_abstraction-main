@@ -216,15 +216,15 @@ namespace NP {
 			Time conditional_latest_ready_time(
 				const Node& n, const State& s,
 				const Job<Time>& j_high, const Job_index j_low,
-				const unsigned int ncores = 1) const
+				const unsigned int j_low_required_cores = 1) const
 			{
 				Time latest_ready_high = j_high.arrival_window().max();
 
-				// if the minimum parallelism of j is more than ncores, then 
-				// for j to be released and have its successors completed 
+				// if the minimum parallelism of j_high is more than j_low_required_cores, then
+				// for j to be released and have its successors completed
 				// is not enough to interfere with a lower priority job.
 				// It must also have enough cores free.
-				if (j_high.get_min_parallelism() > ncores)
+				if (j_high.get_min_parallelism() > j_low_required_cores)
 				{
 					// max {rj_max,Amax(sjmin)}
 					latest_ready_high = std::max(latest_ready_high, s.core_availability(j_high.get_min_parallelism()).max());
