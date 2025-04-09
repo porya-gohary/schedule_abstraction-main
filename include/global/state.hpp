@@ -623,8 +623,8 @@ namespace NP {
 					if (!scheduled_jobs.contains(j_idx))
 						return false;
 
-					//  if `p` has a single successor, then we disregard it
-					if (successors_of[j_idx].size() == 1)
+					//  if `p` has a single successor and zero delay between the completion of `p` and time `succ` becomes ready, then we disregard `p` 
+					if (successors_of[j_idx].size() == 1 && p.second.max() == 0)
 						continue;
 
 					// if `p` is certainly finished and the max delay until `succ` is ready is certainly elapsed before `pred` is finished, then we disregard `p`
