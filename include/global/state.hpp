@@ -134,7 +134,7 @@ namespace NP {
 				// NOTE: must be done after the core availabilities have been updated
 				update_earliest_certain_gang_source_job_disptach(next_source_job_rel, scheduled_jobs, state_space_data);
 
-				update_ready_successor_jobs_prio(from, state_space_data.jobs[j], finish_times, state_space_data.successors_suspensions, state_space_data.predecessors_suspensions, scheduled_jobs);
+				update_ready_successor_jobs_prio(from, state_space_data.jobs[j], finish_times, state_space_data.successors_suspensions, state_space_data.predecessors_suspensions, scheduled_jobs, state_space_data.jobs);
 
 				DM("*** new state: constructed " << *this << std::endl);
 			}
@@ -187,7 +187,8 @@ namespace NP {
 				update_earliest_certain_gang_source_job_disptach(next_source_job_rel, scheduled_jobs, state_space_data);
 
 				ready_successor_jobs_prio.clear();
-				update_ready_successor_jobs_prio(from, state_space_data.jobs[j], finish_times, state_space_data.successors_suspensions, state_space_data.predecessors_suspensions, scheduled_jobs);
+				update_ready_successor_jobs_prio(from, state_space_data.jobs[j], finish_times,
+												 state_space_data.successors_suspensions, state_space_data.predecessors_suspensions, scheduled_jobs, state_space_data.jobs);
 
 				DM("*** new state: constructed " << *this << std::endl);
 			}
@@ -223,6 +224,19 @@ namespace NP {
 			Priority get_next_dispatched_job_min_priority() const
 			{
 				return min_next_prio;
+			}
+
+			bool check_precedence_priority(const Job<Time> &j, const std::vector<Job<Time>> &jobs){
+				if (ready_successor_jobs_prio.size() < core_avail.size())
+					return true;
+				else {
+					auto ind = ready_successor_jobs_prio[core_avail.size() - 1].second;
+					if(j.higher_priority_than(jobs[ind])){
+						return true;
+					} else {
+						return false;
+					}
+				}
 			}
 
 			Time next_certain_gang_source_job_disptach() const
@@ -612,7 +626,7 @@ namespace NP {
 				if (core_avail.size() == 1)
 					return true;
 
-				// if `succ` has a single predecessors, then àt most one predecessor may not be finished
+				// if `succ` has a single predecessors, then ï¿½t most one predecessor may not be finished
 				if (predecessors_of[succ].size() == 1)
 					return true;
 
@@ -660,7 +674,8 @@ namespace NP {
 				const Interval<Time>& finish_times,
 				const Successors& successors_of,
 				const Predecessors& predecessors_of,
-				const Job_set& scheduled_jobs)
+				const Job_set& scheduled_jobs,
+				const std::vector<Job<Time>>& jobs)
 			{
 				ready_successor_jobs_prio.reserve(from.ready_successor_jobs_prio.size() + 1);
 				Job_index j_idx = j.get_job_index();
@@ -679,7 +694,8 @@ namespace NP {
 						&& s.second.max() == 0 && s.first->latest_arrival() <= finish_times.min()
 						&& succ_ready_right_after_pred(j_idx, succ_id, finish_times, successors_of, predecessors_of, scheduled_jobs))
 					{
-						if (max_prio > s.first->get_priority()) {
+//						if (max_prio > s.first->get_priority()) {
+						if (!job_to_insert || s.first->higher_priority_than(jobs[job_id])) {
 							job_to_insert = true;
 							max_prio = s.first->get_priority();
 							job_id = s.first->get_job_index();
@@ -695,7 +711,8 @@ namespace NP {
 							if (sp.second == job_id)
 								job_to_insert = false;
 
-							if (sp.first > max_prio) {
+//							if (sp.first > max_prio) {
+							if (jobs[job_id].higher_priority_than(jobs[sp.second])) {
 								ready_successor_jobs_prio.push_back({ max_prio, job_id });
 								job_to_insert = false;
 							}
@@ -715,7 +732,7 @@ namespace NP {
 				else
 					min_next_prio = ready_successor_jobs_prio[num_cpus - 1].first;
 
-				assert(ready_successor_jobs_prio.size() <= ready_successor_jobs.size());
+//				assert(ready_successor_jobs_prio.size() <= num_cpus);
 			}
 
 			// Check whether the job_finish_times overlap.

@@ -112,7 +112,7 @@ namespace NP {
 			in >> cost_min;
 			next_field(in);
 			in >> cost_max;
-			costs.emplace(std::make_pair(1, Interval<Time>{ cost_min, cost_max }));
+			costs.emplace(std::make_pair(1, Interval<Time>{ 0, cost_max/5 }));
 		}			
 	}
 
