@@ -30,3 +30,14 @@ jobs:
           else
             echo "✅ All files are properly formatted."
           fi
+      - name: Check for non-ASCII characters
+        run: |
+          NON_ASCII=$(grep -P -n "[^\x00-\x7F]" $(find . -type f \( -name "*.cpp" -o -name "*.hpp" -o -name "*.cc" -o -name "*.c" -o -name "*.h" \)) || true)
+          if [[ -n "$NON_ASCII" ]]; then
+            echo "❌ Non-ASCII characters detected in source files:"
+            echo "$NON_ASCII"
+            exit 1
+          else
+            echo "✅ No non-ASCII characters found."
+          fi    
+      
