@@ -1,0 +1,32 @@
+name: Clang Format Check
+
+on:
+  push:
+    branches: [ "*" ]
+  pull_request:
+    branches: [ "*" ]
+
+jobs:
+  check-format:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install clang-format
+        run: sudo apt-get update && sudo apt-get install -y clang-format
+
+      - name: Run clang-format
+        run: |
+          FILES=$(find . -regex '.*\.\(cpp\|hpp\|cc\|c\|h\)' -not -path "./build/*")
+          clang-format -i $FILES
+
+      - name: Check for formatting issues
+        run: |
+          if [[ `git status --porcelain` ]]; then
+            echo "❌ Formatting issues found. Please run clang-format locally." >&2
+            git diff
+            exit 1
+          else
+            echo "✅ All files are properly formatted."
+          fi
