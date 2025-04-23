@@ -231,10 +231,10 @@ namespace NP {
 					return true;
 				else {
 					auto ind = ready_successor_jobs_prio[core_avail.size() - 1].second;
-					if(j.higher_priority_than(jobs[ind])){
-						return true;
-					} else {
+					if(jobs[ind].higher_priority_than(j)){
 						return false;
+					} else {
+						return true;
 					}
 				}
 			}
