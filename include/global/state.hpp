@@ -403,6 +403,20 @@ namespace NP {
 					first = false;
 				}
 				out << "}";
+				// print ready successor jobs
+				out << "\\n";
+				first = true;
+				out << "RSP: {";
+				for (const auto& rj : ready_successor_jobs_prio) {
+					if (!first)
+						out << ", ";
+					out << "T" << jobs[rj.second].get_task_id()
+						<< "J" << jobs[rj.second].get_job_id() ;
+
+					first = false;
+				}
+				out << "}";
+
 			}
 
 		private:

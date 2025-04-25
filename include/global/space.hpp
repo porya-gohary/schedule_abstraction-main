@@ -637,6 +637,10 @@ namespace NP {
 				DM("rt: " << rt << std::endl
 					<< "at: " << at << std::endl);
 
+				DM("t_high: " << t_high << std::endl
+					<< "t_wc: " << t_wc << std::endl
+					<< "t_avail: " << t_avail << std::endl);
+
 				Time lst = std::min(t_wc,
 					std::min(t_high, t_avail) - Time_model::constants<Time>::epsilon());
 
@@ -1069,6 +1073,21 @@ namespace NP {
 						else {
 							out << n->earliest_job_release();
 						}
+
+
+						// print ready successor jobs
+						out << "\\n";
+						out << "RS: {";
+						bool first = true;
+						for (const auto& rj : n->get_ready_successor_jobs()) {
+							if (!first)
+								out << ", ";
+							out << "T" << rj->get_task_id()
+								<< "J" << rj->get_job_id() ;
+
+							first = false;
+						}
+
 						out << "\"];"
 							<< std::endl;
 					}
